@@ -1,0 +1,73 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+benchmark_env/
+runtime/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node / Desktop / Frontend dependencies (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+dist-desktop/
+
+# Media & Large files / Project Outputs
+/models/
+/piper_voices/
+/projects/
+/logs/
+*.mp4
+*.mp3
+*.wav
+*.m4a
+*.srt
+*.ass
+*.vtt
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Log files
+*.log
+
+# Environment variables / Configs with secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
