@@ -110,6 +110,10 @@ class RenderValidationError(RenderError):
     """Raised when rendering configuration or stream validation fails."""
     pass
 
+class RenderFFmpegError(RenderError):
+    """Raised when FFmpeg process fails during rendering."""
+    pass
+
 class EncoderUnavailableError(RenderError):
     """Raised when requested video encoder is unavailable."""
     pass
@@ -129,5 +133,54 @@ class OutputValidationError(RenderError):
 class RenderCancelledError(RenderError):
     """Raised when rendering stage is cancelled."""
     pass
+
+class JobError(AutoDubError):
+    """Base exception class for Job Management module."""
+    pass
+
+class JobStateError(JobError):
+    """Raised when job state operations fail."""
+    pass
+
+class InvalidJobStateTransitionError(JobStateError):
+    """Raised when an invalid job state transition is attempted."""
+    pass
+
+class JobAlreadyExistsError(JobError):
+    """Raised when attempting to create a job with a duplicate ID."""
+    pass
+
+class JobNotFoundError(JobError):
+    """Raised when requested job ID is not found."""
+    pass
+
+class JobLockError(JobError):
+    """Raised when acquiring or releasing a job lock fails."""
+    pass
+
+class QueueError(JobError):
+    """Raised when queue operations fail."""
+    pass
+
+class WorkerError(JobError):
+    """Raised when worker execution fails."""
+    pass
+
+class PipelineRecoveryError(JobError):
+    """Raised when job or pipeline recovery fails."""
+    pass
+
+class StageExecutionError(JobError):
+    """Raised when stage execution fails."""
+    pass
+
+class RetryExhaustedError(JobError):
+    """Raised when maximum retries are exhausted for a job."""
+    pass
+
+class ArtifactValidationError(JobError):
+    """Raised when stage output artifact validation fails."""
+    pass
+
 
 

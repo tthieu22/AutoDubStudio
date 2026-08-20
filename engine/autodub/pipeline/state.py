@@ -36,16 +36,26 @@ VALID_TRANSITIONS = {
     StageStatus.COMPLETED: set(),  # Allowed only with force=True
 }
 
-def validate_state_transition(current_status: StageStatus, new_status: StageStatus, force: bool = False) -> None:
-    if current_status == new_status:
+def validate_state_transition(current_status: StageStatus | str, new_status: StageStatus | str, force: bool = False) -> None:
+    try:
+        curr_enum = StageStatus(str(current_status).lower())
+    except ValueError:
+        curr_enum = StageStatus.PENDING
+
+    try:
+        new_enum = StageStatus(str(new_status).lower())
+    except ValueError:
+        new_enum = StageStatus.RUNNING
+
+    if curr_enum == new_enum:
         return
-    if current_status == StageStatus.COMPLETED and new_status == StageStatus.RUNNING:
+    if curr_enum == StageStatus.COMPLETED and new_enum == StageStatus.RUNNING:
         if not force:
             raise StateTransitionError(f"Cannot transition COMPLETED stage to RUNNING without force option.")
         return
-    allowed = VALID_TRANSITIONS.get(current_status, set())
-    if new_status not in allowed and not force:
-        raise StateTransitionError(f"Invalid state transition from '{current_status}' to '{new_status}'.")
+    allowed = VALID_TRANSITIONS.get(curr_enum, set())
+    if new_enum not in allowed and not force:
+        raise StateTransitionError(f"Invalid state transition from '{curr_enum}' to '{new_enum}'.")
 
 def get_previous_stage(stage: PipelineStage) -> PipelineStage | None:
     idx = STAGE_ORDER.index(stage)

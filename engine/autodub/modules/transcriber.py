@@ -210,6 +210,11 @@ class RealTranscriber:
         total_chunks = len(chunks)
 
         # 5. Initialize Model
+        proj_settings = project.data.get("settings", {})
+        self.model_name = proj_settings.get("whisper_model", self.model_name)
+        self.device_setting = proj_settings.get("whisper_device", proj_settings.get("device", "auto"))
+        self.compute_type = proj_settings.get("whisper_compute_type", self.compute_type)
+
         self._init_whisper_model()
 
         project.update_stage(stage_name, StageStatus.RUNNING.value, progress=0, current=len(completed_chunks), total=total_chunks)

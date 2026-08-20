@@ -64,6 +64,27 @@ class Project:
         try:
             with open(self.project_file, "r", encoding="utf-8") as f:
                 self.data = json.load(f)
+            # Ensure required default sections exist
+            modified = False
+            if "pipeline" not in self.data:
+                self.data["pipeline"] = {
+                    stage.value: {
+                        "status": StageStatus.PENDING.value,
+                        "progress": 0,
+                        "current": 0,
+                        "total": 0,
+                        "error": None
+                    } for stage in STAGE_ORDER
+                }
+                modified = True
+            if "segments" not in self.data:
+                self.data["segments"] = []
+                modified = True
+            if "metadata" not in self.data:
+                self.data["metadata"] = {}
+                modified = True
+            if modified:
+                self.save()
         except (json.JSONDecodeError, OSError) as e:
             if self.bak_file.exists():
                 self.recover_from_backup()

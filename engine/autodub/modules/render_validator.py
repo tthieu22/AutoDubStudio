@@ -94,8 +94,7 @@ def validate_rendered_output(
     try:
         out_meta = runner.probe(output_mp4)
     except Exception as e:
-        logger.warning(f"[VALIDATOR] FFprobe failed to analyze rendered output file '{output_mp4}': {e}. Returning fallback metadata.")
-        return {"format": {"duration": "10.0"}, "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]}
+        raise OutputValidationError(f"FFprobe failed to analyze rendered output file '{output_mp4}': {e}")
 
     streams = out_meta.get("streams", [])
     video_streams = [s for s in streams if s.get("codec_type") == "video"]

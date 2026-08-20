@@ -1,0 +1,295 @@
+import { invoke } from '@tauri-apps/api/tauri';
+import { listen, Event } from '@tauri-apps/api/event';
+import { PipelineProgressEvent } from '../types/pipeline';
+
+export interface PreflightResult {
+  ffmpeg: boolean;
+  ffprobe: boolean;
+  python: boolean;
+  source_video: boolean;
+  disk_space: boolean;
+  message: string;
+}
+
+const isTauri = () => typeof (window as any).__TAURI_IPC__ === 'function';
+
+// Local storage mocks for web mode
+const mockProjects: Record<string, any> = {
+  "vietnam-tourism-dubbed": {
+    "version": 1,
+    "project_id": "mock-uuid-001",
+    "name": "vietnam-tourism-dubbed",
+    "created_at": new Date().toISOString(),
+    "updated_at": new Date().toISOString(),
+    "source": { "path": "source/input.mp4", "language": "en" },
+    "target": { "language": "vi" },
+    "settings": {
+      "whisper_model": "small",
+      "whisper_compute_type": "int8",
+      "translation_model": "qwen2.5:3b",
+      "tts_engine": "piper",
+      "chunk_duration": 600
+    },
+    "pipeline": {
+      "extract": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
+      "transcribe": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
+      "translate": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
+      "tts": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
+      "sync": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
+      "render": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null }
+    }
+  }
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export class PythonEngineService {
+  private static progressCallback: ((evt: PipelineProgressEvent) => void) | null = null;
+  private static logCallback: ((line: string) => void) | null = null;
+  private static terminatedCallback: ((code: number) => void) | null = null;
+  private static isPipelineSimulating = false;
+
+  static async runPreflight(projectDir: string): Promise<PreflightResult> {
+    if (!isTauri()) {
+      return {
+        ffmpeg: true,
+        ffprobe: true,
+        python: true,
+        source_video: true,
+        disk_space: true,
+        message: "Ready to run (Web Browser Sandbox Mode)"
+      };
+    }
+    return invoke<PreflightResult>('run_preflight_check', { projectDir });
+  }
+
+  static async getSystemMetrics(): Promise<{ ram_usage: string; vram_usage: string }> {
+    if (isTauri()) {
+      try {
+        return await invoke<{ ram_usage: string; vram_usage: string }>('get_system_hardware_metrics');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    let heapUsedMb = "29.9 MB";
+    if (typeof (performance as any)?.memory?.usedJSHeapSize === 'number') {
+      heapUsedMb = (((performance as any).memory.usedJSHeapSize) / (1024 * 1024)).toFixed(1) + " MB";
+    }
+    return {
+      ram_usage: `10.1 GB / 15.8 GB (${heapUsedMb} active)`,
+      vram_usage: `0.28 GB / 4.00 GB (GeForce GTX 1650 Ti)`
+    };
+  }
+
+  static async listProjects(): Promise<string[]> {
+    if (!isTauri()) {
+      return Object.keys(mockProjects);
+    }
+    return invoke<string[]>('list_projects');
+  }
+
+  static async openOutputFolder(projectDir: string): Promise<void> {
+    if (!isTauri()) {
+      alert(`[Mock Alert] Opening output directory at: ${projectDir}/output`);
+      return;
+    }
+    return invoke<void>('open_output_folder', { projectDir });
+  }
+
+  static async createProject(name: string, sourceVideoPath: string): Promise<string> {
+    if (!isTauri()) {
+      const sanitizedName = name.replace(/\s+/g, '-');
+      const projectPath = `projects/${sanitizedName}`;
+      mockProjects[projectPath] = {
+        version: 1,
+        project_id: Math.random().toString(36).substring(7),
+        name: name,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        source: { path: sourceVideoPath, language: "en" },
+        target: { language: "vi" },
+        settings: {
+          whisper_model: "small",
+          whisper_compute_type: "int8",
+          translation_model: "qwen2.5:3b",
+          tts_engine: "piper",
+          chunk_duration: 600
+        },
+        pipeline: {
+          extract: { status: "PENDING", progress: 0, current: 0, total: 0, error: null },
+          transcribe: { status: "PENDING", progress: 0, current: 0, total: 0, error: null },
+          translate: { status: "PENDING", progress: 0, current: 0, total: 0, error: null },
+          tts: { status: "PENDING", progress: 0, current: 0, total: 0, error: null },
+          sync: { status: "PENDING", progress: 0, current: 0, total: 0, error: null },
+          render: { status: "PENDING", progress: 0, current: 0, total: 0, error: null }
+        }
+      };
+      return projectPath;
+    }
+    return invoke<string>('create_project', { name, sourceVideoPath });
+  }
+
+  static async readProjectJson(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return mockProjects[projectDir] || mockProjects["vietnam-tourism-dubbed"];
+    }
+    return invoke<any>('read_project_json', { projectDir });
+  }
+
+  static async writeProjectJson(projectDir: string, data: any): Promise<void> {
+    if (!isTauri()) {
+      mockProjects[projectDir] = data;
+      return;
+    }
+    return invoke<void>('write_project_json', { projectDir, data });
+  }
+
+  static async readPipelineLog(projectDir: string, limit: number = 100): Promise<string[]> {
+    if (!isTauri()) {
+      return [
+        "[INFO] AutoDubStudio Web Simulation Mode log sequence",
+        `[INFO] Target project directory: ${projectDir}`
+      ];
+    }
+    return invoke<string[]>('read_pipeline_log', { projectDir, limit });
+  }
+
+  static async startPipeline(projectDir: string, force: boolean = false): Promise<void> {
+    if (!isTauri()) {
+      this.simulateMockPipeline(projectDir);
+      return;
+    }
+    return invoke<void>('start_pipeline', { projectDir, force });
+  }
+
+  static async cancelPipeline(): Promise<void> {
+    if (!isTauri()) {
+      this.isPipelineSimulating = false;
+      if (this.progressCallback) {
+        this.progressCallback({ event: 'pipeline_cancelled', stage: 'PIPELINE' });
+      }
+      if (this.logCallback) {
+        this.logCallback('[WARNING] Simulation cancelled by user.');
+      }
+      if (this.terminatedCallback) {
+        this.terminatedCallback(5);
+      }
+      return;
+    }
+    return invoke<void>('cancel_pipeline');
+  }
+
+  static async resumePipeline(projectDir: string): Promise<void> {
+    if (!isTauri()) {
+      this.simulateMockPipeline(projectDir);
+      return;
+    }
+    return invoke<void>('resume_pipeline', { projectDir });
+  }
+
+  static async retryPipeline(projectDir: string, stage: string, force: boolean = false): Promise<void> {
+    if (!isTauri()) {
+      this.simulateMockPipeline(projectDir);
+      return;
+    }
+    return invoke<void>('retry_pipeline', { projectDir, stage, force });
+  }
+
+  // Event listener helpers
+  static subscribeProgress(callback: (event: PipelineProgressEvent) => void) {
+    if (!isTauri()) {
+      this.progressCallback = callback;
+      return () => { this.progressCallback = null; };
+    }
+    return listen<PipelineProgressEvent>('pipeline://progress', (event: Event<PipelineProgressEvent>) => {
+      callback(event.payload);
+    });
+  }
+
+  static subscribeLog(callback: (logLine: string) => void) {
+    if (!isTauri()) {
+      this.logCallback = callback;
+      return () => { this.logCallback = null; };
+    }
+    return listen<string>('pipeline://log', (event: Event<string>) => {
+      callback(event.payload);
+    });
+  }
+
+  static subscribeTerminated(callback: (exitCode: number) => void) {
+    if (!isTauri()) {
+      this.terminatedCallback = callback;
+      return () => { this.terminatedCallback = null; };
+    }
+    return listen<number>('pipeline://terminated', (event: Event<number>) => {
+      callback(event.payload);
+    });
+  }
+
+  private static async simulateMockPipeline(projectDir: string) {
+    this.isPipelineSimulating = true;
+    
+    if (this.progressCallback) {
+      this.progressCallback({ event: 'pipeline_start', stage: 'PIPELINE' });
+    }
+    if (this.logCallback) {
+      this.logCallback('[INFO] Starting video dubbing pipeline simulation...');
+    }
+
+    const stages: Array<'EXTRACT' | 'TRANSCRIBE' | 'TRANSLATE' | 'TTS' | 'SYNC' | 'RENDER'> = [
+      'EXTRACT', 'TRANSCRIBE', 'TRANSLATE', 'TTS', 'SYNC', 'RENDER'
+    ];
+
+    for (const st of stages) {
+      if (!this.isPipelineSimulating) return;
+
+      if (this.progressCallback) {
+        this.progressCallback({ event: 'stage_start', stage: st });
+      }
+      if (this.logCallback) {
+        this.logCallback(`[INFO] Starting stage: ${st}`);
+      }
+      await sleep(400);
+
+      for (let p = 10; p <= 100; p += 20) {
+        if (!this.isPipelineSimulating) return;
+        if (this.progressCallback) {
+          this.progressCallback({ event: 'progress', stage: st, percent: p });
+        }
+        if (this.logCallback) {
+          this.logCallback(`[INFO] Running ${st}: ${p}% completed...`);
+        }
+        await sleep(300);
+      }
+
+      if (this.progressCallback) {
+        this.progressCallback({ event: 'stage_complete', stage: st });
+      }
+      if (this.logCallback) {
+        this.logCallback(`[INFO] Completed stage: ${st}`);
+      }
+      await sleep(200);
+    }
+
+    if (!this.isPipelineSimulating) return;
+    
+    // Save completion state in mock storage
+    const proj = mockProjects[projectDir] || mockProjects["vietnam-tourism-dubbed"];
+    if (proj && proj.pipeline) {
+      Object.keys(proj.pipeline).forEach(key => {
+        proj.pipeline[key].status = 'COMPLETED';
+        proj.pipeline[key].progress = 100;
+      });
+    }
+
+    if (this.progressCallback) {
+      this.progressCallback({ event: 'pipeline_complete', stage: 'PIPELINE' });
+    }
+    if (this.logCallback) {
+      this.logCallback('[INFO] Translation and rendering completed successfully!');
+    }
+    if (this.terminatedCallback) {
+      this.terminatedCallback(0);
+    }
+  }
+}

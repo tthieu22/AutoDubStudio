@@ -50,14 +50,31 @@ Make sure standalone `ffmpeg` is available on system PATH or in `runtime/ffmpeg/
 - Hardware NVENC GPU acceleration (`h264_nvenc`, `hevc_nvenc`) with CPU auto-fallback.
 - Subtitle modes (`NONE`, `COPY` soft streams, `BURN_IN` hard subtitles).
 
+- **Pipeline Orchestration & Batch Engine (Phase 9)**:
+  - SQLite transaction store (`.autodub/jobs.db`) with WAL journal mode.
+  - Priority FIFO Queue & multi-worker thread pool (`WorkerPool`).
+  - File-based atomic locking (`.lock`) and stale lock detection.
+  - Whole-pipeline checkpointing (`output/pipeline.partial.json`) & configuration hashing.
+  - Automatic startup crash recovery engine.
+
 ## Quick Start (Engine CLI)
 ```bash
 cd engine
 # Activate venv
 .venv\Scripts\activate
-# Run individual CLI stages or full pipeline
-python autodub/cli.py run <project_dir>
-python autodub/cli.py tts <project_dir> --voice vi_VN-viss-low --language vi
-python autodub/cli.py sync <project_dir> --speed-min 0.50 --speed-max 2.00 --overlap-policy TRIM
-python autodub/cli.py render <project_dir> --audio-mode DUCK_ORIGINAL --codec H264 --encoder AUTO --subtitle-mode BURN_IN
+
+# Run single project pipeline
+python autodub/cli.py run --project projects/my_video --input input.mp4
+
+# Batch processing
+python autodub/cli.py batch --input-dir /videos --output-dir /outputs --workers 4 --priority 5
+
+# Job Management
+python autodub/cli.py list --status RUNNING
+python autodub/cli.py status --job-id job_12345 --json
+python autodub/cli.py pause --job-id job_12345
+python autodub/cli.py resume --job-id job_12345
+python autodub/cli.py cancel --job-id job_12345
+python autodub/cli.py retry --job-id job_12345
+python autodub/cli.py recover
 ```

@@ -163,14 +163,15 @@ class RealTranslator:
         mdl = model or self.model_name
 
         system_prompt = (
-            f"You are a professional subtitle translator.\n"
-            f"Translate the following subtitle segment from {src_lang} to {tgt_lang}.\n\n"
+            f"You are a professional subtitle translator and voiceover scriptwriter.\n"
+            f"Translate the following subtitle text from {src_lang} to {tgt_lang}.\n\n"
             f"Rules:\n"
-            f"- Return ONLY the {tgt_lang} translation.\n"
+            f"- Return ONLY the final {tgt_lang} translation text.\n"
+            f"- Use natural, grammatically correct Vietnamese spelling (tiếng Việt chuẩn chính tả, đúng dấu câu).\n"
+            f"- Transliterate English loanwords, proper names, or technical acronyms into standard Vietnamese phonetics so speech synthesis pronounces them clearly (e.g. 'video' -> 'vi-đê-ô', 'podcast' -> 'pót cát', 'AI' -> 'A I', 'website' -> 'trang web').\n"
             f"- Do not explain or add commentary.\n"
             f"- Do not enclose output in quotes, markdown code blocks, or tags.\n"
-            f"- Preserve original meaning, names, and technical terms when appropriate.\n"
-            f"- Keep output concise and natural for subtitles."
+            f"- Keep output concise and natural for voiceover audio."
         )
 
         translated_segments = []

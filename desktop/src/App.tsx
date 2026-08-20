@@ -1,98 +1,442 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Activity, Terminal, Video, Settings } from 'lucide-react';
+import { PythonEngineService } from './services/pythonEngine';
+import { PipelineStatus, StageName, StageProgressInfo, PipelineProgressEvent, StageStatus } from './types/pipeline';
+
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { NewProjectModal } from './components/NewProjectModal';
+import { PipelineWorkflow } from './components/PipelineWorkflow';
+import { ConsoleLogs } from './components/ConsoleLogs';
+import { OutputPreview } from './components/OutputPreview';
+import { SystemSettings } from './components/SystemSettings';
+
+const STAGE_ORDER: StageName[] = [
+  'EXTRACT',
+  'TRANSCRIBE',
+  'TRANSLATE',
+  'TTS',
+  'SYNC',
+  'RENDER'
+];
 
 export default function App() {
-  const [videoPath, setVideoPath] = useState<string | null>(null);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
+  // Screen & Navigation
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'logs' | 'preview' | 'settings'>('pipeline');
+  
+  // Projects state
+  const [projectsList, setProjectsList] = useState<string[]>([]);
+  const [selectedProjectDir, setSelectedProjectDir] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  
+  // Pipeline status & progresses
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>('IDLE');
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [stageProgresses, setStageProgresses] = useState<Record<StageName, StageProgressInfo>>({
+    EXTRACT: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+    TRANSCRIBE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+    TRANSLATE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+    TTS: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+    SYNC: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+    RENDER: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null }
+  });
+  
+  // Logs & Metrics
+  const [logs, setLogs] = useState<string[]>([]);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const timerRef = useRef<any>(null);
+
+  // Dynamic Telemetry
+  const [realRam, setRealRam] = useState<string>('10.1 GB / 16.0 GB (63%)');
+  const [realVram, setRealVram] = useState<string>('0.28 GB / 4.00 GB (GeForce GTX 1650 Ti)');
+
+  // Settings state
+  const [settings, setSettings] = useState({
+    whisperModel: 'small',
+    translationModel: 'qwen2.5:3b',
+    ttsVoice: 'vi_VN-vais1000-medium',
+    encoder: 'NVENC'
+  });
+
+  useEffect(() => {
+    loadProjects();
+    const updateHardwareMetrics = async () => {
+      try {
+        const metrics = await PythonEngineService.getSystemMetrics();
+        setRealRam(metrics.ram_usage);
+        setRealVram(metrics.vram_usage);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    updateHardwareMetrics();
+    const interval = setInterval(updateHardwareMetrics, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Event Listener Subscriptions for Live Pipeline Progress
+  useEffect(() => {
+    let unsubProgress: any = null;
+    let unsubLog: any = null;
+    let unsubTerminated: any = null;
+
+    const setupListeners = async () => {
+      unsubProgress = await PythonEngineService.subscribeProgress((evt: PipelineProgressEvent) => {
+        handleProgressEvent(evt);
+      });
+
+      unsubLog = await PythonEngineService.subscribeLog((line: string) => {
+        setLogs(prev => [...prev, line]);
+      });
+
+      unsubTerminated = await PythonEngineService.subscribeTerminated((code: number) => {
+        if (code === 0) {
+          setPipelineStatus('COMPLETED');
+          setOverallProgress(100);
+          if (selectedProjectDir) {
+            loadProjectJson(selectedProjectDir);
+          }
+        } else {
+          setPipelineStatus('FAILED');
+        }
+      });
+    };
+
+    setupListeners();
+
+    return () => {
+      if (typeof unsubProgress === 'function') unsubProgress();
+      if (typeof unsubLog === 'function') unsubLog();
+      if (typeof unsubTerminated === 'function') unsubTerminated();
+    };
+  }, [selectedProjectDir]);
+
+  useEffect(() => {
+    if (pipelineStatus === 'RUNNING') {
+      timerRef.current = setInterval(() => setElapsedTime(prev => prev + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [pipelineStatus]);
+
+  const loadProjects = async () => {
+    try {
+      const list = await PythonEngineService.listProjects();
+      setProjectsList(list);
+    } catch (err) {
+      console.error('Failed to list projects:', err);
+    }
+  };
+
+  const handleSelectProject = async (projNameOrPath: string) => {
+    let fullPath = projNameOrPath;
+    if (!projNameOrPath.includes('/') && !projNameOrPath.includes('\\')) {
+      fullPath = `d:/FullStack/AutoDubStudio/projects/${projNameOrPath}`;
+    }
+
+    setSelectedProjectDir(fullPath);
+    setCurrentScreen('project');
+    setLogs([]);
+    setElapsedTime(0);
+    setErrorDetails(null);
+    setOverallProgress(0);
+    setActiveTab('pipeline');
+    
+    loadProjectJson(fullPath);
+  };
+
+  const loadProjectJson = async (path: string) => {
+    try {
+      const json = await PythonEngineService.readProjectJson(path);
+      if (json.pipeline) {
+        const progresses = { ...stageProgresses };
+        let totalCompleted = 0;
+        let isAllCompleted = true;
+
+        STAGE_ORDER.forEach(st => {
+          const key = st.toLowerCase();
+          const info = json.pipeline[key];
+          if (info) {
+            const statusUpper = (info.status || 'PENDING').toUpperCase() as StageStatus;
+            progresses[st] = {
+              status: statusUpper,
+              progress: info.progress || (statusUpper === 'COMPLETED' ? 100 : 0),
+              current: info.current || 0,
+              total: info.total || 0,
+              error: info.error || null
+            };
+            if (statusUpper === 'COMPLETED' || statusUpper === 'SKIPPED') {
+              totalCompleted++;
+            } else {
+              isAllCompleted = false;
+            }
+          }
+        });
+
+        setStageProgresses(progresses);
+        if (isAllCompleted && totalCompleted === STAGE_ORDER.length) {
+          setPipelineStatus('COMPLETED');
+          setOverallProgress(100);
+        } else {
+          setOverallProgress(Math.round((totalCompleted / STAGE_ORDER.length) * 100));
+        }
+      }
+    } catch (err) {
+      console.error('Read project json error:', err);
+    }
+  };
+
+  const handleCreateProject = async (name: string, videoPath: string) => {
+    setIsCreatingProject(true);
+    try {
+      const path = await PythonEngineService.createProject(name, videoPath);
+      await loadProjects();
+      handleSelectProject(path);
+    } catch (err: any) {
+      alert(`Tạo dự án thất bại: ${err}`);
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  const handleStartPipeline = async (force: boolean = false) => {
+    if (!selectedProjectDir) return;
+    setPipelineStatus('RUNNING');
+    setErrorDetails(null);
+    setLogs(prev => [...prev, `[INFO] ${new Date().toLocaleTimeString()} Bắt đầu tiến trình AutoDub...`]);
+
+    if (force) {
+      setStageProgresses({
+        EXTRACT: { status: 'RUNNING', progress: 0, current: 0, total: 0, error: null },
+        TRANSCRIBE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+        TRANSLATE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+        TTS: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+        SYNC: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
+        RENDER: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null }
+      });
+      setOverallProgress(0);
+    }
+
+    try {
+      await PythonEngineService.startPipeline(selectedProjectDir, force);
+    } catch (err: any) {
+      setPipelineStatus('FAILED');
+      setErrorDetails(`Lỗi chạy tiến trình: ${err}`);
+    }
+  };
+
+  const handleRetryStage = async (stage: StageName) => {
+    if (!selectedProjectDir) return;
+    setPipelineStatus('RUNNING');
+    setErrorDetails(null);
+    setLogs(prev => [...prev, `[INFO] Đang chạy lại bước ${stage}...`]);
+
+    // Reset targeted stage to RUNNING and subsequent stages to PENDING
+    const stageIdx = STAGE_ORDER.indexOf(stage);
+    setStageProgresses(prev => {
+      const updated = { ...prev };
+      STAGE_ORDER.forEach((st, idx) => {
+        if (idx === stageIdx) {
+          updated[st] = { status: 'RUNNING', progress: 0, current: 0, total: 0, error: null };
+        } else if (idx > stageIdx) {
+          updated[st] = { status: 'PENDING', progress: 0, current: 0, total: 0, error: null };
+        }
+      });
+      return updated;
+    });
+
+    setOverallProgress(Math.round((stageIdx / STAGE_ORDER.length) * 100));
+
+    try {
+      await PythonEngineService.retryPipeline(selectedProjectDir, stage, true);
+    } catch (err: any) {
+      setPipelineStatus('FAILED');
+      setErrorDetails(`Lỗi chạy lại bước ${stage}: ${err}`);
+      setStageProgresses(prev => ({
+        ...prev,
+        [stage]: { ...prev[stage], status: 'FAILED', error: String(err) }
+      }));
+    }
+  };
+
+  const handleCancelPipeline = async () => {
+    if (!selectedProjectDir) return;
+    try {
+      await PythonEngineService.cancelPipeline();
+      setPipelineStatus('CANCELLED');
+      setLogs(prev => [...prev, `[WARNING] Đã gửi tín hiệu hủy tiến trình.`]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenOutputFolder = async () => {
+    if (!selectedProjectDir) return;
+    try {
+      await PythonEngineService.openOutputFolder(selectedProjectDir);
+    } catch (err) {
+      alert(`Không thể mở thư mục: ${err}`);
+    }
+  };
+
+  const handleProgressEvent = (event: PipelineProgressEvent) => {
+    if (event.event === 'stage_start' && event.stage) {
+      const st = event.stage.toUpperCase() as StageName;
+      setPipelineStatus('RUNNING');
+      setStageProgresses(prev => ({
+        ...prev,
+        [st]: { ...prev[st], status: 'RUNNING', progress: 0 }
+      }));
+    } else if (event.event === 'progress' && event.stage) {
+      const st = event.stage.toUpperCase() as StageName;
+      const pct = Math.round(event.percent || 0);
+      setStageProgresses(prev => ({
+        ...prev,
+        [st]: { ...prev[st], status: 'RUNNING', progress: pct, current: event.current || 0, total: event.total || 0 }
+      }));
+      if (event.message) {
+        setLogs(prev => [...prev, `[${st}] ${event.message}`]);
+      }
+    } else if (event.event === 'stage_complete' && event.stage) {
+      const st = event.stage.toUpperCase() as StageName;
+      setStageProgresses(prev => {
+        const updated = {
+          ...prev,
+          [st]: { ...prev[st], status: 'COMPLETED' as StageStatus, progress: 100 }
+        };
+        const completedCount = STAGE_ORDER.filter(s => updated[s].status === 'COMPLETED' || updated[s].status === 'SKIPPED').length;
+        setOverallProgress(Math.round((completedCount / STAGE_ORDER.length) * 100));
+        return updated;
+      });
+    } else if (event.event === 'stage_error' && event.stage) {
+      const st = event.stage.toUpperCase() as StageName;
+      const err = event.error || 'Lỗi chưa xác định';
+      setPipelineStatus('FAILED');
+      setStageProgresses(prev => ({
+        ...prev,
+        [st]: { ...prev[st], status: 'FAILED' as StageStatus, error: err }
+      }));
+      setErrorDetails(`[${st}] ${err}`);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <header style={{ borderBottom: '1px solid #334155', paddingBottom: '12px', marginBottom: '20px' }}>
-        <h1 style={{ margin: 0, fontSize: '24px', color: '#38bdf8' }}>AutoDubStudio MVP v0.1</h1>
-        <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>100% Local AI Video Translation & Dubbing</p>
-      </header>
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: 'var(--bg-dark)' }}>
+      {/* SIDEBAR */}
+      <Sidebar
+        projectsList={projectsList}
+        selectedProjectDir={selectedProjectDir}
+        realRam={realRam}
+        realVram={realVram}
+        onSelectProject={handleSelectProject}
+        onCreateNewProjectClick={() => setCurrentScreen('home')}
+        onRefreshList={loadProjects}
+      />
 
-      {/* Import Video Card */}
-      <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
-        <button 
-          onClick={() => setVideoPath('d:/FullStack/AutoDubStudio/projects/my-video/source/input.mp4')}
-          style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
-        >
-          Import Video
-        </button>
-        {videoPath ? (
-          <div style={{ marginTop: '12px', color: '#cbd5e1' }}>
-            <div><strong>File:</strong> input.mp4</div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>Duration: 00:35:21</div>
-          </div>
-        ) : (
-          <div style={{ marginTop: '8px', color: '#64748b', fontSize: '13px' }}>No video imported yet</div>
+      {/* MAIN WORKSPACE */}
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        {currentScreen === 'home' && (
+          <NewProjectModal isCreating={isCreatingProject} onCreateProject={handleCreateProject} />
         )}
-      </div>
 
-      {/* Settings Grid */}
-      <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8' }}>Source Language</label>
-          <select style={{ width: '100%', background: '#0f172a', color: '#fff', padding: '6px', borderRadius: '4px', border: '1px solid #334155' }}>
-            <option value="en">English</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8' }}>Target Language</label>
-          <select style={{ width: '100%', background: '#0f172a', color: '#fff', padding: '6px', borderRadius: '4px', border: '1px solid #334155' }}>
-            <option value="vi">Vietnamese</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8' }}>Whisper Model</label>
-          <select style={{ width: '100%', background: '#0f172a', color: '#fff', padding: '6px', borderRadius: '4px', border: '1px solid #334155' }}>
-            <option value="small">Small (int8)</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8' }}>Translation LLM</label>
-          <select style={{ width: '100%', background: '#0f172a', color: '#fff', padding: '6px', borderRadius: '4px', border: '1px solid #334155' }}>
-            <option value="qwen2.5:3b">Qwen 2.5 3B</option>
-          </select>
-        </div>
-      </div>
+        {currentScreen === 'project' && selectedProjectDir && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1 }}>
+            {/* WORKSPACE HEADER */}
+            <Header
+              selectedProjectDir={selectedProjectDir}
+              pipelineStatus={pipelineStatus}
+              onStartPipeline={handleStartPipeline}
+              onCancelPipeline={handleCancelPipeline}
+              onOpenOutputFolder={handleOpenOutputFolder}
+            />
 
-      {/* Controls */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
-        <button 
-          onClick={() => setIsRunning(true)}
-          style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 24px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
-        >
-          Start Pipeline
-        </button>
-        <button 
-          onClick={() => setIsRunning(false)}
-          style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '8px 24px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
-        >
-          Cancel
-        </button>
-      </div>
+            {/* TAB NAVIGATION HEADER */}
+            <div style={{ display: 'flex', background: 'rgba(2, 6, 23, 0.6)', borderBottom: '1px solid var(--border-glass)', padding: '0 24px' }}>
+              <button
+                onClick={() => setActiveTab('pipeline')}
+                style={{
+                  padding: '14px 20px', background: 'transparent',
+                  color: activeTab === 'pipeline' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'pipeline' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                <Activity size={16} /> Tiến Trình (Pipeline Workflow)
+              </button>
 
-      {/* Pipeline Status Skeleton */}
-      <div style={{ background: '#1e293b', padding: '16px', borderRadius: '8px' }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#f8fafc' }}>Pipeline Progress</h3>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '14px', lineHeight: '2' }}>
-          <li style={{ color: '#4ade80' }}>✓ Extract Audio</li>
-          <li style={{ color: '#4ade80' }}>✓ Transcription</li>
-          <li style={{ color: '#38bdf8' }}>● Translation (45%)</li>
-          <li style={{ color: '#64748b' }}>○ TTS</li>
-          <li style={{ color: '#64748b' }}>○ Sync</li>
-          <li style={{ color: '#64748b' }}>○ Render</li>
-        </ul>
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>
-            <span>Overall Progress</span>
-            <span>72%</span>
+              <button
+                onClick={() => setActiveTab('logs')}
+                style={{
+                  padding: '14px 20px', background: 'transparent',
+                  color: activeTab === 'logs' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                <Terminal size={16} /> Console Logs
+              </button>
+
+              <button
+                onClick={() => setActiveTab('preview')}
+                style={{
+                  padding: '14px 20px', background: 'transparent',
+                  color: activeTab === 'preview' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'preview' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                <Video size={16} /> Xem Trước Video (Preview)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                style={{
+                  padding: '14px 20px', background: 'transparent',
+                  color: activeTab === 'settings' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'settings' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                }}
+              >
+                <Settings size={16} /> Cấu Hình Hệ Thống
+              </button>
+            </div>
+
+            {/* TAB CONTENTS */}
+            <div style={{ flexGrow: 1, padding: '24px', overflowY: 'auto' }}>
+              {activeTab === 'pipeline' && (
+                <PipelineWorkflow
+                  overallProgress={overallProgress}
+                  elapsedTime={elapsedTime}
+                  stageProgresses={stageProgresses}
+                  errorDetails={errorDetails}
+                  onRetryStage={handleRetryStage}
+                  formatTime={formatTime}
+                />
+              )}
+
+              {activeTab === 'logs' && (
+                <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
+              )}
+
+              {activeTab === 'preview' && (
+                <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
+              )}
+
+              {activeTab === 'settings' && (
+                <SystemSettings settings={settings} onSettingsChange={setSettings} />
+              )}
+            </div>
           </div>
-          <div style={{ width: '100%', background: '#0f172a', borderRadius: '4px', height: '10px', overflow: 'hidden' }}>
-            <div style={{ width: '72%', background: '#38bdf8', height: '100%' }}></div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

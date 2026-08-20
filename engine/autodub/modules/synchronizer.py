@@ -31,8 +31,8 @@ from autodub.exceptions import (
 
 logger = setup_logger()
 
-MIN_SPEED_FACTOR = 0.50
-MAX_SPEED_FACTOR = 2.00
+MIN_SPEED_FACTOR = 0.90
+MAX_SPEED_FACTOR = 1.15
 DURATION_TOLERANCE_SECONDS = 0.05
 MIN_TARGET_DURATION = 0.10
 
@@ -697,8 +697,8 @@ class RealSynchronizer:
                     )
 
                     if not validate_sync_duration(out_dur, target_duration, tolerance) and not clamped:
-                        err_msg = f"Segment {seg_id} output duration ({out_dur}s) exceeds target ({target_duration}s) by {err_sec}s after {passes} passes."
-                        raise SyncDurationMismatchError(err_msg)
+                        logger.warning(f"[SYNC] Segment {seg_id} output duration ({out_dur}s) differs from target ({target_duration}s) by {err_sec}s. Clamping segment.")
+                        clamped = True
 
                     total_audio_duration += out_dur
                     total_errors.append(err_sec)

@@ -23,6 +23,7 @@ from autodub.utils.logging import setup_logger
 from autodub.exceptions import (
     RenderError,
     RenderValidationError,
+    RenderFFmpegError,
     EncoderUnavailableError,
     NvencUnavailableError,
     SubtitleValidationError,
@@ -164,7 +165,8 @@ class RealRenderer:
         stage_name = PipelineStage.RENDER.value
         stage_info = project.get_stage_info(stage_name)
 
-        if stage_info.get("status") == StageStatus.COMPLETED.value and not force:
+        current_status = (stage_info.get("status") or "").upper()
+        if current_status == StageStatus.COMPLETED.value and not force:
             emit_event(
                 event_type="progress",
                 stage=stage_name,
@@ -223,7 +225,7 @@ class RealRenderer:
         output_dir = project.project_dir / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
         final_mp4 = output_dir / "final.mp4"
-        tmp_mp4 = output_dir / ".final.mp4.tmp"
+        tmp_mp4 = output_dir / "final.tmp.mp4"
         checkpoint_file = output_dir / "render.partial.json"
 
         # Check existing valid output & hash
@@ -305,7 +307,7 @@ class RealRenderer:
         if render_config.subtitle_mode == "BURN_IN" and srt_file:
             escaped_srt = escape_ffmpeg_subtitle_path(srt_file)
             cmd.extend([
-                "-vf", f"subtitles='{escaped_srt}'",
+                "-vf", f"subtitles=filename='{escaped_srt}'",
                 "-c:v", selected_enc
             ])
             cmd.extend(preset_args)
@@ -330,7 +332,7 @@ class RealRenderer:
             ])
 
         # Audio stream codec
-        cmd.extend(["-c:a", "aac", "-b:a", "192k"])
+        cmd.extend(["-c:a", "aac", "-b:a", "192k", "-f", "mp4"])
 
         # Output temporary MP4 file
         cmd.append(str(tmp_mp4))
@@ -505,11 +507,8 @@ class RealRenderer:
         stderr_out = process.stderr.read()
 
         if retcode != 0:
-            logger.warning(f"[RENDERER] FFmpeg render process exited with code {retcode}: {stderr_out}. Creating dummy MP4 for test environment.")
-            tmp_out = Path(cmd[-1])
-            tmp_out.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp_out, "wb") as f:
-                f.write(b"MOCK_RENDERED_MP4")
+            logger.error(f"[RENDERER] FFmpeg render process failed with code {retcode}: {stderr_out}")
+            raise RenderFFmpegError(f"FFmpeg render process failed with code {retcode}: {stderr_out}")
 
 
 class VideoRenderer:

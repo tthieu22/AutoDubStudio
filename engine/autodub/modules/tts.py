@@ -28,6 +28,55 @@ from autodub.exceptions import (
 logger = setup_logger()
 
 
+import re
+
+VIETNAMESE_PRONUNCIATION_MAP = {
+    r"\bpodcast\b": "pót cát",
+    r"\bvideo\b": "vi-đê-ô",
+    r"\bvideos\b": "vi-đê-ô",
+    r"\bonline\b": "on-lai",
+    r"\bwebsite\b": "trang web",
+    r"\bwebsites\b": "trang web",
+    r"\baudio\b": "ô-đi-ô",
+    r"\bfacebook\b": "phây-sbút",
+    r"\byoutube\b": "du-túp",
+    r"\bgoogle\b": "gút-gồ",
+    r"\bapp\b": "áp",
+    r"\bapps\b": "áp",
+    r"\blink\b": "linh",
+    r"\bemail\b": "e-mai",
+    r"\bclip\b": "clíp",
+    r"\bclips\b": "clíp",
+    r"\bchannel\b": "kênh",
+    r"\benglish\b": "tiếng Anh",
+    r"\bai\b": "A I",
+    r"\bcpu\b": "C P U",
+    r"\bgpu\b": "G P U",
+}
+
+def sanitize_text_for_piper(text: str) -> str:
+    """Sanitize text input for Piper TTS process, applying Vietnamese phonetics and normalizations."""
+    if not text:
+        return "Xin chào"
+    try:
+        clean = text.encode("utf-16", "surrogatepass").decode("utf-16", "ignore")
+    except Exception:
+        clean = text
+    clean = "".join(c for c in clean if c.isprintable() or c in "\n\r\t ")
+
+    # Apply Vietnamese phonetic mappings for foreign words
+    for pattern, replacement in VIETNAMESE_PRONUNCIATION_MAP.items():
+        clean = re.sub(pattern, replacement, clean, flags=re.IGNORECASE)
+
+    # Replace special symbols with spoken words
+    clean = clean.replace("%", " phần trăm")
+    clean = clean.replace("$", " đô-la")
+    clean = clean.replace("&", " và ")
+    clean = clean.replace("@", " a-còng ")
+
+    return clean.strip() or "Xin chào"
+
+
 class PiperClient:
     """Wrapper around local Piper TTS binary and voice models."""
 
@@ -36,11 +85,14 @@ class PiperClient:
         self.voices_dir = voices_dir or (RUNTIME_DIR / "piper" / "voices")
 
     def find_executable(self) -> Optional[Path]:
-        """Locate Piper binary in runtime/piper/ or system PATH."""
+        """Locate Piper binary in runtime/piper/, .venv Scripts, or system PATH."""
         candidates = [
+            Path(sys.executable).parent / "piper.exe",
+            Path(sys.executable).parent / "piper",
             RUNTIME_DIR / "piper" / "piper.exe",
             RUNTIME_DIR / "piper" / "piper",
             RUNTIME_DIR / "piper.exe",
+            BASE_DIR / "engine" / ".venv" / "Scripts" / "piper.exe",
         ]
         for candidate in candidates:
             if candidate.exists():
@@ -63,9 +115,10 @@ class PiperClient:
             if json_path.exists():
                 return (voice_path.resolve(), json_path.resolve())
 
-        # Search candidates in voices_dir or runtime/piper
+        # Search candidates in voices_dir, piper_voices, or runtime/piper
         search_dirs = [
             self.voices_dir,
+            BASE_DIR / "piper_voices",
             RUNTIME_DIR / "piper",
             MODELS_DIR / "piper",
         ]
@@ -80,6 +133,15 @@ class PiperClient:
             json_candidate = s_dir / f"{clean_name}.onnx.json"
             if onnx_candidate.exists() and json_candidate.exists():
                 return (onnx_candidate.resolve(), json_candidate.resolve())
+
+        # Fallback search: return any valid voice found in search_dirs
+        for s_dir in search_dirs:
+            if not s_dir.exists():
+                continue
+            for onnx_file in s_dir.glob("*.onnx"):
+                json_file = onnx_file.with_suffix(".onnx.json")
+                if json_file.exists():
+                    return (onnx_file.resolve(), json_file.resolve())
 
         return (None, None)
 
@@ -137,6 +199,12 @@ class PiperClient:
         if speaker is not None:
             cmd.extend(["--speaker", str(speaker)])
 
+        clean_text = sanitize_text_for_piper(text)
+
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+
         start_time = time.time()
         proc = None
         try:
@@ -144,10 +212,11 @@ class PiperClient:
                 cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stderr=subprocess.PIPE,
+                env=env
             )
             stdout_data, stderr_data = proc.communicate(
-                input=text.strip().encode("utf-8"),
+                input=clean_text.encode("utf-8", errors="ignore"),
                 timeout=timeout
             )
             elapsed = time.time() - start_time
@@ -302,6 +371,8 @@ class RealTTS:
 
         total_audio_duration = 0.0
 
+        # Collect uncompleted segments
+        unprocessed = []
         for idx, seg in enumerate(segments):
             if is_cancelled and is_cancelled():
                 err = "TTS stage cancelled by user."
@@ -314,12 +385,10 @@ class RealTTS:
             seg_id = seg.get("id", idx + 1)
             wav_filename = f"{seg_id:06d}.wav"
             final_wav_path = audio_tts_dir / wav_filename
-            tmp_wav_path = audio_tts_dir / f"{wav_filename}.tmp"
 
-            # Segment text selection: prefer translation, fallback to text
-            tts_text = (seg.get("translation") or seg.get("text") or "").strip()
+            raw_text = seg.get("translation") or seg.get("text") or ""
+            tts_text = sanitize_text_for_piper(raw_text)
 
-            # Handle Empty / Whitespace Segments
             if not tts_text:
                 logger.info(f"Segment {seg_id} text is empty/whitespace. Skipping TTS synthesis.")
                 seg_meta = {
@@ -331,10 +400,8 @@ class RealTTS:
                 seg["tts"] = seg_meta
                 completed_segment_ids.add(seg_id)
                 segment_metadata_map[str(seg_id)] = seg_meta
-                self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
                 continue
 
-            # Check if segment already completed and valid
             if not force and seg_id in completed_segment_ids and final_wav_path.exists():
                 try:
                     wav_info = validate_wav_file(final_wav_path)
@@ -351,91 +418,80 @@ class RealTTS:
                     logger.warning(f"Segment {seg_id} audio corrupt. Re-synthesizing.")
                     completed_segment_ids.discard(seg_id)
 
-            # Retry loop for synthesis (max 3 attempts with backoff)
-            retries = 3
-            backoff_delays = [1.0, 2.0, 4.0]
-            synthesis_success = False
-            last_err = None
+            unprocessed.append((idx, seg, seg_id, tts_text, wav_filename, final_wav_path))
 
-            for attempt in range(retries):
-                if is_cancelled and is_cancelled():
-                    if tmp_wav_path.exists():
-                        try: tmp_wav_path.unlink()
-                        except OSError: pass
-                    err = "TTS stage cancelled by user."
-                    project.update_stage(stage_name, StageStatus.CANCELLED.value, current=idx, total=total_segments, error=err)
-                    emit_event("stage_cancelled", stage_name, current=idx, total=total_segments, error=err)
-                    self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
-                    raise PipelineCancelledError(err)
+        self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
 
-                try:
-                    if tmp_wav_path.exists():
-                        try: tmp_wav_path.unlink()
-                        except OSError: pass
+        if unprocessed:
+            logger.info(f"Synthesizing {len(unprocessed)} segments using 4 parallel TTS workers...")
 
-                    self.client.synthesize(
-                        text=tts_text,
-                        output_wav_path=tmp_wav_path,
-                        voice_name=target_voice,
-                        timeout=120,
-                        speaker=seg.get("speaker")
-                    )
+            def process_single(item):
+                idx, seg, seg_id, tts_text, wav_filename, final_wav_path = item
+                tmp_wav_path = audio_tts_dir / f"{wav_filename}.{os.getpid()}_{idx}.tmp"
 
-                    # Validate generated temp WAV
-                    wav_info = validate_wav_file(tmp_wav_path)
+                retries = 3
+                backoff_delays = [0.5, 1.0, 2.0]
+                for attempt in range(retries):
+                    if is_cancelled and is_cancelled():
+                        raise PipelineCancelledError("TTS stage cancelled by user.")
+                    try:
+                        if tmp_wav_path.exists():
+                            try: tmp_wav_path.unlink()
+                            except OSError: pass
 
-                    # Atomic Rename
-                    if final_wav_path.exists():
-                        final_wav_path.unlink()
-                    tmp_wav_path.rename(final_wav_path)
+                        self.client.synthesize(
+                            text=tts_text,
+                            output_wav_path=tmp_wav_path,
+                            voice_name=target_voice,
+                            timeout=120,
+                            speaker=seg.get("speaker")
+                        )
+                        wav_info = validate_wav_file(tmp_wav_path)
+                        if final_wav_path.exists():
+                            try: final_wav_path.unlink()
+                            except OSError: pass
+                        tmp_wav_path.rename(final_wav_path)
 
-                    seg_meta = {
-                        "audio_file": f"audio/tts/{wav_filename}",
-                        "duration": wav_info["duration"],
-                        "sample_rate": wav_info["sample_rate"],
-                        "channels": wav_info["channels"],
-                        "format": "wav"
-                    }
-                    seg["tts"] = seg_meta
-                    total_audio_duration += wav_info["duration"]
-
-                    completed_segment_ids.add(seg_id)
-                    segment_metadata_map[str(seg_id)] = seg_meta
-                    self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
-
-                    synthesis_success = True
-                    break
-
-                except (PiperSynthesisError, PiperInvalidOutputError, PiperTimeoutError) as e:
-                    last_err = e
-                    logger.warning(f"Synthesis failed for segment {seg_id} (attempt {attempt + 1}/{retries}): {e}")
-                    if tmp_wav_path.exists():
-                        try: tmp_wav_path.unlink()
-                        except OSError: pass
-                    if attempt < retries - 1:
+                        seg_meta = {
+                            "audio_file": f"audio/tts/{wav_filename}",
+                            "duration": wav_info["duration"],
+                            "sample_rate": wav_info["sample_rate"],
+                            "channels": wav_info["channels"],
+                            "format": "wav"
+                        }
+                        return seg, seg_id, seg_meta, wav_info["duration"]
+                    except Exception as e:
+                        if tmp_wav_path.exists():
+                            try: tmp_wav_path.unlink()
+                            except OSError: pass
+                        if attempt == retries - 1:
+                            raise e
                         time.sleep(backoff_delays[attempt])
 
-            if not synthesis_success:
-                err_msg = f"TTS Synthesis failed for segment {seg_id} after {retries} retries: {last_err}"
-                logger.error(err_msg)
-                project.update_stage(stage_name, StageStatus.FAILED.value, current=idx, total=total_segments, error=err_msg)
-                emit_event("stage_error", stage_name, current=idx, total=total_segments, error=err_msg)
-                self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
-                raise TTSSynthesisFailedError(err_msg) from last_err
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            completed_count = len(segments) - len(unprocessed)
 
-            # Emit progress for segment
-            pct = round(((idx + 1) / total_segments) * 100, 2)
-            elapsed_seg = round(time.time() - start_time, 2)
-            project.update_stage(stage_name, StageStatus.RUNNING.value, progress=pct, current=idx + 1, total=total_segments)
-            emit_event(
-                "progress",
-                stage_name,
-                current=idx + 1,
-                total=total_segments,
-                percent=pct,
-                segment_id=seg_id,
-                elapsed=elapsed_seg
-            )
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                future_map = {executor.submit(process_single, item): item for item in unprocessed}
+                for future in as_completed(future_map):
+                    if is_cancelled and is_cancelled():
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        raise PipelineCancelledError("TTS stage cancelled by user.")
+                    try:
+                        seg, seg_id, seg_meta, dur = future.result()
+                        seg["tts"] = seg_meta
+                        completed_segment_ids.add(seg_id)
+                        segment_metadata_map[str(seg_id)] = seg_meta
+                        total_audio_duration += dur
+                        completed_count += 1
+
+                        pct = round((completed_count / total_segments) * 100, 2)
+                        project.update_stage(stage_name, StageStatus.RUNNING.value, progress=pct, current=completed_count, total=total_segments)
+                        emit_event("progress", stage_name, current=completed_count, total=total_segments, percent=pct, segment_id=seg_id)
+                        self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
+                    except Exception as e:
+                        logger.error(f"Error in parallel TTS synthesis: {e}")
+                        raise e
 
         # 5. Create Optional Combined WAV File
         self._create_combined_audio(audio_tts_dir, segments)
