@@ -96,12 +96,8 @@ class PipelineManager:
         # 2. Verify source input video
         rel_src = self.project.data.get("source", {}).get("path", "source/input.mp4")
         source_path = Path(rel_src) if Path(rel_src).is_absolute() else self.project_dir / rel_src
-        if not source_path.exists():
-            if strict:
-                raise AutoDubError(f"Source video file '{source_path}' does not exist or is 0 bytes.")
-            else:
-                source_path.parent.mkdir(parents=True, exist_ok=True)
-                source_path.touch()
+        if not source_path.exists() or source_path.stat().st_size == 0:
+            raise AutoDubError(f"Source video file '{source_path}' does not exist or is 0 bytes. Please re-create the project with a valid video file.")
 
         # 3. Disk space check (estimate at least 3x source video size required)
         try:
@@ -217,7 +213,22 @@ class PipelineManager:
             emit_event("stage_error", stage=stage_name, error=str(e))
             raise
 
+    def reset_all_stages(self):
+        """Reset all pipeline stages to PENDING status."""
+        for stage in STAGE_ORDER:
+            self.project.update_stage(
+                stage.value,
+                status=StageStatus.PENDING.value,
+                progress=0,
+                current=0,
+                total=0,
+                error=None
+            )
+        self.logger.info("All pipeline stages reset to PENDING.")
+
     def run_all(self, fail_at_stage: Optional[PipelineStage] = None, fail_at_step: Optional[int] = None, force: bool = False):
+        if force:
+            self.reset_all_stages()
         self.preflight_check()
         emit_event("pipeline_start", stage="PIPELINE", project=self.project.data.get("name"))
 
@@ -260,7 +271,7 @@ class PipelineManager:
     def retry(self, stage_enum: PipelineStage, force: bool = False):
         """Retry a failed or cancelled stage (or completed stage if force=True)."""
         stage_info = self.project.get_stage_info(stage_enum.value)
-        raw_status = (stage_info.get("status") or "PENDING").upper()
+        raw_status = (stage_info.get("status") or "pending").lower()
         try:
             status = StageStatus(raw_status)
         except ValueError:
@@ -270,13 +281,26 @@ class PipelineManager:
             raise StateTransitionError(f"Stage '{stage_enum.value}' is already COMPLETED. Use --force to retry.")
 
         if status in (StageStatus.FAILED, StageStatus.CANCELLED, StageStatus.PENDING) or force:
+            # Reset target stage and all subsequent stages to PENDING first
+            stage_idx = STAGE_ORDER.index(stage_enum)
+            for st in STAGE_ORDER[stage_idx:]:
+                self.project.update_stage(
+                    st.value,
+                    status=StageStatus.PENDING.value,
+                    progress=0,
+                    current=0,
+                    total=0,
+                    error=None
+                )
+            self.logger.info(f"Reset stages from {stage_enum.value.upper()} onwards to PENDING.")
+
             self.run_stage(stage_enum, force=force)
             # After retrying this stage, continue subsequent stages
-            stage_idx = STAGE_ORDER.index(stage_enum)
             for next_stage in STAGE_ORDER[stage_idx + 1:]:
                 next_info = self.project.get_stage_info(next_stage.value)
                 if next_info["status"] != StageStatus.COMPLETED.value or not self.validate_stage_artifact(next_stage):
                     self.run_stage(next_stage, force=True)
+
 
     def get_status_formatted(self) -> str:
         lines = [f"Project: {self.project.data.get('name')}", ""]

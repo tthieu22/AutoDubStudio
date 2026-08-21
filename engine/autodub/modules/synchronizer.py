@@ -31,8 +31,8 @@ from autodub.exceptions import (
 
 logger = setup_logger()
 
-MIN_SPEED_FACTOR = 0.90
-MAX_SPEED_FACTOR = 1.15
+MIN_SPEED_FACTOR = 0.75
+MAX_SPEED_FACTOR = 1.35
 DURATION_TOLERANCE_SECONDS = 0.05
 MIN_TARGET_DURATION = 0.10
 
@@ -659,28 +659,17 @@ class RealSynchronizer:
                 time.sleep(self.step_delay)
                 continue
 
+            from autodub.modules.narration import NaturalPacingEngine
+            pacing_engine = NaturalPacingEngine(min_speed=0.95, max_speed=1.05)
+            
+            raw_text = seg.get("translation") or seg.get("text") or ""
+            applied_speed, expected_dur, trailing_pause_ms, pacing_mode = pacing_engine.evaluate_pacing(
+                natural_audio_duration=tts_duration,
+                target_available_duration=target_duration,
+                text=raw_text
+            )
             requested_speed = calculate_speed_factor(tts_duration, target_duration)
-            applied_speed = requested_speed
-            clamped = False
-
-            if requested_speed < speed_min:
-                if extreme_policy == "REJECT":
-                    err_msg = f"Segment {seg_id} requires {requested_speed:.2f}x speed, below minimum limit {speed_min:.2f}x under REJECT policy."
-                    project.update_stage(stage_name, StageStatus.FAILED.value, current=idx - 1, error=err_msg)
-                    emit_event("stage_error", stage=stage_name, current=idx - 1, total=total_segments, error=err_msg)
-                    raise SyncExtremeSpeedError(err_msg)
-                applied_speed = speed_min
-                clamped = True
-                clamped_count += 1
-            elif requested_speed > speed_max:
-                if extreme_policy == "REJECT":
-                    err_msg = f"Segment {seg_id} requires {requested_speed:.2f}x speed, exceeding maximum limit {speed_max:.2f}x under REJECT policy."
-                    project.update_stage(stage_name, StageStatus.FAILED.value, current=idx - 1, error=err_msg)
-                    emit_event("stage_error", stage=stage_name, current=idx - 1, total=total_segments, error=err_msg)
-                    raise SyncExtremeSpeedError(err_msg)
-                applied_speed = speed_max
-                clamped = True
-                clamped_count += 1
+            clamped = pacing_mode != "natural"
 
             retry_count = 0
             last_err = None

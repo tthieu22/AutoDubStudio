@@ -80,9 +80,24 @@ def sanitize_text_for_piper(text: str) -> str:
 class PiperClient:
     """Wrapper around local Piper TTS binary and voice models."""
 
-    def __init__(self, executable_path: Optional[Path] = None, voices_dir: Optional[Path] = None):
+    def __init__(self, executable_path: Optional[Path] = None, voices_dir: Optional[Path] = None, use_cuda: Optional[bool] = None):
         self.executable_path = executable_path or self.find_executable()
         self.voices_dir = voices_dir or (RUNTIME_DIR / "piper" / "voices")
+        self.use_cuda = use_cuda if use_cuda is not None else self._detect_cuda()
+        if self.use_cuda:
+            logger.info("Piper TTS: CUDA GPU acceleration enabled.")
+        else:
+            logger.info("Piper TTS: Running on CPU.")
+
+    @staticmethod
+    def _detect_cuda() -> bool:
+        """Auto-detect if CUDA is available for ONNX Runtime."""
+        try:
+            import onnxruntime
+            providers = onnxruntime.get_available_providers()
+            return "CUDAExecutionProvider" in providers
+        except Exception:
+            return False
 
     def find_executable(self) -> Optional[Path]:
         """Locate Piper binary in runtime/piper/, .venv Scripts, or system PATH."""
@@ -196,6 +211,8 @@ class PiperClient:
             "--model", str(onnx_p),
             "--output_file", str(output_wav_path)
         ]
+        if self.use_cuda:
+            cmd.append("--cuda")
         if speaker is not None:
             cmd.extend(["--speaker", str(speaker)])
 
@@ -340,14 +357,18 @@ class RealTTS:
             else:
                 raise PiperVoiceNotFoundError(err_msg)
 
-        # 3. Load Translated Segments
+        # 3. Load Translated Segments & Group into Complete Narration Sentences
         segments = project.data.get("segments", [])
         if not segments:
             translated_srt = project.project_dir / "transcript" / "translated.srt"
             if translated_srt.exists():
                 segments = self._parse_srt(translated_srt)
 
-        total_segments = len(segments)
+        from autodub.modules.narration import SentenceGrouper
+        grouper = SentenceGrouper()
+        narration_segments = grouper.group_segments(segments)
+
+        total_segments = len(narration_segments) if narration_segments else len(segments)
         if total_segments == 0:
             logger.warning("No segments found for TTS synthesis.")
             project.update_stage(stage_name, StageStatus.COMPLETED.value, progress=100, current=0, total=0)

@@ -196,6 +196,15 @@ class AudioMixer:
         if not tmp_wav.exists() or tmp_wav.stat().st_size == 0:
             raise AudioMixError(f"Generated mixed audio file is missing or zero bytes: {tmp_wav}")
 
-        os.replace(tmp_wav, output_wav)
+        if output_wav.exists():
+            try:
+                output_wav.unlink(missing_ok=True)
+            except OSError:
+                pass
+        try:
+            os.replace(tmp_wav, output_wav)
+        except OSError:
+            shutil.copy2(tmp_wav, output_wav)
+            tmp_wav.unlink(missing_ok=True)
         logger.info(f"[MIXER] Successfully produced mixed audio file '{output_wav}' ({output_wav.stat().st_size / 1024:.1f} KB)")
         return output_wav

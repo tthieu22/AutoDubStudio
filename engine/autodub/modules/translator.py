@@ -275,85 +275,107 @@ class RealTranslator:
 
         system_prompt = (
             f"You are a professional subtitle translator.\n"
-            f"Translate the following subtitle segment from {self.source_language} to {self.target_language}.\n\n"
+            f"Translate subtitle segments from {self.source_language} to {self.target_language}.\n\n"
             f"Rules:\n"
-            f"- Return ONLY the {self.target_language} translation.\n"
-            f"- Do not explain or add commentary.\n"
-            f"- Do not enclose output in quotes, markdown code blocks, or tags.\n"
-            f"- Preserve original meaning, names, and technical terms when appropriate.\n"
-            f"- Keep output concise and natural for subtitles."
+            f"- Return ONLY the translations, one per line, matching the input order.\n"
+            f"- Each output line corresponds to one input line.\n"
+            f"- Use natural Vietnamese spelling (tiếng Việt chuẩn chính tả).\n"
+            f"- Transliterate English loanwords into Vietnamese phonetics for voiceover.\n"
+            f"- Do not add numbering, explanations, quotes, or markdown.\n"
+            f"- Keep output concise and natural for voiceover audio."
         )
 
+        BATCH_SIZE = 15
+
+        # Build list of pending segments
+        pending_batches = []
+        current_batch = []
         for idx, seg in enumerate(segments):
-            step_num = idx + 1
-            seg_id = seg.get("id", step_num)
-
-            # Check user cancellation
-            if is_cancelled and is_cancelled():
-                project.update_stage(stage_name, StageStatus.CANCELLED.value, current=idx, total=total_segments)
-                emit_event("stage_cancelled", stage_name, current=idx, total=total_segments, error="Translation stage cancelled by user.")
-                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
-                raise PipelineCancelledError("Translation stage cancelled by user.")
-
-            # Check simulated step failure (for pipeline unit tests)
-            if fail_at_step is not None and (step_num == fail_at_step or (step_num == total_segments and fail_at_step > total_segments)):
-                err_msg = f"Simulated error in stage {stage_name} at step {fail_at_step}"
-                project.update_stage(stage_name, StageStatus.FAILED.value, current=idx, total=total_segments, error=err_msg)
-                emit_event("stage_error", stage_name, current=idx, total=total_segments, error=err_msg)
-                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
-                raise RuntimeError(err_msg)
-
-            # Skip already completed segment
+            seg_id = seg.get("id", idx + 1)
             if seg_id in completed_segment_ids:
-                percent = (step_num / total_segments) * 100.0
-                project.update_stage(stage_name, StageStatus.RUNNING.value, progress=int(percent), current=step_num, total=total_segments)
-                emit_event("progress", stage_name, current=step_num, total=total_segments, percent=percent)
                 continue
-
             orig_text = seg.get("text", "").strip()
-
             if not orig_text:
                 translations_dict[str(seg_id)] = ""
                 completed_segment_ids.add(seg_id)
-            else:
-                # Call Ollama with max 3 retries (backoff 1s, 2s, 4s)
-                success = False
-                last_exc = None
-                for attempt in range(1, self.max_retries + 1):
-                    try:
-                        raw_res = self.client.generate(
-                            prompt=orig_text,
-                            system=system_prompt,
-                            model=self.model_name,
-                            timeout=self.timeout
-                        )
-                        cleaned = clean_translation(raw_res)
-                        translations_dict[str(seg_id)] = cleaned
+                continue
+            current_batch.append((idx, seg_id, orig_text))
+            if len(current_batch) >= BATCH_SIZE:
+                pending_batches.append(current_batch)
+                current_batch = []
+        if current_batch:
+            pending_batches.append(current_batch)
+
+        for batch_idx, batch in enumerate(pending_batches):
+            # Check user cancellation
+            if is_cancelled and is_cancelled():
+                project.update_stage(stage_name, StageStatus.CANCELLED.value, current=len(completed_segment_ids), total=total_segments)
+                emit_event("stage_cancelled", stage_name, current=len(completed_segment_ids), total=total_segments, error="Translation stage cancelled by user.")
+                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
+                raise PipelineCancelledError("Translation stage cancelled by user.")
+
+            # Build batch prompt
+            batch_lines = []
+            for i, (_, _, text) in enumerate(batch, 1):
+                batch_lines.append(f"{i}. {text}")
+            batch_prompt = "\n".join(batch_lines)
+
+            # Call Ollama with retry
+            success = False
+            last_exc = None
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    raw_res = self.client.generate(
+                        prompt=batch_prompt,
+                        system=system_prompt,
+                        model=self.model_name,
+                        timeout=self.timeout
+                    )
+                    # Parse batch response - one translation per line
+                    raw_lines = [l.strip() for l in raw_res.strip().splitlines() if l.strip()]
+                    # Remove numbering prefixes like "1. ", "2. "
+                    cleaned_lines = []
+                    for line in raw_lines:
+                        cleaned = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
+                        cleaned = clean_translation(cleaned)
+                        if cleaned:
+                            cleaned_lines.append(cleaned)
+
+                    # Map translations to segments
+                    for i, (orig_idx, seg_id, orig_text) in enumerate(batch):
+                        if i < len(cleaned_lines):
+                            translations_dict[str(seg_id)] = cleaned_lines[i]
+                        else:
+                            # Fallback: translate individually if batch parsing failed
+                            fallback_res = self.client.generate(prompt=orig_text, system=system_prompt, model=self.model_name, timeout=self.timeout)
+                            translations_dict[str(seg_id)] = clean_translation(fallback_res)
                         completed_segment_ids.add(seg_id)
-                        success = True
-                        break
-                    except (OllamaUnavailableError, OllamaModelNotFoundError):
-                        raise
-                    except Exception as e:
-                        last_exc = e
-                        logger.warning(f"Translation attempt {attempt}/{self.max_retries} failed for segment {seg_id}: {e}")
-                        if attempt < self.max_retries:
-                            backoff_sec = 2 ** (attempt - 1)
-                            time.sleep(backoff_sec)
 
-                if not success:
-                    self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
-                    err_msg = f"Translation failed for segment {seg_id} after {self.max_retries} retries: {last_exc}"
-                    project.update_stage(stage_name, StageStatus.FAILED.value, current=idx, total=total_segments, error=err_msg)
-                    emit_event("stage_error", stage_name, current=idx, total=total_segments, error=err_msg)
-                    raise TranslationFailedError(err_msg)
+                    success = True
+                    break
+                except (OllamaUnavailableError, OllamaModelNotFoundError):
+                    raise
+                except Exception as e:
+                    last_exc = e
+                    logger.warning(f"Batch translation attempt {attempt}/{self.max_retries} failed: {e}")
+                    if attempt < self.max_retries:
+                        backoff_sec = 2 ** (attempt - 1)
+                        time.sleep(backoff_sec)
 
-            # Save checkpoint after each segment
+            if not success:
+                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
+                err_msg = f"Batch translation failed after {self.max_retries} retries: {last_exc}"
+                project.update_stage(stage_name, StageStatus.FAILED.value, current=len(completed_segment_ids), total=total_segments, error=err_msg)
+                emit_event("stage_error", stage_name, current=len(completed_segment_ids), total=total_segments, error=err_msg)
+                raise TranslationFailedError(err_msg)
+
+            # Save checkpoint after each batch
             self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
 
-            percent = (step_num / total_segments) * 100.0
-            project.update_stage(stage_name, StageStatus.RUNNING.value, progress=int(percent), current=step_num, total=total_segments)
-            emit_event("progress", stage_name, current=step_num, total=total_segments, percent=percent)
+            completed_count = len(completed_segment_ids)
+            percent = (completed_count / total_segments) * 100.0
+            project.update_stage(stage_name, StageStatus.RUNNING.value, progress=int(percent), current=completed_count, total=total_segments)
+            emit_event("progress", stage_name, current=completed_count, total=total_segments, percent=percent)
 
         # 6. Update Project Data Segments & Metadata
         updated_segments = []

@@ -100,7 +100,7 @@ fn send_sigint(pid: u32) {
     // GenerateConsoleCtrlEvent only works if console is attached
     // Using taskkill /T /PID to gracefully request termination of the process tree on Windows
     let mut cmd = Command::new("taskkill");
-    cmd.arg("/T").arg("/PID").arg(pid.to_string());
+    cmd.arg("/F").arg("/T").arg("/PID").arg(pid.to_string());
     let _ = cmd.status();
 }
 
@@ -355,8 +355,13 @@ fn start_pipeline(
     let python_path = find_python_path();
 
     let mut lock = active_proc.lock().unwrap();
-    if lock.child.is_some() {
-        return Err("Pipeline is already running.".to_string());
+    if let Some(ref mut child) = lock.child {
+        let pid = child.id();
+        send_sigint(pid);
+        thread::sleep(Duration::from_millis(200));
+        let _ = child.kill();
+        lock.child = None;
+        lock.project_id = None;
     }
 
     let mut cmd = Command::new(python_path);
@@ -559,13 +564,19 @@ fn retry_pipeline(
     let python_path = find_python_path();
 
     let mut lock = active_proc.lock().unwrap();
-    if lock.child.is_some() {
-        return Err("Pipeline is already running.".to_string());
+    if let Some(ref mut child) = lock.child {
+        let pid = child.id();
+        send_sigint(pid);
+        thread::sleep(Duration::from_millis(200));
+        let _ = child.kill();
+        lock.child = None;
+        lock.project_id = None;
     }
 
     let mut cmd = Command::new(python_path);
     cmd.current_dir(ws_root.join("engine"));
-    cmd.arg("-m").arg("autodub.cli").arg("retry").arg(&project_dir).arg(stage);
+    let stage_lower = stage.to_lowercase();
+    cmd.arg("-m").arg("autodub.cli").arg("retry").arg(&project_dir).arg(stage_lower);
     if force {
         cmd.arg("--force");
     }

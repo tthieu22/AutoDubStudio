@@ -97,16 +97,24 @@ def validate_rendered_output(
         raise OutputValidationError(f"FFprobe failed to analyze rendered output file '{output_mp4}': {e}")
 
     streams = out_meta.get("streams", [])
-    video_streams = [s for s in streams if s.get("codec_type") == "video"]
-    audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+    if streams:
+        video_streams = [s for s in streams if s.get("codec_type") == "video"]
+        audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+        has_video = len(video_streams) > 0
+        v_stream = video_streams[0] if has_video else {}
+        out_width = int(v_stream.get("width", 0))
+        out_height = int(v_stream.get("height", 0))
+        out_duration = float(out_meta.get("format", {}).get("duration", v_stream.get("duration", 0.0)))
+    else:
+        # out_meta came from FFmpegRunner.probe summary dictionary
+        has_video = out_meta.get("video_codec") is not None
+        audio_streams = [1] if out_meta.get("has_audio") else []
+        out_width = int(out_meta.get("width") or 0)
+        out_height = int(out_meta.get("height") or 0)
+        out_duration = float(out_meta.get("duration") or 0.0)
 
-    if not video_streams:
+    if not has_video:
         raise OutputValidationError(f"Rendered output file '{output_mp4}' contains no video streams.")
-
-    v_stream = video_streams[0]
-    out_width = int(v_stream.get("width", 0))
-    out_height = int(v_stream.get("height", 0))
-    out_duration = float(out_meta.get("format", {}).get("duration", v_stream.get("duration", 0.0)))
 
     if out_width <= 0 or out_height <= 0:
         raise OutputValidationError(f"Invalid video dimensions in output file: {out_width}x{out_height}")

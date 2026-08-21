@@ -436,8 +436,9 @@ class RealRenderer:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             text=True,
+            bufsize=1,
             encoding="utf-8",
             errors="replace"
         )
@@ -487,7 +488,7 @@ class RealRenderer:
                 if now - last_progress_time >= 0.2:
                     last_progress_time = now
                     pct = (current_time_sec / total_duration * 100.0) if total_duration > 0 else 0.0
-                    pct = min(max(pct, 0.0), 99.0)
+                    pct = min(max(pct, 0.0), 100.0)
 
                     project.update_stage(stage_name, StageStatus.RUNNING.value, current=int(pct), progress=int(pct))
                     chk_data["progress"] = pct
@@ -504,11 +505,10 @@ class RealRenderer:
                     )
 
         retcode = process.wait()
-        stderr_out = process.stderr.read()
 
         if retcode != 0:
-            logger.error(f"[RENDERER] FFmpeg render process failed with code {retcode}: {stderr_out}")
-            raise RenderFFmpegError(f"FFmpeg render process failed with code {retcode}: {stderr_out}")
+            logger.error(f"[RENDERER] FFmpeg render process failed with code {retcode}")
+            raise RenderFFmpegError(f"FFmpeg render process failed with code {retcode}")
 
 
 class VideoRenderer:

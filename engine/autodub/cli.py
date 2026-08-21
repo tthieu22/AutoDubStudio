@@ -1,8 +1,18 @@
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import List
+
+# Add NVIDIA CUDA DLL paths from pip-installed packages to OS PATH
+# This is required for ctranslate2/faster-whisper to find cublas64_12.dll, cudnn, etc.
+_venv_site = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+if _venv_site.exists():
+    for _dll_dir in _venv_site.rglob("bin"):
+        if _dll_dir.is_dir():
+            os.add_dll_directory(str(_dll_dir))
+            os.environ["PATH"] = str(_dll_dir) + os.pathsep + os.environ.get("PATH", "")
 
 from autodub.pipeline.manager import PipelineManager
 from autodub.pipeline.state import PipelineStage

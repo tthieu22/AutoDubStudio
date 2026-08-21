@@ -308,9 +308,31 @@ export default function App() {
           [st]: { ...prev[st], status: 'COMPLETED' as StageStatus, progress: 100 }
         };
         const completedCount = STAGE_ORDER.filter(s => updated[s].status === 'COMPLETED' || updated[s].status === 'SKIPPED').length;
-        setOverallProgress(Math.round((completedCount / STAGE_ORDER.length) * 100));
+        const newOverall = Math.round((completedCount / STAGE_ORDER.length) * 100);
+        setOverallProgress(newOverall);
+        if (completedCount === STAGE_ORDER.length || st === 'RENDER') {
+          setPipelineStatus('COMPLETED');
+        }
         return updated;
       });
+    } else if (event.event === 'pipeline_complete') {
+      setPipelineStatus('COMPLETED');
+      setOverallProgress(100);
+      setStageProgresses(prev => {
+        const updated = { ...prev };
+        STAGE_ORDER.forEach(st => {
+          updated[st] = { ...updated[st], status: 'COMPLETED', progress: 100 };
+        });
+        return updated;
+      });
+      if (selectedProjectDir) {
+        loadProjectJson(selectedProjectDir);
+      }
+    } else if (event.event === 'pipeline_error') {
+      setPipelineStatus('FAILED');
+      if (event.error) {
+        setErrorDetails(event.error);
+      }
     } else if (event.event === 'stage_error' && event.stage) {
       const st = event.stage.toUpperCase() as StageName;
       const err = event.error || 'Lỗi chưa xác định';
