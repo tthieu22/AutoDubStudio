@@ -655,32 +655,74 @@ struct SystemHardwareMetrics {
 }
 
 #[tauri::command]
-fn get_system_hardware_metrics() -> SystemHardwareMetrics {
-    let ram_str = "10.1 GB / 16.0 GB (63%)".to_string();
-    let mut vram_str = "0.28 GB / 4.00 GB (GTX 1650 Ti)".to_string();
+fn list_jobs_queue(status: Option<String>) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
 
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(output) = Command::new("nvidia-smi")
-            .args(&["--query-gpu=memory.used,memory.total,name", "--format=csv,noheader,nounits"])
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"));
+    cmd.args(&["-m", "autodub.cli", "list", "--json"]);
+    if let Some(st) = status {
+        cmd.args(&["--status", &st]);
+    }
+
+    let output = cmd.output().map_err(|e| format!("Failed to list jobs: {}", e))?;
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        let val: serde_json::Value = serde_json::from_str(text.trim()).map_err(|e| format!("JSON parse error: {}", e))?;
+        Ok(val)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+fn pause_job_queue(job_id: String) -> Result<(), String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let output = Command::new(&python_path)
+        .current_dir(ws_root.join("engine"))
+        .args(&["-m", "autodub.cli", "pause", &job_id])
+        .output()
+        .map_err(|e| format!("Failed to pause job: {}", e))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+fn get_system_hardware_metrics() -> SystemHardwareMetrics {
+    let ws_root = find_workspace_root();
+    let python_path = find_python_path();
+
+    if let Some(ws) = ws_root {
+        if let Ok(output) = Command::new(&python_path)
+            .current_dir(ws.join("engine"))
+            .args(&["-m", "autodub.cli", "telemetry"])
             .output()
         {
-            let text = String::from_utf8_lossy(&output.stdout);
-            let parts: Vec<&str> = text.trim().split(',').collect();
-            if parts.len() >= 3 {
-                if let (Ok(used_mb), Ok(total_mb)) = (parts[0].trim().parse::<f32>(), parts[1].trim().parse::<f32>()) {
-                    let used_gb = used_mb / 1024.0;
-                    let total_gb = total_mb / 1024.0;
-                    let name = parts[2].trim().replace("NVIDIA ", "");
-                    vram_str = format!("{:.2} GB / {:.2} GB ({})", used_gb, total_gb, name);
+            if output.status.success() {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(stdout_str.trim()) {
+                    let ram = val["ram"].as_str().unwrap_or("N/A").to_string();
+                    let vram = val["vram"].as_str().unwrap_or("N/A").to_string();
+                    return SystemHardwareMetrics {
+                        ram_usage: ram,
+                        vram_usage: vram,
+                    };
                 }
             }
         }
     }
 
+    // Fallback if execution fails
     SystemHardwareMetrics {
-        ram_usage: ram_str,
-        vram_usage: vram_str,
+        ram_usage: "N/A (Telemetry Error)".to_string(),
+        vram_usage: "N/A (Telemetry Error)".to_string(),
     }
 }
 
@@ -699,6 +741,8 @@ fn main() {
             cancel_pipeline,
             resume_pipeline,
             retry_pipeline,
+            list_jobs_queue,
+            pause_job_queue,
             get_system_hardware_metrics
         ])
         .run(tauri::generate_context!())

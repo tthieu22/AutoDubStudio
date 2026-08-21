@@ -80,6 +80,9 @@ def main():
     clean_sp = subparsers.add_parser("clean", help="Clean completed or failed jobs from database")
     clean_sp.add_argument("--status", default=None, help="Specific job status to clean (default: all)")
 
+    # telemetry
+    subparsers.add_parser("telemetry", help="Get real-time RAM/VRAM hardware telemetry")
+
     # validate <project>
     val_sp = subparsers.add_parser("validate", help="Validate project integrity and dependencies")
     val_sp.add_argument("project", help="Project name or path")
@@ -203,6 +206,11 @@ def main():
         elif args.command == "clean":
             count = job_mgr.clean_jobs(status=args.status)
             print(f"Cleaned {count} jobs from database.")
+            return
+
+        elif args.command == "telemetry":
+            from autodub.utils.telemetry import get_telemetry
+            print(json.dumps(get_telemetry()))
             return
 
         # Commands supporting both job_id and project_id target

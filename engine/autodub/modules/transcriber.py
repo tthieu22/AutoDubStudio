@@ -15,6 +15,11 @@ from autodub.pipeline.progress import emit_event
 from autodub.utils.ffmpeg import FFmpegRunner, find_ffmpeg
 from autodub.exceptions import AutoDubError, PipelineCancelledError
 
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
+
 logger = logging.getLogger("autodub")
 
 def format_srt_timestamp(seconds: float) -> str:
@@ -52,70 +57,96 @@ class RealTranscriber:
         self,
         step_delay: float = 0.0,
         model_name: str = "small",
-        device: str = "auto",
-        compute_type: str = "int8",
-        chunk_duration: int = 600
+        device: str = "cuda",
+        compute_type: str = "float16",
+        chunk_duration: int = 600,
+        cpu_threads: int = 4,
+        beam_size: int = 1,
+        best_of: int = 1,
+        vad_filter: bool = True
     ):
         self.step_delay = step_delay
         self.model_name = model_name
         self.device_setting = device
         self.compute_type = compute_type
         self.chunk_duration = chunk_duration
+        self.cpu_threads = min(cpu_threads, 4)  # Core limit for 4C/8T CPU
+        self.beam_size = beam_size
+        self.best_of = best_of
+        self.vad_filter = vad_filter
         self.whisper_model = None
         self.active_device = None
 
     def _init_whisper_model(self):
-        """Initialize faster-whisper model with device selection and CPU fallback."""
+        """Initialize faster-whisper model with hardware-aware constraints and VRAM validation."""
         if self.whisper_model is not None:
             return
 
-        from faster_whisper import WhisperModel
+        if WhisperModel is None:
+            raise AutoDubError(
+                "DEPENDENCY_ERROR: Cannot find module 'faster_whisper'. "
+                "Please make sure you are running with the project virtual environment (d:\\FullStack\\AutoDubStudio\\engine\\.venv\\Scripts\\python.exe)."
+            )
+
+        from autodub.utils.telemetry import get_vram_info
+        from autodub.utils.gpu_lock import gpu_lock_manager
 
         whisper_dir = MODELS_DIR / "whisper"
         whisper_dir.mkdir(parents=True, exist_ok=True)
 
         target_device = self.device_setting.lower()
 
-        if target_device == "auto":
-            try:
-                logger.info(f"Attempting faster-whisper CUDA initialization (model={self.model_name}, compute_type={self.compute_type})...")
+        # VRAM Check before starting inference
+        if target_device in ["cuda", "auto"]:
+            vram_info = get_vram_info()
+            logger.info(f"[TRANSCRIBE] GPU VRAM check: free={vram_info['free_mb']:.1f} MB, total={vram_info['total_mb']:.1f} MB")
+            if vram_info["free_mb"] < 1000.0:
+                raise AutoDubError(f"INSUFFICIENT_VRAM: Available VRAM ({vram_info['free_mb']:.1f} MB) is below safe threshold (1000 MB).")
+
+            # Acquire GPU Lock to prevent Ollama VRAM contention
+            if not gpu_lock_manager.acquire_gpu("WHISPER_TRANSCRIBE", timeout=60.0):
+                raise AutoDubError("RESOURCE_LIMIT_REACHED: Failed to acquire GPU lock due to concurrent GPU workload.")
+
+        try:
+            if target_device in ["cuda", "auto"]:
+                logger.info(f"[TRANSCRIBE] Initializing faster-whisper (model={self.model_name}, device=cuda, compute_type={self.compute_type}, cpu_threads={self.cpu_threads}, num_workers=1)...")
                 self.whisper_model = WhisperModel(
                     self.model_name,
                     device="cuda",
                     compute_type=self.compute_type,
+                    cpu_threads=self.cpu_threads,
+                    num_workers=1,
                     download_root=str(whisper_dir)
                 )
                 self.active_device = "cuda"
-                logger.info("faster-whisper CUDA initialized successfully.")
-            except Exception as e:
-                logger.warning(f"CUDA unavailable or failed to initialize ({e}). Falling back to CPU.")
+                logger.info("[TRANSCRIBE] faster-whisper CUDA initialized successfully.")
+            else:
+                logger.info(f"[TRANSCRIBE] Initializing faster-whisper on CPU (cpu_threads={self.cpu_threads})...")
                 self.whisper_model = WhisperModel(
                     self.model_name,
                     device="cpu",
                     compute_type="int8",
+                    cpu_threads=self.cpu_threads,
+                    num_workers=1,
                     download_root=str(whisper_dir)
                 )
                 self.active_device = "cpu"
-                logger.info("faster-whisper CPU initialized successfully.")
-        elif target_device == "cuda":
-            try:
+        except Exception as e:
+            if target_device == "cuda":
+                raise AutoDubError(f"CUDA_INITIALIZATION_FAILED: CUDA requested but failed to initialize: {e}")
+            elif target_device == "auto":
+                logger.warning(f"[TRANSCRIBE] CUDA initialization failed ({e}). Explicitly falling back to CPU (cpu_threads={self.cpu_threads}).")
                 self.whisper_model = WhisperModel(
                     self.model_name,
-                    device="cuda",
-                    compute_type=self.compute_type,
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=self.cpu_threads,
+                    num_workers=1,
                     download_root=str(whisper_dir)
                 )
-                self.active_device = "cuda"
-            except Exception as e:
-                raise AutoDubError(f"CUDA device explicitly requested but failed to initialize: {e}")
-        else:
-            self.whisper_model = WhisperModel(
-                self.model_name,
-                device="cpu",
-                compute_type="int8",
-                download_root=str(whisper_dir)
-            )
-            self.active_device = "cpu"
+                self.active_device = "cpu"
+            else:
+                raise AutoDubError(f"MODEL_LOAD_FAILED: {e}")
 
     def _create_audio_chunks(self, audio_path: Path, output_chunks_dir: Path, total_duration: float) -> List[Dict[str, Any]]:
         """Split audio file into 10-minute (600s) chunk files using FFmpeg."""
@@ -248,8 +279,9 @@ class RealTranscriber:
                 segments_iter, info = self.whisper_model.transcribe(
                     str(chunk_info["file"]),
                     language=lang_param,
-                    beam_size=5,
-                    vad_filter=True
+                    beam_size=self.beam_size,
+                    best_of=self.best_of,
+                    vad_filter=self.vad_filter
                 )
 
                 if info and hasattr(info, "language"):
@@ -353,6 +385,10 @@ class RealTranscriber:
             emit_event("stage_error", stage_name, error=str(e))
             raise
         finally:
+            # Release GPU lock
+            from autodub.utils.gpu_lock import gpu_lock_manager
+            gpu_lock_manager.release_gpu("WHISPER_TRANSCRIBE")
+
             # Memory Cleanup
             self.whisper_model = None
             gc.collect()

@@ -274,15 +274,14 @@ class RealTranslator:
         emit_event("stage_start", stage_name, current=len(completed_segment_ids), total=total_segments)
 
         system_prompt = (
-            f"You are a professional subtitle translator.\n"
+            f"You are a professional subtitle translator and voiceover scriptwriter.\n"
             f"Translate subtitle segments from {self.source_language} to {self.target_language}.\n\n"
             f"Rules:\n"
-            f"- Return ONLY the translations, one per line, matching the input order.\n"
-            f"- Each output line corresponds to one input line.\n"
-            f"- Use natural Vietnamese spelling (tiếng Việt chuẩn chính tả).\n"
-            f"- Transliterate English loanwords into Vietnamese phonetics for voiceover.\n"
-            f"- Do not add numbering, explanations, quotes, or markdown.\n"
-            f"- Keep output concise and natural for voiceover audio."
+            f"- Return ONLY the final translations, matching the input order.\n"
+            f"- Use natural, grammatically correct Vietnamese spelling (tiếng Việt chuẩn chính tả).\n"
+            f"- Correct accidental foreign language words/contamination (e.g. Chinese fragments) into natural Vietnamese.\n"
+            f"- Preserve intentional loanwords/terms ('Shadowing', 'podcast', 'chill').\n"
+            f"- Do not add explanations, quotes, or markdown code blocks."
         )
 
         BATCH_SIZE = 15
@@ -334,19 +333,15 @@ class RealTranslator:
                     # Parse batch response - one translation per line
                     raw_lines = [l.strip() for l in raw_res.strip().splitlines() if l.strip()]
                     # Remove numbering prefixes like "1. ", "2. "
-                    cleaned_lines = []
-                    for line in raw_lines:
-                        cleaned = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
-                        cleaned = clean_translation(cleaned)
-                        if cleaned:
-                            cleaned_lines.append(cleaned)
-
                     # Map translations to segments
                     for i, (orig_idx, seg_id, orig_text) in enumerate(batch):
-                        if i < len(cleaned_lines):
-                            translations_dict[str(seg_id)] = cleaned_lines[i]
+                        if i < len(raw_lines):
+                            line = raw_lines[i]
+                            # Remove batch index prefix if matches like "1. ", "1) ", "1: "
+                            cleaned = re.sub(r'^\d+[\.\)\:]\s*', '', line).strip()
+                            cleaned = clean_translation(cleaned)
+                            translations_dict[str(seg_id)] = cleaned
                         else:
-                            # Fallback: translate individually if batch parsing failed
                             fallback_res = self.client.generate(prompt=orig_text, system=system_prompt, model=self.model_name, timeout=self.timeout)
                             translations_dict[str(seg_id)] = clean_translation(fallback_res)
                         completed_segment_ids.add(seg_id)
@@ -488,4 +483,31 @@ class RealTranslator:
         secs = float(parts[2])
         return hours * 3600.0 + mins * 60.0 + secs
 
+def build_semantic_segmentation_prompt(segments: List[Dict[str, Any]], source_language: str = "en", target_language: str = "vi") -> str:
+    """Build Ollama prompt for semantic segmentation & language cleanup."""
+    system_prompt = (
+        f"# AUTODUBSTUDIO — OLLAMA SUBTITLE SEMANTIC SEGMENTATION & LANGUAGE CLEANUP\n\n"
+        f"## ROLE\n"
+        f"You are the Subtitle Semantic Processing Engine of AutoDubStudio.\n\n"
+        f"INPUT:\n"
+        f"SOURCE_LANGUAGE: {source_language}\n"
+        f"TARGET_LANGUAGE: {target_language}\n\n"
+        f"Analyze segments together and return ONLY valid JSON according to instructions."
+    )
+    user_payload = {
+        "SOURCE_LANGUAGE": source_language,
+        "TARGET_LANGUAGE": target_language,
+        "SEGMENTS": [
+            {
+                "id": s.get("id"),
+                "start": s.get("start"),
+                "end": s.get("end"),
+                "text": s.get("text", "")
+            }
+            for s in segments
+        ]
+    }
+    return f"{system_prompt}\n\n{json.dumps(user_payload, ensure_ascii=False, indent=2)}"
+
 OllamaTranslator = RealTranslator
+

@@ -88,6 +88,20 @@ export class PythonEngineService {
     return invoke<string[]>('list_projects');
   }
 
+  static async listJobsQueue(status?: string): Promise<any[]> {
+    if (!isTauri()) {
+      return [];
+    }
+    return invoke<any[]>('list_jobs_queue', { status: status || null });
+  }
+
+  static async pauseJobQueue(jobId: string): Promise<void> {
+    if (!isTauri()) {
+      return;
+    }
+    return invoke<void>('pause_job_queue', { jobId });
+  }
+
   static async openOutputFolder(projectDir: string): Promise<void> {
     if (!isTauri()) {
       alert(`[Mock Alert] Opening output directory at: ${projectDir}/output`);

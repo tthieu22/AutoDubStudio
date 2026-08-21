@@ -162,6 +162,9 @@ class TestPhase4Transcriber(unittest.TestCase):
         self.assertEqual(mtime1, mtime2)
 
         # Running with force should re-transcribe
+        def mock_init():
+            transcriber.whisper_model = MockWhisperModel()
+        transcriber._init_whisper_model = mock_init
         transcriber.run(self.proj, force=True)
         mtime3 = srt_file.stat().st_mtime
         self.assertNotEqual(mtime2, mtime3)

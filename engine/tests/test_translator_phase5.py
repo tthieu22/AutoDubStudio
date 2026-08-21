@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -50,7 +51,17 @@ class MockOllamaClient(OllamaClient):
 
         if prompt in self.response_map:
             return self.response_map[prompt]
-        return f"Bản dịch: {prompt} (translated)"
+
+        # Handle batch prompt with numbered lines
+        lines = prompt.strip().splitlines()
+        res_lines = []
+        for line in lines:
+            cleaned_in = re.sub(r'^\d+[\.\)\:]\s*', '', line).strip()
+            if cleaned_in in self.response_map:
+                res_lines.append(self.response_map[cleaned_in])
+            else:
+                res_lines.append(f"Bản dịch: {cleaned_in} (translated)")
+        return "\n".join(res_lines)
 
 class TestPhase5Translator(unittest.TestCase):
     def setUp(self):
