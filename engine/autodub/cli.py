@@ -87,6 +87,24 @@ def main():
     val_sp = subparsers.add_parser("validate", help="Validate project integrity and dependencies")
     val_sp.add_argument("project", help="Project name or path")
 
+    # qc <project> [--json]
+    qc_sp = subparsers.add_parser("qc", help="Run Quality Control & Audio-Subtitle Sync inspection")
+    qc_sp.add_argument("project", help="Project name or path")
+    qc_sp.add_argument("--json", action="store_true", help="Output machine-readable JSON report")
+
+    # autofit <project>
+    autofit_sp = subparsers.add_parser("autofit", help="Automatically adjust timing and fix subtitle overlaps")
+    autofit_sp.add_argument("project", help="Project name or path")
+
+    # preview-tts --text <text> [--voice <voice>] [--gender <gender>] [--output <path>]
+    prev_sp = subparsers.add_parser("preview-tts", help="Generate single sentence preview audio clip")
+    prev_sp.add_argument("--text", required=True, help="Text sentence to synthesize")
+    prev_sp.add_argument("--voice", default="vi_VN-vais1000-medium", help="Voice model or engine name")
+    prev_sp.add_argument("--gender", default="female", help="Voice gender (female or male)")
+    prev_sp.add_argument("--output", default="preview.mp3", help="Output file path")
+
+
+
     # individual stage runners
     for stage_enum in PipelineStage:
         sp = subparsers.add_parser(stage_enum.value, help=f"Execute {stage_enum.value} stage")
@@ -277,6 +295,66 @@ def main():
             mgr = PipelineManager(target)
             if mgr.validate():
                 print(f"Project '{target}' is VALID.")
+
+        elif args.command == "qc":
+            from autodub.modules.qc import QualityControlEngine
+            qc_engine = QualityControlEngine(args.project)
+            report = qc_engine.run_qc_inspection()
+            if getattr(args, "json", False):
+                print(json.dumps(report, indent=2, ensure_ascii=False))
+            else:
+                print(f"QC Inspection for '{args.project}': Valid={report['valid']} Issues={len(report['issues'])}")
+                for issue in report['issues']:
+                    print(f"  [{issue['severity']}] Seg #{issue['segment_id']}: {issue['message']}")
+
+        elif args.command == "autofit":
+            from autodub.modules.qc import QualityControlEngine
+            qc_engine = QualityControlEngine(args.project)
+            res = qc_engine.apply_autofit()
+            print(json.dumps(res, indent=2))
+
+        elif args.command == "preview-tts":
+            text = args.text
+            voice = args.voice.lower()
+            gender = args.gender.lower()
+            output_file = Path(args.output)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Select exact Vietnamese Neural voice
+            if "nam" in voice or "male" in voice or "vnu" in voice or "namminh" in voice or gender == "male":
+                tts_voice = "vi-VN-NamMinhNeural"
+            else:
+                tts_voice = "vi-VN-HoaiMyNeural"
+
+            import base64
+
+            def _encode_b64(path):
+                if path.exists() and path.stat().st_size > 0:
+                    with open(path, "rb") as f:
+                        return "data:audio/mp3;base64," + base64.b64encode(f.read()).decode("utf-8")
+                return ""
+
+            try:
+                import asyncio
+                import edge_tts
+                async def _gen():
+                    communicate = edge_tts.Communicate(text, tts_voice)
+                    await communicate.save(str(output_file))
+                asyncio.run(_gen())
+                b64 = _encode_b64(output_file)
+                print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "edge-tts", "voice": tts_voice}))
+            except Exception as e:
+                # Fallback to gTTS
+                try:
+                    import gtts
+                    g_tts = gtts.gTTS(text, lang="vi")
+                    g_tts.save(str(output_file))
+                    b64 = _encode_b64(output_file)
+                    print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "gtts", "voice": "vi"}))
+                except Exception as e2:
+                    print(json.dumps({"success": False, "error": str(e2)}))
+
+
 
         else:
             # Individual stage command

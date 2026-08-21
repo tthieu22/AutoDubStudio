@@ -158,6 +158,54 @@ export class PythonEngineService {
     return invoke<void>('write_project_json', { projectDir, data });
   }
 
+  static async readSubtitles(projectDir: string): Promise<any[]> {
+    if (!isTauri()) {
+      return [
+        { id: 1, start: 0.0, end: 4.96, text: "Welcome everyone to our travel documentary.", translated_text: "Xin chào mọi người đến với thước phim tài liệu du lịch của chúng tôi.", speaker: "Speaker 1", voice: "vi_VN-vais1000-medium", speed: 1.0 },
+        { id: 2, start: 6.12, end: 9.16, text: "Today we will explore the breathtaking mountains of Da Lat.", translated_text: "Hôm nay chúng ta sẽ cùng khám phá vùng núi tuyệt đẹp của Đà Lạt.", speaker: "Speaker 1", voice: "vi_VN-vais1000-medium", speed: 1.0 },
+        { id: 3, start: 10.0, end: 14.2, text: "The weather is cool and refreshing all year round.", translated_text: "Thời tiết tại đây quanh năm luôn mát mẻ và trong lành.", speaker: "Speaker 2", voice: "vi_VN-vnu-medium", speed: 1.0 }
+      ];
+    }
+    return invoke<any[]>('read_subtitles', { projectDir });
+  }
+
+  static async writeSubtitles(projectDir: string, data: any[]): Promise<void> {
+    if (!isTauri()) {
+      return;
+    }
+    return invoke<void>('write_subtitles', { projectDir, data });
+  }
+
+  static async runQcCheck(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return {
+        valid: true,
+        total_segments: 3,
+        error_count: 0,
+        warning_count: 1,
+        issues: [
+          { severity: 'WARNING', segment_id: 2, type: 'SPEECH_EXCEEDS_WINDOW', message: 'Segment #2 TTS audio exceeds window by +0.22s', action: 'Auto Fit' }
+        ],
+        stats: { avg_tts_duration_ratio: 1.04, max_duration_exceeded_sec: 0.22, missing_audio_segments: 0 }
+      };
+    }
+    return invoke<any>('run_qc_check', { projectDir });
+  }
+
+  static async applyAutofitQc(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return { success: true, modified: true, total_segments: 3 };
+    }
+    return invoke<any>('apply_autofit_qc', { projectDir });
+  }
+
+  static async previewTtsVoice(text: string, voice: string, gender: string): Promise<any> {
+    if (!isTauri()) {
+      return { success: true, audio_b64: "" };
+    }
+    return invoke<any>('preview_tts_voice', { text, voice, gender });
+  }
+
   static async readPipelineLog(projectDir: string, limit: number = 100): Promise<string[]> {
     if (!isTauri()) {
       return [

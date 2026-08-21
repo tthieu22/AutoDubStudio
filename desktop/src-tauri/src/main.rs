@@ -726,6 +726,109 @@ fn get_system_hardware_metrics() -> SystemHardwareMetrics {
     }
 }
 
+#[tauri::command]
+#[allow(dead_code)]
+fn read_subtitles(project_dir: String) -> Result<serde_json::Value, String> {
+    let p_dir = PathBuf::from(&project_dir);
+    let trans_file = p_dir.join("transcript").join("translation.json");
+    let orig_file = p_dir.join("transcript").join("transcript.json");
+
+    let file_to_read = if trans_file.exists() {
+        trans_file
+    } else if orig_file.exists() {
+        orig_file
+    } else {
+        return Err("No transcript or translation JSON file found.".to_string());
+    };
+
+    let content = fs::read_to_string(file_to_read).map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    Ok(json)
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+fn write_subtitles(project_dir: String, data: serde_json::Value) -> Result<(), String> {
+    let p_dir = PathBuf::from(&project_dir);
+    let trans_dir = p_dir.join("transcript");
+    fs::create_dir_all(&trans_dir).map_err(|e| e.to_string())?;
+
+    let trans_file = trans_dir.join("translation.json");
+    let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+    fs::write(trans_file, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+fn run_qc_check(project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let output = Command::new(&python_path)
+        .current_dir(ws_root.join("engine"))
+        .args(&["-m", "autodub.cli", "qc", &project_dir, "--json"])
+        .output()
+        .map_err(|e| format!("Failed to execute QC command: {}", e))?;
+
+    if output.status.success() {
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let json: serde_json::Value = serde_json::from_str(stdout_str.trim()).map_err(|e| e.to_string())?;
+        Ok(json)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+fn apply_autofit_qc(project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let output = Command::new(&python_path)
+        .current_dir(ws_root.join("engine"))
+        .args(&["-m", "autodub.cli", "autofit", &project_dir])
+        .output()
+        .map_err(|e| format!("Failed to execute autofit command: {}", e))?;
+
+    if output.status.success() {
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let json: serde_json::Value = serde_json::from_str(stdout_str.trim()).map_err(|e| e.to_string())?;
+        Ok(json)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+fn preview_tts_voice(text: String, voice: String, gender: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let temp_mp3 = ws_root.join("engine").join("logs").join("preview.mp3");
+
+    let output = Command::new(&python_path)
+        .current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "preview-tts",
+            "--text", &text,
+            "--voice", &voice,
+            "--gender", &gender,
+            "--output", &temp_mp3.to_string_lossy()
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run preview-tts: {}", e))?;
+
+    if output.status.success() {
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let json: serde_json::Value = serde_json::from_str(stdout_str.trim()).map_err(|e| e.to_string())?;
+        Ok(json)
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
@@ -743,7 +846,12 @@ fn main() {
             retry_pipeline,
             list_jobs_queue,
             pause_job_queue,
-            get_system_hardware_metrics
+            get_system_hardware_metrics,
+            read_subtitles,
+            write_subtitles,
+            run_qc_check,
+            apply_autofit_qc,
+            preview_tts_voice
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

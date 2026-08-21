@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Terminal, Video, Settings } from 'lucide-react';
+import { Activity, Terminal, Video, Settings, FileText, Mic, ShieldCheck, Share2 } from 'lucide-react';
 import { PythonEngineService } from './services/pythonEngine';
 import { PipelineStatus, StageName, StageProgressInfo, PipelineProgressEvent, StageStatus } from './types/pipeline';
 
@@ -10,6 +10,10 @@ import { PipelineWorkflow } from './components/PipelineWorkflow';
 import { ConsoleLogs } from './components/ConsoleLogs';
 import { OutputPreview } from './components/OutputPreview';
 import { SystemSettings } from './components/SystemSettings';
+import { SubtitleEditor } from './components/SubtitleEditor';
+import { VoiceStudio } from './components/VoiceStudio';
+import { QualityControl } from './components/QualityControl';
+import { ExportPresets } from './components/ExportPresets';
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
@@ -23,7 +27,7 @@ const STAGE_ORDER: StageName[] = [
 export default function App() {
   // Screen & Navigation
   const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'logs' | 'preview' | 'settings'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'subtitles' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('pipeline');
   
   // Projects state
   const [projectsList, setProjectsList] = useState<string[]>([]);
@@ -382,53 +386,101 @@ export default function App() {
             />
 
             {/* TAB NAVIGATION HEADER */}
-            <div style={{ display: 'flex', background: 'rgba(2, 6, 23, 0.6)', borderBottom: '1px solid var(--border-glass)', padding: '0 24px' }}>
+            <div style={{ display: 'flex', background: 'rgba(2, 6, 23, 0.6)', borderBottom: '1px solid var(--border-glass)', padding: '0 24px', overflowX: 'auto' }}>
               <button
                 onClick={() => setActiveTab('pipeline')}
                 style={{
-                  padding: '14px 20px', background: 'transparent',
+                  padding: '14px 18px', background: 'transparent',
                   color: activeTab === 'pipeline' ? 'var(--cyan)' : 'var(--text-muted)',
                   border: 'none', borderBottom: activeTab === 'pipeline' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
                 }}
               >
-                <Activity size={16} /> Tiến Trình (Pipeline Workflow)
+                <Activity size={15} /> Tiến Trình (Pipeline)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('subtitles')}
+                style={{
+                  padding: '14px 18px', background: 'transparent',
+                  color: activeTab === 'subtitles' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'subtitles' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
+                }}
+              >
+                <FileText size={15} /> Sửa Phụ Đề (Subtitle Editor)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('voices')}
+                style={{
+                  padding: '14px 18px', background: 'transparent',
+                  color: activeTab === 'voices' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'voices' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
+                }}
+              >
+                <Mic size={15} /> Voice Studio (TTS Preview)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('qc')}
+                style={{
+                  padding: '14px 18px', background: 'transparent',
+                  color: activeTab === 'qc' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'qc' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
+                }}
+              >
+                <ShieldCheck size={15} /> Quality Control (QC)
               </button>
 
               <button
                 onClick={() => setActiveTab('logs')}
                 style={{
-                  padding: '14px 20px', background: 'transparent',
+                  padding: '14px 18px', background: 'transparent',
                   color: activeTab === 'logs' ? 'var(--cyan)' : 'var(--text-muted)',
                   border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
                 }}
               >
-                <Terminal size={16} /> Console Logs
+                <Terminal size={15} /> Console Logs
               </button>
 
               <button
                 onClick={() => setActiveTab('preview')}
                 style={{
-                  padding: '14px 20px', background: 'transparent',
+                  padding: '14px 18px', background: 'transparent',
                   color: activeTab === 'preview' ? 'var(--cyan)' : 'var(--text-muted)',
                   border: 'none', borderBottom: activeTab === 'preview' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
                 }}
               >
-                <Video size={16} /> Xem Trước Video (Preview)
+                <Video size={15} /> Xem Trước Video
+              </button>
+
+              <button
+                onClick={() => setActiveTab('export')}
+                style={{
+                  padding: '14px 18px', background: 'transparent',
+                  color: activeTab === 'export' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'export' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
+                }}
+              >
+                <Share2 size={15} /> Export Presets
               </button>
 
               <button
                 onClick={() => setActiveTab('settings')}
                 style={{
-                  padding: '14px 20px', background: 'transparent',
+                  padding: '14px 18px', background: 'transparent',
                   color: activeTab === 'settings' ? 'var(--cyan)' : 'var(--text-muted)',
                   border: 'none', borderBottom: activeTab === 'settings' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px'
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
                 }}
               >
-                <Settings size={16} /> Cấu Hình Hệ Thống
+                <Settings size={15} /> Cấu Hình
               </button>
             </div>
 
@@ -445,12 +497,28 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'subtitles' && (
+                <SubtitleEditor projectDir={selectedProjectDir} />
+              )}
+
+              {activeTab === 'voices' && (
+                <VoiceStudio projectDir={selectedProjectDir} />
+              )}
+
+              {activeTab === 'qc' && (
+                <QualityControl projectDir={selectedProjectDir} />
+              )}
+
               {activeTab === 'logs' && (
                 <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
               )}
 
               {activeTab === 'preview' && (
                 <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
+              )}
+
+              {activeTab === 'export' && (
+                <ExportPresets projectDir={selectedProjectDir} />
               )}
 
               {activeTab === 'settings' && (
