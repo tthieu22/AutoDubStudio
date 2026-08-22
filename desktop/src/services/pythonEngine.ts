@@ -206,6 +206,44 @@ export class PythonEngineService {
     return invoke<any>('preview_tts_voice', { text, voice, gender });
   }
 
+  static async synthesizeSegmentVoice(projectDir: string, segmentId: number | string, text: string, voice?: string): Promise<{ success: boolean; duration?: number; audioPath?: string }> {
+    if (!isTauri()) {
+      return { success: true, duration: 4.0, audioPath: `audio/segments/seg_${segmentId}.wav` };
+    }
+    return invoke<any>('synthesize_segment_voice', { projectDir, segmentId: String(segmentId), text, voice });
+  }
+
+  static async renderFinalComposition(projectDir: string, composition: any): Promise<{ success: boolean; outputPath?: string }> {
+    if (!isTauri()) {
+      return { success: true, outputPath: `${projectDir}/output/final_dubbed.mp4` };
+    }
+    return invoke<any>('render_final_composition', { projectDir, composition });
+  }
+
+  static async readComposition(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return {
+        version: 1,
+        width: 1920,
+        height: 1080,
+        fps: 30.0,
+        duration: 120.0,
+        layers: [
+          { id: "layer-title-1", type: "title", text: "AUTO DUB STUDIO", start: 0, duration: 5, x: 700, y: 80, z_index: 2, style: { font_size: 44, color: "#facc15", border_width: 2, border_color: "#000000" }, visible: true, locked: false },
+          { id: "layer-logo-1", type: "logo", text: "LOGO WATERMARK", start: 0, duration: 120, x: 1650, y: 60, z_index: 3, style: { font_size: 24, color: "#38bdf8", border_width: 1, border_color: "#000000" }, visible: true, locked: false }
+        ]
+      };
+    }
+    return invoke<any>('read_composition', { projectDir });
+  }
+
+  static async writeComposition(projectDir: string, data: any): Promise<void> {
+    if (!isTauri()) {
+      return;
+    }
+    return invoke<void>('write_composition', { projectDir, data });
+  }
+
   static async readPipelineLog(projectDir: string, limit: number = 100): Promise<string[]> {
     if (!isTauri()) {
       return [

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, Save, RotateCcw, Clock, User, Volume2, Sparkles, AlertCircle } from 'lucide-react';
 import { PythonEngineService } from '../services/pythonEngine';
+import { editorStore } from '../editor/state/editorStore';
 
 interface SubtitleEditorProps {
   projectDir: string;
@@ -28,13 +29,31 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
   };
 
   const handleFieldChange = (id: number, field: string, value: any) => {
-    setSubtitles(prev => prev.map(s => {
+    const updated = subtitles.map(s => {
       if (s.id === id) {
         return { ...s, [field]: value };
       }
       return s;
-    }));
+    });
+    setSubtitles(updated);
     setHasChanges(true);
+
+    // Sync directly to timeline subtitle clip
+    const currentComp = editorStore.getComposition();
+    const clipId = `clip-sub-${id}`;
+    const targetClip = currentComp.clips.find(c => c.id === clipId);
+    if (targetClip) {
+      if (field === 'translated_text' || field === 'text') {
+        editorStore.updateClip(clipId, {
+          name: `Sub #${id}: ${(value || '').substring(0, 16)}...`,
+          subtitleProps: { ...targetClip.subtitleProps, text: value }
+        });
+      } else if (field === 'start') {
+        editorStore.updateClip(clipId, { startTime: Number(value) });
+      } else if (field === 'end') {
+        editorStore.updateClip(clipId, { duration: Math.max(0.2, Number(value) - targetClip.startTime) });
+      }
+    }
   };
 
   const handleSave = async () => {
@@ -42,7 +61,6 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
     try {
       await PythonEngineService.writeSubtitles(projectDir, subtitles);
       setHasChanges(false);
-      alert('Đã lưu thay đổi phụ đề thành công!');
     } catch (err) {
       alert(`Lưu thất bại: ${err}`);
     } finally {

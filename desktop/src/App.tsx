@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Terminal, Video, Settings, FileText, Mic, ShieldCheck, Share2 } from 'lucide-react';
+import { Activity, Terminal, Video, Settings, FileText, Mic, ShieldCheck, Share2, Layers } from 'lucide-react';
 import { PythonEngineService } from './services/pythonEngine';
 import { PipelineStatus, StageName, StageProgressInfo, PipelineProgressEvent, StageStatus } from './types/pipeline';
 
@@ -14,6 +14,10 @@ import { SubtitleEditor } from './components/SubtitleEditor';
 import { VoiceStudio } from './components/VoiceStudio';
 import { QualityControl } from './components/QualityControl';
 import { ExportPresets } from './components/ExportPresets';
+import { TimelineEditor } from './components/TimelineEditor';
+import { EditorLayout } from './components/editor/EditorLayout';
+import { CompositionBuilder } from './editor/state/compositionBuilder';
+import { editorStore } from './editor/state/editorStore';
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
@@ -27,7 +31,7 @@ const STAGE_ORDER: StageName[] = [
 export default function App() {
   // Screen & Navigation
   const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'subtitles' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'subtitles' | 'timeline' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('pipeline');
   
   // Projects state
   const [projectsList, setProjectsList] = useState<string[]>([]);
@@ -155,6 +159,35 @@ export default function App() {
   const loadProjectJson = async (path: string) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
+      
+      // Auto Sync to Timeline Editor Store
+      try {
+        const subs = await PythonEngineService.readSubtitles(path);
+        const compData = await PythonEngineService.readComposition(path);
+        const segments = (subs || []).map((s: any) => ({
+          id: s.id,
+          start: Number(s.start),
+          end: Number(s.end),
+          text: s.translated_text || s.text || '',
+          speaker: s.speaker,
+        }));
+
+        const newComp = CompositionBuilder.buildFromArtifacts({
+          projectId: json.name || path.split('/').pop() || 'project',
+          projectName: json.name || 'AutoDub Project',
+          videoDuration: json.source?.duration || 120,
+          sourceVideoPath: json.source?.path || 'source/input.mp4',
+          segments: segments,
+          dubbedAudioPath: 'audio/dubbed_synchronized.wav',
+          dubbedAudioDuration: segments.length > 0 ? Math.max(...segments.map((s: any) => s.end)) : 60,
+          layers: compData?.layers || []
+        });
+
+        editorStore.setComposition(newComp, false);
+      } catch (syncErr) {
+        console.error('Failed to sync to timeline editorStore:', syncErr);
+      }
+
       if (json.pipeline) {
         const progresses = { ...stageProgresses };
         let totalCompleted = 0;
@@ -319,6 +352,11 @@ export default function App() {
         }
         return updated;
       });
+
+      // Reload project artifacts & timeline immediately on each AI stage completion
+      if (selectedProjectDir) {
+        loadProjectJson(selectedProjectDir);
+      }
     } else if (event.event === 'pipeline_complete') {
       setPipelineStatus('COMPLETED');
       setOverallProgress(100);
@@ -412,6 +450,18 @@ export default function App() {
               </button>
 
               <button
+                onClick={() => setActiveTab('timeline')}
+                style={{
+                  padding: '14px 18px', background: 'transparent',
+                  color: activeTab === 'timeline' ? 'var(--cyan)' : 'var(--text-muted)',
+                  border: 'none', borderBottom: activeTab === 'timeline' ? '2px solid var(--cyan)' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
+                }}
+              >
+                <Layers size={15} /> Timeline & Layers Studio
+              </button>
+
+              <button
                 onClick={() => setActiveTab('voices')}
                 style={{
                   padding: '14px 18px', background: 'transparent',
@@ -493,12 +543,19 @@ export default function App() {
                   stageProgresses={stageProgresses}
                   errorDetails={errorDetails}
                   onRetryStage={handleRetryStage}
+                  onOpenTimeline={() => setActiveTab('timeline')}
                   formatTime={formatTime}
                 />
               )}
 
               {activeTab === 'subtitles' && (
                 <SubtitleEditor projectDir={selectedProjectDir} />
+              )}
+
+              {activeTab === 'timeline' && (
+                <div style={{ margin: '-24px', width: 'calc(100% + 48px)', height: 'calc(100vh - 128px)', position: 'relative' }}>
+                  <EditorLayout onBackToApp={() => setActiveTab('pipeline')} />
+                </div>
               )}
 
               {activeTab === 'voices' && (

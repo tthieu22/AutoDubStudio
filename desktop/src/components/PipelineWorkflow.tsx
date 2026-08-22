@@ -18,6 +18,7 @@ interface PipelineWorkflowProps {
   stageProgresses: Record<StageName, StageProgressInfo>;
   errorDetails: string | null;
   onRetryStage: (stage: StageName) => void;
+  onOpenTimeline?: () => void;
   formatTime: (seconds: number) => string;
 }
 
@@ -54,6 +55,7 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
   stageProgresses,
   errorDetails,
   onRetryStage,
+  onOpenTimeline,
   formatTime
 }) => {
   return (
@@ -73,6 +75,41 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
           <div style={{ width: `${overallProgress}%`, background: 'linear-gradient(90deg, #6366f1, #06b6d4, #10b981)', height: '100%', transition: 'width 0.4s ease' }}></div>
         </div>
       </div>
+
+      {/* PIPELINE COMPLETED PROMINENT BANNER */}
+      {overallProgress >= 100 && onOpenTimeline && (
+        <div 
+          className="glass-card animate-pulse" 
+          style={{ 
+            padding: '24px', 
+            borderRadius: '16px', 
+            border: '2px solid #10b981', 
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ✓ All AI Processing Completed!
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#cbd5e1' }}>
+              Your video is ready for editing. Jump into the Timeline & Layers Studio to review, adjust subtitles, and fine-tune layers.
+            </p>
+          </div>
+
+          <button
+            onClick={onOpenTimeline}
+            className="btn-primary"
+            style={{ padding: '10px 24px', fontSize: '14px', fontWeight: 800, gap: '8px', background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}
+          >
+            <Layers size={18} /> EDIT TIMELINE (CHỈNH SỬA VIDEO)
+          </button>
+        </div>
+      )}
 
       {/* STAGE CARDS GRID */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
@@ -118,18 +155,29 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
                 ></div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   {info.total > 0 ? `Tiến độ: ${info.current}/${info.total} (${info.progress}%)` : `Phần trăm: ${info.progress}%`}
                 </span>
 
-                <button 
-                  className="btn-secondary" 
-                  onClick={() => onRetryStage(st)}
-                  style={{ padding: '4px 10px', fontSize: '11px' }}
-                >
-                  <RefreshCw size={12} /> Chạy Lại
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {st === 'RENDER' && onOpenTimeline && (
+                    <button 
+                      className="btn-primary" 
+                      onClick={onOpenTimeline}
+                      style={{ padding: '4px 10px', fontSize: '11px', gap: '4px' }}
+                    >
+                      <Layers size={12} /> Chỉnh sửa trên Timeline
+                    </button>
+                  )}
+                  <button 
+                    className="btn-secondary" 
+                    onClick={() => onRetryStage(st)}
+                    style={{ padding: '4px 10px', fontSize: '11px' }}
+                  >
+                    <RefreshCw size={12} /> Chạy Lại
+                  </button>
+                </div>
               </div>
 
               {info.error && (

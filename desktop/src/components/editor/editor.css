@@ -1,0 +1,324 @@
+/* Professional Desktop Video Editor CSS */
+
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #070a12;
+  color: #f8fafc;
+  overflow: hidden;
+  user-select: none;
+  font-family: var(--font-body, system-ui, -apple-system, sans-serif);
+  position: relative;
+}
+
+/* TOP TOOLBAR */
+.editor-topbar {
+  height: 48px;
+  min-height: 48px;
+  background-color: #0d111a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 40;
+}
+
+.editor-brand-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+.editor-project-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  background-color: rgba(15, 23, 42, 0.7);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* CENTER WORKSPACE: LEFT TOOLS | CANVAS | RIGHT INSPECTOR */
+.editor-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* LEFT NAVIGATION ICON TAB BAR */
+.editor-left-nav {
+  width: 52px;
+  min-width: 52px;
+  background-color: #0b0f17;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 12px;
+  z-index: 20;
+}
+
+.editor-nav-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-nav-btn:hover {
+  color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.editor-nav-btn.active {
+  color: #38bdf8;
+  background-color: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* SIDE PANEL */
+.editor-side-panel {
+  background-color: #101622;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+  z-index: 15;
+}
+
+/* CANVAS CENTER */
+.editor-canvas-container {
+  flex: 1;
+  min-width: 0;
+  background-color: #05070c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-canvas-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-width: 960px;
+  max-height: calc(100% - 20px);
+  background-color: #000000;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* RIGHT INSPECTOR */
+.editor-inspector-panel {
+  background-color: #101622;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+  z-index: 15;
+}
+
+/* RESIZE SPLITTERS */
+.editor-resizer-vertical {
+  width: 4px;
+  cursor: col-resize;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  transition: background-color 0.2s;
+}
+
+.editor-resizer-vertical:hover,
+.editor-resizer-vertical.resizing {
+  background-color: #6366f1;
+}
+
+.editor-resizer-horizontal {
+  height: 4px;
+  width: 100%;
+  cursor: row-resize;
+  background-color: #0b0f17;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 30;
+  transition: background-color 0.2s;
+}
+
+.editor-resizer-horizontal:hover,
+.editor-resizer-horizontal.resizing {
+  background-color: #6366f1;
+}
+
+/* BOTTOM TIMELINE */
+.editor-timeline-panel {
+  background-color: #0a0e17;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 20;
+  overflow: hidden;
+}
+
+.editor-timeline-header {
+  height: 38px;
+  min-height: 38px;
+  background-color: #0f1420;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+
+.editor-timeline-body {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-track-row {
+  display: flex;
+  height: 44px;
+  min-height: 44px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.editor-track-header {
+  width: 160px;
+  min-width: 160px;
+  background-color: #0f1420;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.editor-track-lane {
+  flex: 1;
+  position: relative;
+  background-color: #090c14;
+}
+
+.editor-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.1s ease;
+}
+
+.editor-clip:hover {
+  filter: brightness(1.15);
+}
+
+.editor-clip.selected {
+  outline: 2px solid #ffffff;
+  outline-offset: 1px;
+  z-index: 15;
+}
+
+/* PLAYHEAD */
+.editor-playhead-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #f43f5e;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.editor-playhead-handle {
+  width: 12px;
+  height: 12px;
+  background-color: #f43f5e;
+  transform: translateX(-5px) rotate(45deg);
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.6);
+}
+
+/* FORM CONTROLS & INPUTS */
+.editor-input {
+  width: 100%;
+  background-color: #090d16;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.editor-input:focus {
+  border-color: #6366f1;
+}
+
+.editor-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}

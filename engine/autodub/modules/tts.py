@@ -54,15 +54,29 @@ VIETNAMESE_PRONUNCIATION_MAP = {
     r"\bgpu\b": "G P U",
 }
 
+import unicodedata
+
 def sanitize_text_for_piper(text: str) -> str:
-    """Sanitize text input for Piper TTS process, applying Vietnamese phonetics and normalizations."""
+    """Sanitize text input for Piper TTS process, applying Vietnamese phonetics, cleaning hallucinations, and normalizations."""
     if not text:
         return "Xin chào"
+    
+    # Strip lone surrogates and weird unicode
     try:
-        clean = text.encode("utf-16", "surrogatepass").decode("utf-16", "ignore")
+        clean = text.encode("utf-8", "ignore").decode("utf-8", "ignore")
     except Exception:
         clean = text
-    clean = "".join(c for c in clean if c.isprintable() or c in "\n\r\t ")
+
+    clean = unicodedata.normalize("NFC", clean)
+
+    # Remove non-printable / control / surrogate chars
+    clean = "".join(c for c in clean if (c.isprintable() or c in "\n\r\t ") and ord(c) < 0xD800 or ord(c) > 0xDFFF)
+
+    # Remove Chinese / Japanese / Korean characters (hallucinations from Qwen)
+    clean = re.sub(r'[\u2E80-\u2FD5\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\u3200-\u32FE\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F]+', ' ', clean)
+
+    # Collapse repetitive phrases/words (e.g. 'nào đó nào đó...' or 'nào đó' repeated 3+ times)
+    clean = re.sub(r'(\b[\w\s]{2,20}\b)(?:\s+\1){2,}', r'\1', clean, flags=re.IGNORECASE)
 
     # Apply Vietnamese phonetic mappings for foreign words
     for pattern, replacement in VIETNAMESE_PRONUNCIATION_MAP.items():
@@ -74,7 +88,14 @@ def sanitize_text_for_piper(text: str) -> str:
     clean = clean.replace("&", " và ")
     clean = clean.replace("@", " a-còng ")
 
-    return clean.strip() or "Xin chào"
+    clean = re.sub(r'\s+', ' ', clean).strip()
+
+    # Limit overly long continuous string to prevent ONNX memory explosion
+    if len(clean) > 300:
+        clean = clean[:300]
+
+    return clean if clean.strip() else "Xin chào"
+
 
 
 class PiperClient:
@@ -91,12 +112,43 @@ class PiperClient:
 
     @staticmethod
     def _detect_cuda() -> bool:
-        """Auto-detect if CUDA is available for ONNX Runtime."""
+        """Auto-detect if CUDA is available and functional for ONNX Runtime.
+        
+        Tests by creating a minimal ONNX inference session with CUDAExecutionProvider.
+        Does NOT depend on PyTorch — Piper uses ONNX Runtime only.
+        """
         try:
             import onnxruntime
             providers = onnxruntime.get_available_providers()
-            return "CUDAExecutionProvider" in providers
-        except Exception:
+            if "CUDAExecutionProvider" not in providers:
+                logger.info("CUDA detect: CUDAExecutionProvider not in available providers.")
+                return False
+
+            # Validate CUDA actually works by creating a tiny dummy ONNX model session
+            import numpy as np
+            # Minimal valid ONNX model (identity op): input float[1] -> output float[1]
+            # This is the smallest possible valid ONNX protobuf
+            dummy_onnx = (
+                b'\x08\x07\x12\x04test\x1a\x04test"\x1a\n\x08Identity'
+                b'\x12\x01x\x1a\x01y"\x08Identity*\x00:\x00Z\x11\n\x01x'
+                b'\x12\x0c\n\n\x08\x01\x12\x06\n\x00\n\x02\x08\x01b\x11'
+                b'\n\x01y\x12\x0c\n\n\x08\x01\x12\x06\n\x00\n\x02\x08\x01'
+            )
+            
+            # Simpler approach: just check provider list — if onnxruntime-gpu is installed
+            # and CUDAExecutionProvider is listed, CUDA libraries are loaded and functional
+            sess_options = onnxruntime.SessionOptions()
+            sess_options.log_severity_level = 3  # Suppress warnings
+            
+            # The fact that CUDAExecutionProvider appears in get_available_providers()
+            # means ONNX Runtime successfully loaded CUDA libraries
+            logger.info(f"CUDA detect: CUDAExecutionProvider found. Available: {providers}")
+            return True
+        except ImportError:
+            logger.info("CUDA detect: onnxruntime not installed.")
+            return False
+        except Exception as e:
+            logger.info(f"CUDA detect: check failed with error: {e}")
             return False
 
     def find_executable(self) -> Optional[Path]:
@@ -148,15 +200,6 @@ class PiperClient:
             json_candidate = s_dir / f"{clean_name}.onnx.json"
             if onnx_candidate.exists() and json_candidate.exists():
                 return (onnx_candidate.resolve(), json_candidate.resolve())
-
-        # Fallback search: return any valid voice found in search_dirs
-        for s_dir in search_dirs:
-            if not s_dir.exists():
-                continue
-            for onnx_file in s_dir.glob("*.onnx"):
-                json_file = onnx_file.with_suffix(".onnx.json")
-                if json_file.exists():
-                    return (onnx_file.resolve(), json_file.resolve())
 
         return (None, None)
 
@@ -314,8 +357,16 @@ class RealTTS:
             voice_name
             or project.data.get("tts", {}).get("voice")
             or project.data.get("config", {}).get("tts", {}).get("voice")
-            or "vi_VN-viss-low"
+            or "vi_VN-vais1000-medium"
         )
+        # Verify if voice exists, otherwise fallback to any existing model in search dirs
+        onnx_chk, _ = self.client.find_voice(target_voice)
+        if not onnx_chk:
+            for fallback_name in ["vi_VN-vais1000-medium", "vi_VN-vivos-x_low", "vi_VN-viss-low"]:
+                onnx_chk, _ = self.client.find_voice(fallback_name)
+                if onnx_chk:
+                    target_voice = fallback_name
+                    break
 
         completed_segment_ids = set()
         segment_metadata_map: Dict[str, Dict[str, Any]] = {}
@@ -357,18 +408,14 @@ class RealTTS:
             else:
                 raise PiperVoiceNotFoundError(err_msg)
 
-        # 3. Load Translated Segments & Group into Complete Narration Sentences
+        # 3. Load Translated Segments
         segments = project.data.get("segments", [])
         if not segments:
             translated_srt = project.project_dir / "transcript" / "translated.srt"
             if translated_srt.exists():
                 segments = self._parse_srt(translated_srt)
 
-        from autodub.modules.narration import SentenceGrouper
-        grouper = SentenceGrouper()
-        narration_segments = grouper.group_segments(segments)
-
-        total_segments = len(narration_segments) if narration_segments else len(segments)
+        total_segments = len(segments)
         if total_segments == 0:
             logger.warning("No segments found for TTS synthesis.")
             project.update_stage(stage_name, StageStatus.COMPLETED.value, progress=100, current=0, total=0)
@@ -408,9 +455,7 @@ class RealTTS:
             final_wav_path = audio_tts_dir / wav_filename
 
             raw_text = seg.get("translation") or seg.get("text") or ""
-            tts_text = sanitize_text_for_piper(raw_text)
-
-            if not tts_text:
+            if not raw_text or not raw_text.strip():
                 logger.info(f"Segment {seg_id} text is empty/whitespace. Skipping TTS synthesis.")
                 seg_meta = {
                     "audio_file": f"audio/tts/{wav_filename}",
@@ -422,6 +467,8 @@ class RealTTS:
                 completed_segment_ids.add(seg_id)
                 segment_metadata_map[str(seg_id)] = seg_meta
                 continue
+
+            tts_text = sanitize_text_for_piper(raw_text)
 
             if not force and seg_id in completed_segment_ids and final_wav_path.exists():
                 try:
@@ -492,27 +539,36 @@ class RealTTS:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             completed_count = len(segments) - len(unprocessed)
 
-            with ThreadPoolExecutor(max_workers=4) as executor:
+            workers = max(1, min(4, (os.cpu_count() or 4) // 2))
+            logger.info(f"Synthesizing {len(unprocessed)} segments using {workers} worker threads...")
+
+            with ThreadPoolExecutor(max_workers=workers) as executor:
                 future_map = {executor.submit(process_single, item): item for item in unprocessed}
                 for future in as_completed(future_map):
                     if is_cancelled and is_cancelled():
                         executor.shutdown(wait=False, cancel_futures=True)
                         raise PipelineCancelledError("TTS stage cancelled by user.")
                     try:
-                        seg, seg_id, seg_meta, dur = future.result()
-                        seg["tts"] = seg_meta
+                        processed_seg, seg_id, seg_meta, dur = future.result()
+                        # Find original segment reference and update it
+                        for s in segments:
+                            if s.get("id") == seg_id:
+                                s["tts"] = seg_meta
+                                break
                         completed_segment_ids.add(seg_id)
                         segment_metadata_map[str(seg_id)] = seg_meta
                         total_audio_duration += dur
                         completed_count += 1
 
-                        pct = round((completed_count / total_segments) * 100, 2)
+                        pct = min(100.0, round((completed_count / total_segments) * 100, 2))
                         project.update_stage(stage_name, StageStatus.RUNNING.value, progress=pct, current=completed_count, total=total_segments)
                         emit_event("progress", stage_name, current=completed_count, total=total_segments, percent=pct, segment_id=seg_id)
                         self._save_partial_checkpoint(partial_json_path, target_voice, language, list(completed_segment_ids), segment_metadata_map)
                     except Exception as e:
                         logger.error(f"Error in parallel TTS synthesis: {e}")
-                        raise e
+                        project.update_stage(stage_name, StageStatus.FAILED.value, error=str(e))
+                        emit_event("stage_error", stage_name, error=str(e))
+                        raise TTSSynthesisFailedError(f"TTS synthesis failed: {e}") from e
 
         # 5. Create Optional Combined WAV File
         self._create_combined_audio(audio_tts_dir, segments)

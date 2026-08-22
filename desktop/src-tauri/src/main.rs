@@ -829,6 +829,36 @@ fn preview_tts_voice(text: String, voice: String, gender: String) -> Result<serd
     }
 }
 
+#[tauri::command]
+#[allow(dead_code)]
+fn read_composition(project_dir: String) -> Result<serde_json::Value, String> {
+    let comp_file = PathBuf::from(&project_dir).join("composition.json");
+    if comp_file.exists() {
+        let content = fs::read_to_string(comp_file).map_err(|e| e.to_string())?;
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        Ok(json)
+    } else {
+        Ok(serde_json::json!({
+            "version": 1,
+            "width": 1920,
+            "height": 1080,
+            "fps": 30.0,
+            "duration": 0.0,
+            "layers": []
+        }))
+    }
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+fn write_composition(project_dir: String, data: serde_json::Value) -> Result<(), String> {
+    let p_dir = PathBuf::from(&project_dir);
+    let comp_file = p_dir.join("composition.json");
+    let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+    fs::write(comp_file, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
@@ -851,7 +881,9 @@ fn main() {
             write_subtitles,
             run_qc_check,
             apply_autofit_qc,
-            preview_tts_voice
+            preview_tts_voice,
+            read_composition,
+            write_composition
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

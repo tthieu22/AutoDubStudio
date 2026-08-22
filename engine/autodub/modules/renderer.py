@@ -165,7 +165,7 @@ class RealRenderer:
         stage_name = PipelineStage.RENDER.value
         stage_info = project.get_stage_info(stage_name)
 
-        current_status = (stage_info.get("status") or "").upper()
+        current_status = (stage_info.get("status") or "").lower()
         if current_status == StageStatus.COMPLETED.value and not force:
             emit_event(
                 event_type="progress",
@@ -225,7 +225,7 @@ class RealRenderer:
         output_dir = project.project_dir / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
         final_mp4 = output_dir / "final.mp4"
-        tmp_mp4 = output_dir / "final.tmp.mp4"
+        tmp_mp4 = output_dir / ".final.mp4.tmp"
         checkpoint_file = output_dir / "render.partial.json"
 
         # Check existing valid output & hash
@@ -303,11 +303,35 @@ class RealRenderer:
             "-nostats"
         ]
 
+        # Subtitle and Multi-Layer Composition Filtergraph
+        comp_file = project.project_dir / "composition.json"
+        comp_filtergraph = ""
+        comp_extra_inputs: List[str] = []
+
+        if comp_file.exists():
+            try:
+                from autodub.modules.composition import Composition
+                comp = Composition.load(comp_file)
+                comp_filtergraph, comp_extra_inputs = comp.build_ffmpeg_filtergraph(base_video_stream="[0:v]")
+            except Exception as e:
+                logger.warning(f"[RENDERER] Failed to load composition filtergraph: {e}")
+
         # Video stream encoding / filtering / copy
+        vf_filters = []
+        if comp_filtergraph:
+            vf_filters.append(comp_filtergraph)
+
         if render_config.subtitle_mode == "BURN_IN" and srt_file:
             escaped_srt = escape_ffmpeg_subtitle_path(srt_file)
+            vf_filters.append(f"subtitles=filename='{escaped_srt}'")
+
+        for extra_in in comp_extra_inputs:
+            cmd.extend(["-i", extra_in])
+
+        if vf_filters:
+            full_vf = ",".join(vf_filters)
             cmd.extend([
-                "-vf", f"subtitles=filename='{escaped_srt}'",
+                "-vf", full_vf,
                 "-c:v", selected_enc
             ])
             cmd.extend(preset_args)

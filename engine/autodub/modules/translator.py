@@ -43,8 +43,14 @@ def clean_translation(raw_text: str) -> str:
     # Strip surrounding quotes if matching
     if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
         text = text[1:-1].strip()
-        
-    return text
+
+    # Remove Chinese / East Asian characters (hallucinations from Qwen)
+    text = re.sub(r'[\u4e00-\u9fff]+', ' ', text)
+
+    # Collapse repetitive phrases/words (e.g. 'nào đó nào đó...' or 'nào đó' repeated 3+ times)
+    text = re.sub(r'(\b[\w\s]{2,20}\b)(?:\s+\1){2,}', r'\1', text, flags=re.IGNORECASE)
+
+    return re.sub(r'\s+', ' ', text).strip()
 
 class OllamaClient:
     """HTTP client for communicating with local Ollama REST API server."""
