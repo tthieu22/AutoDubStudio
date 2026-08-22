@@ -31,115 +31,158 @@ export const QualityControl: React.FC<QualityControlProps> = ({ projectDir }) =>
     setIsApplyingAutofit(true);
     try {
       await PythonEngineService.applyAutofitQc(projectDir);
-      alert('Đã tự động căn chỉnh khoảng ngắt nghỉ và xử lý đè khớp thời gian thành công!');
+      alert('Autofit alignment completed successfully!');
       await runQC();
     } catch (err) {
-      alert(`Auto-fit thất bại: ${err}`);
+      alert(`Autofit failed: ${err}`);
     } finally {
       setIsApplyingAutofit(false);
     }
   };
 
+  const getHealthScore = () => {
+    if (!qcReport) return 100;
+    const warnings = qcReport.warning_count || 0;
+    const score = Math.max(0, 100 - warnings * 5);
+    return score;
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%' }}>
-      {/* HEADER */}
-      <div className="glass-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <ShieldCheck color="#10b981" size={22} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden' }}>
+      {/* 1. CONTROL HEADER */}
+      <div 
+        style={{ 
+          background: '#111318', 
+          border: '1px solid rgba(255, 255, 255, 0.05)', 
+          borderRadius: '10px', 
+          padding: '12px 20px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <ShieldCheck color="#10b981" size={18} />
           <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>AUDIO SYNC & QUALITY CONTROL (QC) INSPECTOR</h3>
-            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Tự động kiểm tra lệch audio, missing segment, speech overrun & timestamp overlap</span>
+            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#fff' }}>Audio & Timing Quality Control</h3>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Analyze segment alignments, speech overruns, and overlap constraints</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn-secondary" onClick={runQC} disabled={isLoading}>
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> {isLoading ? 'Đang quét...' : 'Quét Lại (Inspect)'}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn-secondary" onClick={runQC} disabled={isLoading} style={{ padding: '6px 12px', fontSize: '12px' }}>
+            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} /> Analyze Timeline
           </button>
-
-          <button className="btn-primary" onClick={handleApplyAutofit} disabled={isApplyingAutofit || !qcReport || qcReport.issues?.length === 0}>
-            <Wand2 size={15} /> {isApplyingAutofit ? 'Đang căn chỉnh...' : '[ Auto Fit ] Tự Động Sửa Lệch'}
+          <button 
+            className="btn-primary" 
+            onClick={handleApplyAutofit} 
+            disabled={isApplyingAutofit || !qcReport || qcReport.issues?.length === 0}
+            style={{ padding: '6px 14px', fontSize: '12px', background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}
+          >
+            <Wand2 size={13} /> {isApplyingAutofit ? 'Aligning...' : 'Auto-Fit Segments'}
           </button>
         </div>
       </div>
 
-      {/* METRICS & STATS CARDS */}
+      {/* 2. DUAL LAYOUT: SUMMARY & DIAGNOSTICS */}
       {qcReport && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-          <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>TRẠNG THÁI KIỂM THỬ</span>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: qcReport.valid ? '#10b981' : '#f59e0b' }}>
-              {qcReport.valid ? 'PASSED (HỢP LỆ)' : 'NEED ATTENTION'}
-            </span>
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '16px', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+          {/* STATS & METRICS PANEL */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>HEALTH SCORE</span>
+              <span style={{ fontSize: '36px', fontWeight: 800, color: getHealthScore() > 80 ? '#10b981' : '#f59e0b' }}>
+                {getHealthScore()}%
+              </span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                {qcReport.valid ? 'All segments valid' : 'Timeline needs adjustment'}
+              </span>
+            </div>
+
+            <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 800, color: '#64748b' }}>DIAGNOSTIC METRICS</span>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
+                <span style={{ color: '#94a3b8' }}>Total Warnings</span>
+                <span style={{ color: '#fff', fontWeight: 700 }}>{qcReport.warning_count}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
+                <span style={{ color: '#94a3b8' }}>Avg Speed Ratio</span>
+                <span style={{ color: '#fff', fontWeight: 700 }}>{qcReport.stats?.avg_tts_duration_ratio || '1.0'}x</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                <span style={{ color: '#94a3b8' }}>Max Overrun</span>
+                <span style={{ color: '#ef4444', fontWeight: 700 }}>+{qcReport.stats?.max_duration_exceeded_sec || 0}s</span>
+              </div>
+            </div>
           </div>
 
-          <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>SỐ LƯỢNG CẢNH BÁO</span>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: qcReport.warning_count > 0 ? '#f59e0b' : '#38bdf8' }}>
-              {qcReport.warning_count} Cảnh báo
+          {/* DIAGNOSTIC DETAILED LIST */}
+          <div 
+            style={{ 
+              background: '#111318', 
+              border: '1px solid rgba(255, 255, 255, 0.05)', 
+              borderRadius: '10px', 
+              padding: '20px', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '12px',
+              overflowY: 'auto' 
+            }}
+          >
+            <span style={{ fontSize: '10px', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Detailed Diagnoses
             </span>
-          </div>
 
-          <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>TỶ LỆ LỜI THOẠI TRUNG BÌNH</span>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#fff' }}>
-              {qcReport.stats?.avg_tts_duration_ratio || 1.0}x
-            </span>
-          </div>
+            {qcReport.issues?.length === 0 ? (
+              <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                <CheckCircle size={32} color="#10b981" />
+                <span style={{ fontSize: '13px', color: '#10b981', fontWeight: 700 }}>All segments are perfectly synchronized!</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {qcReport.issues?.map((issue: any, idx: number) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '6px',
+                      background: 'rgba(255, 255, 255, 0.01)',
+                      border: '1px solid',
+                      borderColor: issue.severity === 'ERROR' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <AlertTriangle size={16} color={issue.severity === 'ERROR' ? '#ef4444' : '#f59e0b'} style={{ flexShrink: 0 }} />
+                      <div>
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>
+                          Segment #{issue.segment_id}: {issue.message}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
+                          Recommendation: {issue.action}
+                        </span>
+                      </div>
+                    </div>
 
-          <div className="glass-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>LỆCH LỚN NHẤT</span>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#fb7185' }}>
-              +{qcReport.stats?.max_duration_exceeded_sec || 0}s
-            </span>
+                    <button 
+                      className="btn-secondary" 
+                      onClick={handleApplyAutofit}
+                      style={{ fontSize: '11px', padding: '4px 8px' }}
+                    >
+                      Fix Segment
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {/* ISSUES LIST */}
-      <div className="glass-card" style={{ padding: '20px', flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
-        <h4 style={{ margin: 0, fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Layers size={16} color="#38bdf8" /> DANH SÁCH CHI TIẾT CÁC ĐOẠN CẦN XỬ LÝ ({qcReport?.issues?.length || 0})
-        </h4>
-
-        {qcReport?.issues?.length === 0 ? (
-          <div style={{ padding: '30px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-            <CheckCircle size={36} color="#10b981" />
-            <span style={{ fontSize: '14px', color: '#6ee7b7', fontWeight: 600 }}>Tất cả các đoạn phụ đề và audio lồng tiếng đều hoàn toàn khớp nhau! Không phát hiện lỗi.</span>
-          </div>
-        ) : (
-          qcReport?.issues?.map((issue: any, idx: number) => (
-            <div
-              key={idx}
-              style={{
-                padding: '14px 16px',
-                borderRadius: '8px',
-                background: issue.severity === 'ERROR' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                border: issue.severity === 'ERROR' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <AlertTriangle size={18} color={issue.severity === 'ERROR' ? '#f87171' : '#fbbf24'} />
-                <div>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>
-                    Segment #{issue.segment_id}: {issue.message}
-                  </span>
-                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
-                    Loại lỗi: {issue.type} • Đề xuất: {issue.action}
-                  </span>
-                </div>
-              </div>
-
-              <button className="btn-secondary" onClick={handleApplyAutofit} style={{ fontSize: '12px', padding: '6px 12px' }}>
-                [{issue.action}]
-              </button>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 };

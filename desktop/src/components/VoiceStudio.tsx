@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Mic, Volume2, Play, Square, Loader2, Sparkles, Sliders, CheckCircle2, Volume2 as VolumeIcon } from 'lucide-react';
+import { Mic, Volume2, Play, Square, Loader2, Sparkles, Sliders, CheckCircle2, VolumeX, User } from 'lucide-react';
 import { PythonEngineService } from '../services/pythonEngine';
 
 interface VoiceStudioProps {
@@ -19,11 +19,11 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const voiceBank = [
-    { id: 'edge-tts-vi-hoaimy', name: '🎬 Giọng Nữ Review Phim (Hoài My Neural - Truyền Cảm)', gender: 'Female', region: 'North' },
-    { id: 'edge-tts-vi-namminh', name: '🎬 Giọng Nam Review Phim (Nam Minh Neural - Trầm Ấm Kể Chuyện)', gender: 'Male', region: 'North' },
-    { id: 'vi_VN-vais1000-medium', name: '🎙️ Nữ Thuyết Minh Điện Ảnh (Vais 1000 Premium)', gender: 'Female', region: 'North' },
-    { id: 'vi_VN-vnu-medium', name: '🎙️ Nam Thuyết Minh Tài Liệu (VNU Deep Voice)', gender: 'Male', region: 'North' },
-    { id: 'vi_VN-southern-female', name: '🎙️ Nữ Miền Nam (Sài Gòn Soft Voice)', gender: 'Female', region: 'South' }
+    { id: 'edge-tts-vi-hoaimy', name: '🎬 Female Review (Hoài My Neural)', gender: 'Female', region: 'North' },
+    { id: 'edge-tts-vi-namminh', name: '🎬 Male Storytelling (Nam Minh Neural)', gender: 'Male', region: 'North' },
+    { id: 'vi_VN-vais1000-medium', name: '🎙️ Female Cinematic (Vais 1000 Premium)', gender: 'Female', region: 'North' },
+    { id: 'vi_VN-vnu-medium', name: '🎙️ Male Documentary (VNU Deep Voice)', gender: 'Male', region: 'North' },
+    { id: 'vi_VN-southern-female', name: '🎙️ Southern Female (Sài Gòn Soft Voice)', gender: 'Female', region: 'South' }
   ];
 
   const handleSpeakerVoiceChange = (speakerId: string, voiceId: string) => {
@@ -109,84 +109,92 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
     }
   };
 
-  const fallbackWebSpeech = (text: string, speed: number, gender?: string) => {
-    setIsGenerating(false);
-    setIsPlaying(true);
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'vi-VN';
-      utterance.rate = speed;
-      utterance.pitch = gender === 'Female' ? 1.1 : 0.85;
-
-      // Find Vietnamese voice if available in system
-      const voices = window.speechSynthesis.getVoices();
-      const viVoice = voices.find(v => v.lang.includes('vi') || v.name.toLowerCase().includes('vietnam'));
-      if (viVoice) {
-        utterance.voice = viVoice;
-      }
-
-      utterance.onend = () => setIsPlaying(false);
-      utterance.onerror = () => setIsPlaying(false);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setTimeout(() => setIsPlaying(false), 2500);
-    }
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', height: '100%' }}>
-      {/* HEADER */}
-      <div className="glass-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Mic color="#a855f7" size={22} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden' }}>
+      {/* 1. CONTROL HEADER */}
+      <div 
+        style={{ 
+          background: '#111318', 
+          border: '1px solid rgba(255, 255, 255, 0.05)', 
+          borderRadius: '10px', 
+          padding: '12px 20px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Mic color="#6366f1" size={18} />
           <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#fff' }}>VOICE STUDIO & MULTI-SPEAKER ENGINE</h3>
-            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Phân chia giọng đọc riêng biệt cho từng nhân vật, thử nghiệm nghe thử trực tiếp chuẩn tiếng Việt</span>
+            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#fff' }}>Voice Studio & Casting Console</h3>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Assign voice models, customize speech speed, and preview characters offline</span>
           </div>
         </div>
-
-        <span className="badge badge-completed">PIPER ONNX CUDA + NEURAL TTS</span>
+        <span style={{ fontSize: '10px', color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '20px', fontWeight: 700 }}>
+          PIPER LOCAL COCUDA ACTIVE
+        </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', flexGrow: 1 }}>
-        {/* SPEAKER MANAGEMENT TABLE */}
-        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h4 style={{ margin: 0, fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sliders size={16} color="#a855f7" /> DANH SÁCH NHÂN VẬT & GIỌNG ĐỌC CẤU HÌNH
-          </h4>
+      {/* 2. DUAL PANEL LAYOUT */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* SPEAKERS MANAGEMENT */}
+        <div 
+          style={{ 
+            background: '#111318', 
+            border: '1px solid rgba(255, 255, 255, 0.05)', 
+            borderRadius: '10px', 
+            padding: '16px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '12px',
+            overflowY: 'auto' 
+          }}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Cast Members
+          </span>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             {speakers.map(spk => {
               const isSelected = selectedSpeaker === spk.id;
+              const activeVoice = voiceBank.find(v => v.id === spk.voice);
               return (
                 <div
                   key={spk.id}
                   onClick={() => setSelectedSpeaker(spk.id)}
                   style={{
-                    padding: '16px',
-                    background: isSelected ? 'rgba(168, 85, 247, 0.12)' : 'rgba(15, 23, 42, 0.6)',
-                    border: isSelected ? '1px solid #a855f7' : '1px solid var(--border-glass)',
-                    borderRadius: '10px',
+                    padding: '14px',
+                    background: isSelected ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+                    border: '1px solid',
+                    borderColor: isSelected ? '#6366f1' : 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px'
+                    gap: '10px',
+                    transition: 'all 0.15s ease'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: '#fff', fontSize: '14px' }}>{spk.id} ({spk.gender})</span>
-                    <span className="badge badge-pending">Piper Neural</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#0B0D10', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <User size={14} style={{ color: isSelected ? '#6366f1' : '#64748b' }} />
+                      </div>
+                      <span style={{ fontWeight: 700, color: '#fff', fontSize: '13px' }}>{spk.id}</span>
+                    </div>
+                    <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', color: '#94a3b8' }}>
+                      {spk.gender}
+                    </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div>
-                      <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>MÔ HÌNH GIỌNG ĐỌC (VOICE MODEL)</label>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>VOICE CHARACTER</span>
                       <select
                         value={spk.voice}
                         onChange={(e) => handleSpeakerVoiceChange(spk.id, e.target.value)}
-                        style={{ width: '100%', background: '#0f172a', border: '1px solid var(--border-glass)', color: '#fff', padding: '8px', borderRadius: '6px' }}
+                        style={{ width: '100%', background: '#0B0D10', border: '1px solid rgba(255,255,255,0.05)', color: '#fff', padding: '6px', borderRadius: '4px', fontSize: '11px', outline: 'none', marginTop: '3px' }}
                       >
                         {voiceBank.map(v => (
                           <option key={v.id} value={v.id}>{v.name}</option>
@@ -195,19 +203,19 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>TỐC ĐỘ (SPEED)</label>
+                      <span style={{ fontSize: '10px', color: '#64748b' }}>SPEED COEFFICIENT</span>
                       <select
                         value={spk.speed}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           setSpeakers(prev => prev.map(s => s.id === spk.id ? { ...s, speed: val } : s));
                         }}
-                        style={{ width: '100%', background: '#0f172a', border: '1px solid var(--border-glass)', color: '#fff', padding: '8px', borderRadius: '6px' }}
+                        style={{ width: '100%', background: '#0B0D10', border: '1px solid rgba(255,255,255,0.05)', color: '#fff', padding: '6px', borderRadius: '4px', fontSize: '11px', outline: 'none', marginTop: '3px' }}
                       >
-                        <option value={0.90}>0.90x</option>
-                        <option value={0.95}>0.95x</option>
-                        <option value={1.00}>1.00x</option>
-                        <option value={1.05}>1.05x</option>
+                        <option value={0.90}>0.90x (Relaxed)</option>
+                        <option value={0.95}>0.95x (Natural)</option>
+                        <option value={1.00}>1.00x (Standard)</option>
+                        <option value={1.05}>1.05x (Fast)</option>
                       </select>
                     </div>
                   </div>
@@ -217,57 +225,82 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
           </div>
         </div>
 
-        {/* INSTANT SINGLE SEGMENT AUDITION PREVIEW */}
-        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h4 style={{ margin: 0, fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Volume2 size={16} color="#38bdf8" /> GENERATE AUDITION PREVIEW
-          </h4>
+        {/* AUDITION ROOM */}
+        <div 
+          style={{ 
+            background: '#111318', 
+            border: '1px solid rgba(255, 255, 255, 0.05)', 
+            borderRadius: '10px', 
+            padding: '20px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '16px' 
+          }}
+        >
+          <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Audition Room
+            </span>
+            <h4 style={{ margin: '4px 0 0 0', fontSize: '14px', fontWeight: 700, color: '#fff' }}>
+              Testing Speaker: <span style={{ color: '#6366f1' }}>{selectedSpeaker}</span>
+            </h4>
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label style={{ fontSize: '11px', color: '#94a3b8' }}>DÙNG GIỌNG CỦA: <strong style={{ color: '#a855f7' }}>{selectedSpeaker}</strong></label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexGrow: 1 }}>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Preview Text Script</span>
             <textarea
               value={previewText}
               onChange={(e) => setPreviewText(e.target.value)}
-              rows={4}
-              style={{ width: '100%', background: '#0f172a', border: '1px solid var(--border-glass)', color: '#fff', padding: '10px', borderRadius: '8px', fontSize: '13px' }}
+              rows={5}
+              style={{ width: '100%', background: '#0B0D10', border: '1px solid rgba(255,255,255,0.05)', color: '#fff', padding: '10px', borderRadius: '6px', fontSize: '12px', outline: 'none', resize: 'none' }}
             />
+
+            {/* Playback animation wave */}
+            {isPlaying && (
+              <div style={{ padding: '12px', background: 'rgba(6, 182, 212, 0.08)', border: '1px solid rgba(6, 182, 212, 0.15)', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                  <div className="wave-bar" style={{ width: '3px', height: '14px', background: '#06b6d4', borderRadius: '1px', animation: 'bounce 0.5s ease infinite alternate' }} />
+                  <div className="wave-bar" style={{ width: '3px', height: '22px', background: '#06b6d4', borderRadius: '1px', animation: 'bounce 0.5s ease infinite alternate 0.1s' }} />
+                  <div className="wave-bar" style={{ width: '3px', height: '10px', background: '#06b6d4', borderRadius: '1px', animation: 'bounce 0.5s ease infinite alternate 0.2s' }} />
+                </div>
+                <span style={{ fontSize: '11px', color: '#06b6d4', fontWeight: 600 }}>Synthesized audio stream playing...</span>
+              </div>
+            )}
           </div>
 
-          <button
-            className="btn-primary"
-            onClick={handleGeneratePreview}
-            disabled={isGenerating}
-            style={{
-              width: '100%',
-              justifyContent: 'center',
-              background: isPlaying ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : undefined
-            }}
-          >
-            {isGenerating ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : isPlaying ? (
-              <Square size={16} />
-            ) : (
-              <Play size={16} />
-            )}
-            {isGenerating
-              ? 'Đang tải luồng audio thuyết minh tiếng Việt...'
-              : isPlaying
-              ? '⏹ ĐANG PHÁT AUDIO (Dừng Nghe)'
-              : '▶ CHẠY NGHE THỬ MẪU (Generate Preview)'}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              className="btn-primary"
+              onClick={handleGeneratePreview}
+              disabled={isGenerating}
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                background: isPlaying ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : undefined,
+                padding: '10px',
+                fontSize: '12px'
+              }}
+            >
+              {isGenerating ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : isPlaying ? (
+                <Square size={14} />
+              ) : (
+                <Play size={14} />
+              )}
+              {isGenerating
+                ? 'Synthesizing Audio...'
+                : isPlaying
+                ? 'Stop Playback'
+                : 'Audition Voice Model'}
+            </button>
 
-          {/* AUDIO ANIMATION WAVE INDICATOR */}
-          {isPlaying && (
-            <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <VolumeIcon size={20} className="animate-bounce" color="#38bdf8" />
-              <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>Đang phát loa audio thuyết minh tiếng Việt chuẩn...</span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '6px', padding: '10px' }}>
+              <CheckCircle2 size={14} color="#10b981" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.3 }}>
+                Multi-speaker pace ducking is pre-configured on sync stages.
+              </span>
             </div>
-          )}
-
-          <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CheckCircle2 size={16} color="#10b981" />
-            <span style={{ fontSize: '12px', color: '#6ee7b7' }}>Giọng thuyết minh được tối ưu tốc độ ngắt nghỉ tự nhiên theo chuẩn IMDb documentary.</span>
           </div>
         </div>
       </div>

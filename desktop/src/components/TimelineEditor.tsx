@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CanvasLayer, LayerPreviewCanvas } from './LayerPreviewCanvas';
 import { HistoryManager } from '../services/historyManager';
 import { PythonEngineService } from '../services/pythonEngine';
+import { TimelineToolbar } from './timeline/TimelineToolbar';
 
 interface TimelineEditorProps {
   projectDir: string;
@@ -111,57 +112,15 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
   const selectedLayer = composition.layers.find(l => l.id === selectedLayerId);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-100 p-6 overflow-y-auto space-y-6">
-      {/* Top Controls Toolbar */}
-      <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-lg backdrop-blur-md">
-        <div className="flex items-center space-x-3">
-          <div className="bg-indigo-600/20 text-indigo-400 p-2 rounded-lg border border-indigo-500/30">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h18M3 16h18" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold tracking-wide">Multi-Track Video Timeline & Layer Studio</h2>
-            <p className="text-xs text-slate-400">Interactive Layer Composition & Timeline Editor</p>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleUndo}
-            disabled={!history.canUndo()}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold rounded-lg border border-slate-700 transition"
-          >
-            ↩ Undo (Ctrl+Z)
-          </button>
-          <button
-            onClick={handleRedo}
-            disabled={!history.canRedo()}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold rounded-lg border border-slate-700 transition"
-          >
-            ↪ Redo (Ctrl+Y)
-          </button>
-          <div className="h-6 w-px bg-slate-800 mx-2" />
-          <button
-            onClick={() => handleAddLayer('title')}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white rounded-lg shadow-lg shadow-indigo-600/30 transition"
-          >
-            + Add Title
-          </button>
-          <button
-            onClick={() => handleAddLayer('text')}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 rounded-lg border border-slate-700 transition"
-          >
-            + Add Text
-          </button>
-          <button
-            onClick={() => handleAddLayer('logo')}
-            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white rounded-lg shadow-lg shadow-cyan-600/30 transition"
-          >
-            + Add Logo Watermark
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col h-full bg-[#080c14] text-slate-100 p-6 overflow-y-auto space-y-6">
+      {/* Top Controls Toolbar Component */}
+      <TimelineToolbar
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={history.canUndo()}
+        canRedo={history.canRedo()}
+        onAddLayer={handleAddLayer}
+      />
 
       {/* Main Split View: Left Canvas Preview, Right Layer Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -175,16 +134,16 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
           />
 
           {/* Timeline Playback Scrubber */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shadow-md">
+          <div className="bg-[#0d1423] border border-white/5 rounded-xl p-4 space-y-3 shadow-md">
             <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg border border-slate-700 transition"
+                className="px-4 py-1.5 bg-[#162036] hover:bg-[#1e2d4d] text-slate-200 font-bold rounded-lg border border-white/5 transition"
               >
                 {isPlaying ? '⏸ Pause' : '▶ Play'}
               </button>
               <div>
-                Time: <span className="text-indigo-400 font-bold">{currentTime.toFixed(2)}s</span> / {composition.duration.toFixed(2)}s
+                Time: <span className="text-blue-400 font-bold">{currentTime.toFixed(2)}s</span> / {composition.duration.toFixed(2)}s
               </div>
             </div>
             <input
@@ -194,14 +153,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
               step={0.1}
               value={currentTime}
               onChange={e => setCurrentTime(parseFloat(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
           </div>
         </div>
 
         {/* Right Layer Inspector */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-5 shadow-xl">
-          <h3 className="text-sm font-bold tracking-wider text-slate-300 uppercase border-b border-slate-800 pb-2">
+        <div className="bg-[#0d1423] border border-white/5 rounded-xl p-5 space-y-5 shadow-xl">
+          <h3 className="text-sm font-bold tracking-wider text-slate-300 uppercase border-b border-white/5 pb-2">
             Layer Properties & Inspector
           </h3>
 
@@ -213,7 +172,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                   type="text"
                   value={selectedLayer.text || ''}
                   onChange={e => handleUpdateLayer({ ...selectedLayer, text: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -224,7 +183,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     type="number"
                     value={selectedLayer.x}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, x: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100"
+                    className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100"
                   />
                 </div>
                 <div>
@@ -233,7 +192,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     type="number"
                     value={selectedLayer.y}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, y: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100"
+                    className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100"
                   />
                 </div>
               </div>
@@ -245,7 +204,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     type="number"
                     value={selectedLayer.style?.font_size || 36}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, style: { ...selectedLayer.style, font_size: parseInt(e.target.value) || 24 } })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100"
+                    className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100"
                   />
                 </div>
                 <div>
@@ -254,7 +213,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     type="color"
                     value={selectedLayer.style?.color || '#ffffff'}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, style: { ...selectedLayer.style, color: e.target.value } })}
-                    className="w-full h-9 bg-slate-950 border border-slate-800 rounded-lg p-1 cursor-pointer"
+                    className="w-full h-9 bg-[#080c14] border border-white/5 rounded-lg p-1 cursor-pointer"
                   />
                 </div>
               </div>
@@ -268,7 +227,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                   step={0.05}
                   value={selectedLayer.opacity}
                   onChange={e => handleUpdateLayer({ ...selectedLayer, opacity: parseFloat(e.target.value) })}
-                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
               </div>
 
@@ -282,7 +241,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     step={0.1}
                     value={selectedLayer.fade_in_sec || 0}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, fade_in_sec: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100"
+                    className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100"
                   />
                 </div>
                 <div>
@@ -294,17 +253,17 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                     step={0.1}
                     value={selectedLayer.fade_out_sec || 0}
                     onChange={e => handleUpdateLayer({ ...selectedLayer, fade_out_sec: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100"
+                    className="w-full bg-[#080c14] border border-white/5 rounded-lg px-3 py-2 text-slate-100"
                   />
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+              <div className="pt-3 border-t border-white/5 flex justify-between items-center">
                 <button
                   onClick={() => handleUpdateLayer({ ...selectedLayer, visible: !selectedLayer.visible })}
                   className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
                     selectedLayer.visible
-                      ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-400'
+                      ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-400'
                       : 'bg-slate-800 border-slate-700 text-slate-400'
                   }`}
                 >
@@ -312,7 +271,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                 </button>
                 <button
                   onClick={() => handleDeleteLayer(selectedLayer.id)}
-                  className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 font-semibold rounded-lg border border-rose-800/60 transition"
+                  className="px-3 py-1.5 bg-rose-950/20 hover:bg-rose-900/40 text-rose-400 font-semibold rounded-lg border border-rose-800/40 transition"
                 >
                   🗑 Delete Layer
                 </button>
@@ -327,8 +286,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
       </div>
 
       {/* Multi-Track Timeline Overview Panel */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
-        <h3 className="text-sm font-bold tracking-wider text-slate-300 uppercase border-b border-slate-800 pb-2">
+      <div className="bg-[#0d1423] border border-white/5 rounded-xl p-5 space-y-4 shadow-xl">
+        <h3 className="text-sm font-bold tracking-wider text-slate-300 uppercase border-b border-white/5 pb-2">
           Multi-Track Layer Stacking
         </h3>
 
@@ -344,8 +303,8 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
                 onClick={() => setSelectedLayerId(layer.id)}
                 className={`flex items-center justify-between px-4 py-3 rounded-lg border transition cursor-pointer ${
                   selectedLayerId === layer.id
-                    ? 'bg-indigo-950/40 border-indigo-500/80 text-white shadow-md'
-                    : 'bg-slate-950 border-slate-800/80 text-slate-400 hover:border-slate-700'
+                    ? 'bg-blue-950/20 border-blue-500/60 text-white shadow-md'
+                    : 'bg-[#080c14] border-white/5 text-slate-400 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center space-x-3">

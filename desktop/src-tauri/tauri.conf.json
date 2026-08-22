@@ -66,10 +66,11 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 700,
+        "maximized": true,
+        "height": 720,
         "resizable": true,
         "title": "AutoDubStudio",
-        "width": 900
+        "width": 1280
       }
     ]
   }

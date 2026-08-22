@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Terminal, Video, Settings, FileText, Mic, ShieldCheck, Share2, Layers } from 'lucide-react';
+import { Activity, Terminal, Video, Settings, FileText, Mic, ShieldCheck, Share2, Layers, Cpu } from 'lucide-react';
 import { PythonEngineService } from './services/pythonEngine';
 import { PipelineStatus, StageName, StageProgressInfo, PipelineProgressEvent, StageStatus } from './types/pipeline';
+import { usePipeline } from './hooks/usePipeline';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -14,7 +15,6 @@ import { SubtitleEditor } from './components/SubtitleEditor';
 import { VoiceStudio } from './components/VoiceStudio';
 import { QualityControl } from './components/QualityControl';
 import { ExportPresets } from './components/ExportPresets';
-import { TimelineEditor } from './components/TimelineEditor';
 import { EditorLayout } from './components/editor/EditorLayout';
 import { CompositionBuilder } from './editor/state/compositionBuilder';
 import { editorStore } from './editor/state/editorStore';
@@ -32,28 +32,33 @@ export default function App() {
   // Screen & Navigation
   const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
   const [activeTab, setActiveTab] = useState<'pipeline' | 'subtitles' | 'timeline' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('pipeline');
+  const [isConsoleDrawerOpen, setIsConsoleDrawerOpen] = useState(false);
   
   // Projects state
   const [projectsList, setProjectsList] = useState<string[]>([]);
   const [selectedProjectDir, setSelectedProjectDir] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+
+  // Custom Pipeline Hook Integration
+  const {
+    pipelineStatus,
+    setPipelineStatus,
+    overallProgress,
+    setOverallProgress,
+    stageProgresses,
+    setStageProgresses,
+    logs,
+    setLogs,
+    errorDetails,
+    setErrorDetails,
+    elapsedTime,
+    setElapsedTime,
+    startPipeline: handleStartPipeline,
+    cancelPipeline: handleCancelPipeline,
+    retryStage: handleRetryStage
+  } = usePipeline(selectedProjectDir, (path: string) => loadProjectJson(path));
   
-  // Pipeline status & progresses
-  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>('IDLE');
-  const [overallProgress, setOverallProgress] = useState(0);
-  const [stageProgresses, setStageProgresses] = useState<Record<StageName, StageProgressInfo>>({
-    EXTRACT: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-    TRANSCRIBE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-    TRANSLATE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-    TTS: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-    SYNC: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-    RENDER: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null }
-  });
-  
-  // Logs & Metrics
-  const [logs, setLogs] = useState<string[]>([]);
-  const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  // Timer Reference
   const timerRef = useRef<any>(null);
 
   // Dynamic Telemetry
@@ -83,43 +88,6 @@ export default function App() {
     const interval = setInterval(updateHardwareMetrics, 3000);
     return () => clearInterval(interval);
   }, []);
-
-  // Event Listener Subscriptions for Live Pipeline Progress
-  useEffect(() => {
-    let unsubProgress: any = null;
-    let unsubLog: any = null;
-    let unsubTerminated: any = null;
-
-    const setupListeners = async () => {
-      unsubProgress = await PythonEngineService.subscribeProgress((evt: PipelineProgressEvent) => {
-        handleProgressEvent(evt);
-      });
-
-      unsubLog = await PythonEngineService.subscribeLog((line: string) => {
-        setLogs(prev => [...prev, line]);
-      });
-
-      unsubTerminated = await PythonEngineService.subscribeTerminated((code: number) => {
-        if (code === 0) {
-          setPipelineStatus('COMPLETED');
-          setOverallProgress(100);
-          if (selectedProjectDir) {
-            loadProjectJson(selectedProjectDir);
-          }
-        } else {
-          setPipelineStatus('FAILED');
-        }
-      });
-    };
-
-    setupListeners();
-
-    return () => {
-      if (typeof unsubProgress === 'function') unsubProgress();
-      if (typeof unsubLog === 'function') unsubLog();
-      if (typeof unsubTerminated === 'function') unsubTerminated();
-    };
-  }, [selectedProjectDir]);
 
   useEffect(() => {
     if (pipelineStatus === 'RUNNING') {
@@ -239,151 +207,12 @@ export default function App() {
     }
   };
 
-  const handleStartPipeline = async (force: boolean = false) => {
-    if (!selectedProjectDir) return;
-    setPipelineStatus('RUNNING');
-    setErrorDetails(null);
-    setLogs(prev => [...prev, `[INFO] ${new Date().toLocaleTimeString()} Bắt đầu tiến trình AutoDub...`]);
-
-    if (force) {
-      setStageProgresses({
-        EXTRACT: { status: 'RUNNING', progress: 0, current: 0, total: 0, error: null },
-        TRANSCRIBE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-        TRANSLATE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-        TTS: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-        SYNC: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
-        RENDER: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null }
-      });
-      setOverallProgress(0);
-    }
-
-    try {
-      await PythonEngineService.startPipeline(selectedProjectDir, force);
-    } catch (err: any) {
-      setPipelineStatus('FAILED');
-      setErrorDetails(`Lỗi chạy tiến trình: ${err}`);
-    }
-  };
-
-  const handleRetryStage = async (stage: StageName) => {
-    if (!selectedProjectDir) return;
-    setPipelineStatus('RUNNING');
-    setErrorDetails(null);
-    setLogs(prev => [...prev, `[INFO] Đang chạy lại bước ${stage}...`]);
-
-    // Reset targeted stage to RUNNING and subsequent stages to PENDING
-    const stageIdx = STAGE_ORDER.indexOf(stage);
-    setStageProgresses(prev => {
-      const updated = { ...prev };
-      STAGE_ORDER.forEach((st, idx) => {
-        if (idx === stageIdx) {
-          updated[st] = { status: 'RUNNING', progress: 0, current: 0, total: 0, error: null };
-        } else if (idx > stageIdx) {
-          updated[st] = { status: 'PENDING', progress: 0, current: 0, total: 0, error: null };
-        }
-      });
-      return updated;
-    });
-
-    setOverallProgress(Math.round((stageIdx / STAGE_ORDER.length) * 100));
-
-    try {
-      await PythonEngineService.retryPipeline(selectedProjectDir, stage, true);
-    } catch (err: any) {
-      setPipelineStatus('FAILED');
-      setErrorDetails(`Lỗi chạy lại bước ${stage}: ${err}`);
-      setStageProgresses(prev => ({
-        ...prev,
-        [stage]: { ...prev[stage], status: 'FAILED', error: String(err) }
-      }));
-    }
-  };
-
-  const handleCancelPipeline = async () => {
-    if (!selectedProjectDir) return;
-    try {
-      await PythonEngineService.cancelPipeline();
-      setPipelineStatus('CANCELLED');
-      setLogs(prev => [...prev, `[WARNING] Đã gửi tín hiệu hủy tiến trình.`]);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleOpenOutputFolder = async () => {
     if (!selectedProjectDir) return;
     try {
       await PythonEngineService.openOutputFolder(selectedProjectDir);
     } catch (err) {
       alert(`Không thể mở thư mục: ${err}`);
-    }
-  };
-
-  const handleProgressEvent = (event: PipelineProgressEvent) => {
-    if (event.event === 'stage_start' && event.stage) {
-      const st = event.stage.toUpperCase() as StageName;
-      setPipelineStatus('RUNNING');
-      setStageProgresses(prev => ({
-        ...prev,
-        [st]: { ...prev[st], status: 'RUNNING', progress: 0 }
-      }));
-    } else if (event.event === 'progress' && event.stage) {
-      const st = event.stage.toUpperCase() as StageName;
-      const pct = Math.round(event.percent || 0);
-      setStageProgresses(prev => ({
-        ...prev,
-        [st]: { ...prev[st], status: 'RUNNING', progress: pct, current: event.current || 0, total: event.total || 0 }
-      }));
-      if (event.message) {
-        setLogs(prev => [...prev, `[${st}] ${event.message}`]);
-      }
-    } else if (event.event === 'stage_complete' && event.stage) {
-      const st = event.stage.toUpperCase() as StageName;
-      setStageProgresses(prev => {
-        const updated = {
-          ...prev,
-          [st]: { ...prev[st], status: 'COMPLETED' as StageStatus, progress: 100 }
-        };
-        const completedCount = STAGE_ORDER.filter(s => updated[s].status === 'COMPLETED' || updated[s].status === 'SKIPPED').length;
-        const newOverall = Math.round((completedCount / STAGE_ORDER.length) * 100);
-        setOverallProgress(newOverall);
-        if (completedCount === STAGE_ORDER.length || st === 'RENDER') {
-          setPipelineStatus('COMPLETED');
-        }
-        return updated;
-      });
-
-      // Reload project artifacts & timeline immediately on each AI stage completion
-      if (selectedProjectDir) {
-        loadProjectJson(selectedProjectDir);
-      }
-    } else if (event.event === 'pipeline_complete') {
-      setPipelineStatus('COMPLETED');
-      setOverallProgress(100);
-      setStageProgresses(prev => {
-        const updated = { ...prev };
-        STAGE_ORDER.forEach(st => {
-          updated[st] = { ...updated[st], status: 'COMPLETED', progress: 100 };
-        });
-        return updated;
-      });
-      if (selectedProjectDir) {
-        loadProjectJson(selectedProjectDir);
-      }
-    } else if (event.event === 'pipeline_error') {
-      setPipelineStatus('FAILED');
-      if (event.error) {
-        setErrorDetails(event.error);
-      }
-    } else if (event.event === 'stage_error' && event.stage) {
-      const st = event.stage.toUpperCase() as StageName;
-      const err = event.error || 'Lỗi chưa xác định';
-      setPipelineStatus('FAILED');
-      setStageProgresses(prev => ({
-        ...prev,
-        [st]: { ...prev[st], status: 'FAILED' as StageStatus, error: err }
-      }));
-      setErrorDetails(`[${st}] ${err}`);
     }
   };
 
@@ -394,149 +223,43 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: 'var(--bg-dark)' }}>
-      {/* SIDEBAR */}
+    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
+      {/* SIDEBAR activity bar */}
       <Sidebar
         projectsList={projectsList}
         selectedProjectDir={selectedProjectDir}
-        realRam={realRam}
-        realVram={realVram}
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          if (selectedProjectDir) setActiveTab(tab);
+        }}
         onSelectProject={handleSelectProject}
         onCreateNewProjectClick={() => setCurrentScreen('home')}
         onRefreshList={loadProjects}
       />
 
-      {/* MAIN WORKSPACE */}
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      {/* MAIN CONTAINER */}
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
         {currentScreen === 'home' && (
           <NewProjectModal isCreating={isCreatingProject} onCreateProject={handleCreateProject} />
         )}
 
         {currentScreen === 'project' && selectedProjectDir && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, overflow: 'hidden' }}>
             {/* WORKSPACE HEADER */}
             <Header
               selectedProjectDir={selectedProjectDir}
               pipelineStatus={pipelineStatus}
+              stageProgresses={stageProgresses}
               onStartPipeline={handleStartPipeline}
               onCancelPipeline={handleCancelPipeline}
               onOpenOutputFolder={handleOpenOutputFolder}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
             />
 
-            {/* TAB NAVIGATION HEADER */}
-            <div style={{ display: 'flex', background: 'rgba(2, 6, 23, 0.6)', borderBottom: '1px solid var(--border-glass)', padding: '0 24px', overflowX: 'auto' }}>
-              <button
-                onClick={() => setActiveTab('pipeline')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'pipeline' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'pipeline' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Activity size={15} /> Tiến Trình (Pipeline)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('subtitles')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'subtitles' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'subtitles' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <FileText size={15} /> Sửa Phụ Đề (Subtitle Editor)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('timeline')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'timeline' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'timeline' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Layers size={15} /> Timeline & Layers Studio
-              </button>
-
-              <button
-                onClick={() => setActiveTab('voices')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'voices' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'voices' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Mic size={15} /> Voice Studio (TTS Preview)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('qc')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'qc' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'qc' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <ShieldCheck size={15} /> Quality Control (QC)
-              </button>
-
-              <button
-                onClick={() => setActiveTab('logs')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'logs' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'logs' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Terminal size={15} /> Console Logs
-              </button>
-
-              <button
-                onClick={() => setActiveTab('preview')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'preview' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'preview' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Video size={15} /> Xem Trước Video
-              </button>
-
-              <button
-                onClick={() => setActiveTab('export')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'export' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'export' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Share2 size={15} /> Export Presets
-              </button>
-
-              <button
-                onClick={() => setActiveTab('settings')}
-                style={{
-                  padding: '14px 18px', background: 'transparent',
-                  color: activeTab === 'settings' ? 'var(--cyan)' : 'var(--text-muted)',
-                  border: 'none', borderBottom: activeTab === 'settings' ? '2px solid var(--cyan)' : '2px solid transparent',
-                  cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap'
-                }}
-              >
-                <Settings size={15} /> Cấu Hình
-              </button>
-            </div>
-
-            {/* TAB CONTENTS */}
-            <div style={{ flexGrow: 1, padding: '24px', overflowY: 'auto' }}>
-              {activeTab === 'pipeline' && (
+            {/* TAB CONTENTS CONTAINER */}
+            <div style={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ display: activeTab === 'pipeline' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <PipelineWorkflow
                   overallProgress={overallProgress}
                   elapsedTime={elapsedTime}
@@ -546,41 +269,105 @@ export default function App() {
                   onOpenTimeline={() => setActiveTab('timeline')}
                   formatTime={formatTime}
                 />
-              )}
+              </div>
 
-              {activeTab === 'subtitles' && (
+              <div style={{ display: activeTab === 'subtitles' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <SubtitleEditor projectDir={selectedProjectDir} />
-              )}
+              </div>
 
-              {activeTab === 'timeline' && (
-                <div style={{ margin: '-24px', width: 'calc(100% + 48px)', height: 'calc(100vh - 128px)', position: 'relative' }}>
+              <div style={{ display: activeTab === 'timeline' ? 'block' : 'none', height: '100%', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: 'calc(100vh - 82px)', position: 'relative' }}>
                   <EditorLayout onBackToApp={() => setActiveTab('pipeline')} />
                 </div>
-              )}
+              </div>
 
-              {activeTab === 'voices' && (
+              <div style={{ display: activeTab === 'voices' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <VoiceStudio projectDir={selectedProjectDir} />
-              )}
+              </div>
 
-              {activeTab === 'qc' && (
+              <div style={{ display: activeTab === 'qc' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <QualityControl projectDir={selectedProjectDir} />
-              )}
+              </div>
 
-              {activeTab === 'logs' && (
+              <div style={{ display: activeTab === 'logs' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
-              )}
+              </div>
 
-              {activeTab === 'preview' && (
+              <div style={{ display: activeTab === 'preview' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
-              )}
+              </div>
 
-              {activeTab === 'export' && (
+              <div style={{ display: activeTab === 'export' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <ExportPresets projectDir={selectedProjectDir} />
-              )}
+              </div>
 
-              {activeTab === 'settings' && (
+              <div style={{ display: activeTab === 'settings' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <SystemSettings settings={settings} onSettingsChange={setSettings} />
-              )}
+              </div>
+            </div>
+
+            {/* BOTTOM COLLAPSIBLE CONSOLE DRAWER */}
+            {isConsoleDrawerOpen && (
+              <div 
+                style={{ 
+                  height: '200px', 
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
+                  background: '#0B0D10', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  overflow: 'hidden' 
+                }}
+              >
+                <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
+              </div>
+            )}
+
+            {/* STATUS BAR */}
+            <div 
+              style={{ 
+                height: '30px', 
+                background: '#0B0D10', 
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                padding: '0 16px', 
+                fontSize: '11px', 
+                color: '#64748b', 
+                flexShrink: 0 
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: pipelineStatus === 'RUNNING' ? '#06b6d4' : '#10b981' }} />
+                  {pipelineStatus === 'RUNNING' ? 'AI Sync Active' : 'System Ready'}
+                </span>
+                <button
+                  onClick={() => setIsConsoleDrawerOpen(!isConsoleDrawerOpen)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isConsoleDrawerOpen ? '#6366f1' : '#64748b',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11px'
+                  }}
+                >
+                  <Terminal size={12} /> {isConsoleDrawerOpen ? 'Hide Terminal' : 'Show Terminal'}
+                </button>
+              </div>
+
+              {/* Hardware Telemetry stats */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Cpu size={12} /> RAM: <strong style={{ color: '#cbd5e1' }}>{realRam.split(' ')[0] || '10.1'} GB</strong>
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Video size={12} /> VRAM: <strong style={{ color: '#06b6d4' }}>{realVram.split(' ')[0] || '0.28'} GB</strong>
+                </span>
+              </div>
             </div>
           </div>
         )}

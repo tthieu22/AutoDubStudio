@@ -8,27 +8,29 @@
   --font-heading: 'Outfit', sans-serif;
   --font-body: 'Plus Jakarta Sans', sans-serif;
 
-  --bg-dark: #080c14;
-  --bg-card: rgba(13, 20, 35, 0.85);
-  --bg-card-hover: rgba(22, 32, 54, 0.9);
+  --bg-dark: #0B0D10;
+  --bg-surface: #111318;
+  --bg-surface-elevated: #161A20;
+  --bg-card: #1A1F27;
+  --bg-card-hover: #222934;
 
   --border-glass: rgba(255, 255, 255, 0.05);
-  --border-glass-bright: rgba(59, 130, 246, 0.25);
+  --border-glass-bright: rgba(99, 102, 241, 0.25);
 
-  --primary: #3b82f6;
-  --primary-glow: rgba(59, 130, 246, 0.15);
-  --cyan: #0ea5e9;
-  --cyan-glow: rgba(14, 165, 233, 0.15);
+  --primary: #6366f1;
+  --primary-glow: rgba(99, 102, 241, 0.15);
+  --cyan: #06b6d4;
+  --cyan-glow: rgba(6, 182, 212, 0.15);
   --emerald: #10b981;
   --emerald-glow: rgba(16, 185, 129, 0.15);
-  --amber: #d97706;
-  --rose: #e11d48;
+  --amber: #f59e0b;
+  --rose: #ef4444;
 
   --text-main: #f1f5f9;
-  --text-muted: #64748b;
+  --text-muted: #94a3b8;
 
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-main);
   background-color: var(--bg-dark);
