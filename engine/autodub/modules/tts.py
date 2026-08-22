@@ -97,52 +97,89 @@ def sanitize_text_for_piper(text: str) -> str:
     return clean if clean.strip() else "Xin chào"
 
 
-
 class PiperClient:
-    """Wrapper around local Piper TTS binary and voice models."""
+    """Wrapper around local Piper TTS library and voice models using Python API and GPU/CUDA."""
 
     def __init__(self, executable_path: Optional[Path] = None, voices_dir: Optional[Path] = None, use_cuda: Optional[bool] = None):
         self.executable_path = executable_path or self.find_executable()
         self.voices_dir = voices_dir or (RUNTIME_DIR / "piper" / "voices")
+        self._setup_dll_directories()
         self.use_cuda = use_cuda if use_cuda is not None else self._detect_cuda()
+        self._loaded_voices = {}
         if self.use_cuda:
             logger.info("Piper TTS: CUDA GPU acceleration enabled.")
         else:
             logger.info("Piper TTS: Running on CPU.")
 
+    def _setup_dll_directories(self):
+        """Add nvidia site-packages bin directories to Windows DLL path so ONNX Runtime can find CUDA/cuDNN dlls."""
+        if sys.platform != "win32":
+            return
+        if getattr(self, "_dll_directories_setup", False):
+            return
+        import importlib.util
+        dll_paths = []
+        for pkg in ["nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime", "nvidia.cuda_nvrtc", "nvidia.cufft", "nvidia.curand", "nvidia.nvjitlink"]:
+            try:
+                spec = importlib.util.find_spec(pkg)
+                if spec and spec.submodule_search_locations:
+                    for loc in spec.submodule_search_locations:
+                        bin_path = Path(loc) / "bin"
+                        if bin_path.exists():
+                            os.add_dll_directory(str(bin_path))
+                            dll_paths.append(str(bin_path.resolve()))
+                            logger.info(f"Piper CUDA setup: Added DLL directory {bin_path}")
+            except Exception as e:
+                logger.debug(f"Piper CUDA setup: Failed to add DLL directory for {pkg}: {e}")
+        
+        # Prepend to PATH environment variable as well (ONNX Runtime Windows loader workaround)
+        if dll_paths:
+            os.environ["PATH"] = ";".join(dll_paths) + ";" + os.environ.get("PATH", "")
+            
+        self._dll_directories_setup = True
+
     @staticmethod
     def _detect_cuda() -> bool:
-        """Auto-detect if CUDA is available and functional for ONNX Runtime.
-        
-        Tests by creating a minimal ONNX inference session with CUDAExecutionProvider.
-        Does NOT depend on PyTorch — Piper uses ONNX Runtime only.
-        """
+        """Auto-detect if CUDA is available and functional for ONNX Runtime."""
         try:
+            if sys.platform == "win32":
+                import importlib.util
+                dll_paths = []
+                for pkg in ["nvidia.cublas", "nvidia.cudnn", "nvidia.cuda_runtime", "nvidia.cuda_nvrtc", "nvidia.cufft", "nvidia.curand", "nvidia.nvjitlink"]:
+                    try:
+                        spec = importlib.util.find_spec(pkg)
+                        if spec and spec.submodule_search_locations:
+                            for loc in spec.submodule_search_locations:
+                                bin_path = Path(loc) / "bin"
+                                if bin_path.exists():
+                                    os.add_dll_directory(str(bin_path))
+                                    dll_paths.append(str(bin_path.resolve()))
+                    except Exception:
+                        pass
+                if dll_paths:
+                    os.environ["PATH"] = ";".join(dll_paths) + ";" + os.environ.get("PATH", "")
+
             import onnxruntime
             providers = onnxruntime.get_available_providers()
             if "CUDAExecutionProvider" not in providers:
                 logger.info("CUDA detect: CUDAExecutionProvider not in available providers.")
                 return False
 
-            # Validate CUDA actually works by creating a tiny dummy ONNX model session
-            import numpy as np
-            # Minimal valid ONNX model (identity op): input float[1] -> output float[1]
-            # This is the smallest possible valid ONNX protobuf
+            # Validate CUDA execution provider loads successfully
             dummy_onnx = (
                 b'\x08\x07\x12\x04test\x1a\x04test"\x1a\n\x08Identity'
                 b'\x12\x01x\x1a\x01y"\x08Identity*\x00:\x00Z\x11\n\x01x'
                 b'\x12\x0c\n\n\x08\x01\x12\x06\n\x00\n\x02\x08\x01b\x11'
                 b'\n\x01y\x12\x0c\n\n\x08\x01\x12\x06\n\x00\n\x02\x08\x01'
             )
-            
-            # Simpler approach: just check provider list — if onnxruntime-gpu is installed
-            # and CUDAExecutionProvider is listed, CUDA libraries are loaded and functional
-            sess_options = onnxruntime.SessionOptions()
-            sess_options.log_severity_level = 3  # Suppress warnings
-            
-            # The fact that CUDAExecutionProvider appears in get_available_providers()
-            # means ONNX Runtime successfully loaded CUDA libraries
-            logger.info(f"CUDA detect: CUDAExecutionProvider found. Available: {providers}")
+            try:
+                onnxruntime.InferenceSession(dummy_onnx, providers=["CUDAExecutionProvider"])
+            except Exception as e:
+                if "Missing opset in the model" in str(e):
+                    logger.info("CUDA detect: CUDAExecutionProvider successfully loaded and verified.")
+                    return True
+                logger.info(f"CUDA detect: InferenceSession creation failed: {e}")
+                return False
             return True
         except ImportError:
             logger.info("CUDA detect: onnxruntime not installed.")
@@ -236,70 +273,58 @@ class PiperClient:
         speaker: Optional[str] = None
     ) -> float:
         """
-        Synthesize text into WAV file using Piper CLI process.
+        Synthesize text into WAV file using Python PiperVoice API.
         Returns synthesis duration in seconds.
         """
-        exe = self.find_executable()
-        if not exe:
-            raise PiperUnavailableError("Piper binary not found.")
-
-        onnx_p, _ = self.find_voice(voice_name)
+        onnx_p, json_p = self.find_voice(voice_name)
         if not onnx_p:
             raise PiperVoiceNotFoundError(f"Voice model '{voice_name}' not found.")
 
         output_wav_path.parent.mkdir(parents=True, exist_ok=True)
-
-        cmd = [
-            str(exe),
-            "--model", str(onnx_p),
-            "--output_file", str(output_wav_path)
-        ]
-        if self.use_cuda:
-            cmd.append("--cuda")
-        if speaker is not None:
-            cmd.extend(["--speaker", str(speaker)])
-
         clean_text = sanitize_text_for_piper(text)
 
-        env = os.environ.copy()
-        env["PYTHONUTF8"] = "1"
-        env["PYTHONIOENCODING"] = "utf-8"
-
         start_time = time.time()
-        proc = None
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=env
-            )
-            stdout_data, stderr_data = proc.communicate(
-                input=clean_text.encode("utf-8", errors="ignore"),
-                timeout=timeout
-            )
-            elapsed = time.time() - start_time
+            from piper import PiperVoice
+            from piper.config import SynthesisConfig
 
-            if proc.returncode != 0:
-                err_text = stderr_data.decode("utf-8", errors="replace")
-                raise PiperSynthesisError(f"Piper exited with code {proc.returncode}: {err_text}")
+            voice_key = str(onnx_p)
+            if voice_key not in self._loaded_voices:
+                logger.info(f"Loading Piper voice model (CUDA={self.use_cuda}): {onnx_p}")
+                self._loaded_voices[voice_key] = PiperVoice.load(str(onnx_p), use_cuda=self.use_cuda)
 
-            return elapsed
+            voice = self._loaded_voices[voice_key]
 
-        except subprocess.TimeoutExpired:
-            if proc:
-                proc.kill()
-                proc.communicate()
+            # Determine speaker ID
+            speaker_id = None
+            if speaker is not None:
+                try:
+                    speaker_id = int(speaker)
+                except ValueError:
+                    try:
+                        speaker_id = voice.config.speaker_id_map.get(speaker, 0)
+                    except Exception:
+                        speaker_id = 0
+
+            syn_config = SynthesisConfig(speaker_id=speaker_id)
+
+            with wave.open(str(output_wav_path), "wb") as wav_file:
+                # Pre-set wave parameters to prevent wave.Error: # channels not specified
+                # if clean_text is empty or does not yield any audio frames.
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(voice.config.sample_rate)
+                voice.synthesize_wav(clean_text, wav_file, syn_config=syn_config, set_wav_format=False)
+
+            return time.time() - start_time
+        except Exception as e:
             if output_wav_path.exists():
                 try:
                     output_wav_path.unlink()
                 except OSError:
                     pass
-            raise PiperTimeoutError(f"Piper synthesis process timed out after {timeout} seconds.")
-        except Exception as e:
             if not isinstance(e, AutoDubError):
-                raise PiperSynthesisError(f"Subprocess invocation failed: {e}") from e
+                raise PiperSynthesisError(f"Piper python synthesis failed: {e}") from e
             raise
 
 
@@ -455,8 +480,9 @@ class RealTTS:
             final_wav_path = audio_tts_dir / wav_filename
 
             raw_text = seg.get("translation") or seg.get("text") or ""
-            if not raw_text or not raw_text.strip():
-                logger.info(f"Segment {seg_id} text is empty/whitespace. Skipping TTS synthesis.")
+            # Skip segment if it is empty, whitespace-only, or contains no spoken/alphanumeric characters (e.g., "...")
+            if not raw_text or not raw_text.strip() or not re.search(r'[a-zA-Z0-9\u00c0-\u1ef9]', raw_text):
+                logger.info(f"Segment {seg_id} text is empty/whitespace or has no spoken characters. Skipping TTS synthesis.")
                 seg_meta = {
                     "audio_file": f"audio/tts/{wav_filename}",
                     "status": "SKIPPED",
