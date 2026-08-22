@@ -2,11 +2,21 @@ import React, { useState, useRef } from 'react';
 import { Mic, Volume2, Play, Square, Loader2, Sparkles, Sliders, CheckCircle2, VolumeX, User } from 'lucide-react';
 import { PythonEngineService } from '../services/pythonEngine';
 
+import { StageName, StageProgressInfo, PipelineStatus } from '../types/pipeline';
+
 interface VoiceStudioProps {
   projectDir: string;
+  pipelineStatus: PipelineStatus;
+  stageProgresses: Record<StageName, StageProgressInfo>;
+  onResumePipeline: (stopAt?: string) => Promise<void>;
 }
 
-export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
+export const VoiceStudio: React.FC<VoiceStudioProps> = ({ 
+  projectDir, 
+  pipelineStatus, 
+  stageProgresses, 
+  onResumePipeline 
+}) => {
   const [speakers, setSpeakers] = useState([
     { id: 'Speaker 1', gender: 'Female', voice: 'edge-tts-vi-hoaimy', speed: 0.95, pitch: 'Normal' },
     { id: 'Speaker 2', gender: 'Male', voice: 'edge-tts-vi-namminh', speed: 0.95, pitch: 'Deep' }
@@ -131,9 +141,27 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({ projectDir }) => {
             <span style={{ fontSize: '11px', color: '#94a3b8' }}>Assign voice models, customize speech speed, and preview characters offline</span>
           </div>
         </div>
-        <span style={{ fontSize: '10px', color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '20px', fontWeight: 700 }}>
-          PIPER LOCAL COCUDA ACTIVE
-        </span>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {pipelineStatus === 'RUNNING' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#94a3b8' }}>
+              <Loader2 size={12} className="animate-spin" color="#06b6d4" />
+              <span>
+                {stageProgresses['TTS']?.status === 'RUNNING' && `TTS Progress: ${stageProgresses['TTS']?.progress}%`}
+                {stageProgresses['SYNC']?.status === 'RUNNING' && `Syncing audio timeline...`}
+              </span>
+            </div>
+          )}
+          
+          <button 
+            className="btn-primary" 
+            onClick={() => onResumePipeline('sync')}
+            disabled={pipelineStatus === 'RUNNING'}
+            style={{ padding: '6px 14px', fontSize: '12px', background: 'linear-gradient(135deg, #a855f7, #6366f1)' }}
+          >
+            {pipelineStatus === 'RUNNING' ? 'Running Generation...' : 'Generate Voice & Time-Sync ➔'}
+          </button>
+        </div>
       </div>
 
       {/* 2. DUAL PANEL LAYOUT */}

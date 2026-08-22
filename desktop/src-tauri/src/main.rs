@@ -362,6 +362,7 @@ fn start_pipeline(
     active_proc: State<'_, ProcessState>,
     project_dir: String,
     force: bool,
+    stop_at: Option<String>,
 ) -> Result<(), String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let python_path = find_python_path();
@@ -381,6 +382,9 @@ fn start_pipeline(
     cmd.arg("-m").arg("autodub.cli").arg("run").arg(&project_dir);
     if force {
         cmd.arg("--force");
+    }
+    if let Some(ref sa) = stop_at {
+        cmd.arg("--stop-at").arg(sa);
     }
 
     cmd.stdout(Stdio::piped());
@@ -484,6 +488,7 @@ fn resume_pipeline(
     window: Window,
     active_proc: State<'_, ProcessState>,
     project_dir: String,
+    stop_at: Option<String>,
 ) -> Result<(), String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let python_path = find_python_path();
@@ -496,6 +501,9 @@ fn resume_pipeline(
     let mut cmd = Command::new(python_path);
     cmd.current_dir(ws_root.join("engine"));
     cmd.arg("-m").arg("autodub.cli").arg("resume").arg(&project_dir);
+    if let Some(ref sa) = stop_at {
+        cmd.arg("--stop-at").arg(sa);
+    }
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -745,17 +753,37 @@ fn read_subtitles(project_dir: String) -> Result<serde_json::Value, String> {
     let trans_file = p_dir.join("transcript").join("translation.json");
     let orig_file = p_dir.join("transcript").join("transcript.json");
 
-    let file_to_read = if trans_file.exists() {
-        trans_file
+    if trans_file.exists() {
+        let content = fs::read_to_string(trans_file).map_err(|e| e.to_string())?;
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        Ok(json)
     } else if orig_file.exists() {
-        orig_file
+        let content = fs::read_to_string(orig_file).map_err(|e| e.to_string())?;
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        Ok(json)
     } else {
-        return Err("No transcript or translation JSON file found.".to_string());
-    };
-
-    let content = fs::read_to_string(file_to_read).map_err(|e| e.to_string())?;
-    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    Ok(json)
+        // Fallback to project.json segments list
+        let proj_file = p_dir.join("project.json");
+        if proj_file.exists() {
+            let content = fs::read_to_string(proj_file).map_err(|e| e.to_string())?;
+            let mut proj_json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            if let Some(mut segments) = proj_json.get_mut("segments").map(|s| s.take()) {
+                if let Some(arr) = segments.as_array_mut() {
+                    for seg in arr {
+                        if let Some(obj) = seg.as_object_mut() {
+                            if !obj.contains_key("translated_text") {
+                                if let Some(trans) = obj.get("translation") {
+                                    obj.insert("translated_text".to_string(), trans.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                return Ok(segments);
+            }
+        }
+        Err("No transcript, translation JSON, or project.json segments found.".to_string())
+    }
 }
 
 #[tauri::command]

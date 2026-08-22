@@ -14,9 +14,15 @@ import { ShortcutsModal } from './ShortcutsModal';
 
 interface EditorLayoutProps {
   onBackToApp?: () => void;
+  onRender?: (preset: string) => void;
+  isRendering?: boolean;
 }
 
-export const EditorLayout: React.FC<EditorLayoutProps> = ({ onBackToApp }) => {
+export const EditorLayout: React.FC<EditorLayoutProps> = ({ 
+  onBackToApp,
+  onRender,
+  isRendering = false,
+}) => {
   const [comp, setComp] = useState<CompositionState>(editorStore.getComposition());
   const [uiState, setUiState] = useState<EditorUiState>(editorStore.getUiState());
   const [leftTab, setLeftTab] = useState<'media' | 'layers' | 'text' | 'audio'>('media');
@@ -134,6 +140,8 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({ onBackToApp }) => {
         })}
         onOpenShortcuts={() => setShowShortcuts(true)}
         onBackToApp={onBackToApp}
+        onRender={onRender || ((p) => alert('Render preset: ' + p))}
+        isRendering={isRendering}
       />
 
       {/* 2. MAIN WORKSPACE (LEFT NAV + LEFT PANEL | CENTER CANVAS | RIGHT INSPECTOR) */}

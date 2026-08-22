@@ -1,5 +1,5 @@
 import React from 'react';
-import { 
+import {
   Undo, Redo, Save, Download, Play, Pause,
   Grid, HelpCircle, Magnet, ArrowLeft
 } from 'lucide-react';
@@ -19,6 +19,8 @@ interface ToolbarProps {
   onToggleSnapping: () => void;
   onOpenShortcuts: () => void;
   onBackToApp?: () => void;
+  onRender: (preset: string) => void;
+  isRendering?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -36,41 +38,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleSnapping,
   onOpenShortcuts,
   onBackToApp,
+  onRender,
+  isRendering = false,
 }) => {
+  const [selectedRatio, setSelectedRatio] = React.useState('16:9');
   return (
     <header className="editor-topbar">
-      {/* LEFT: BACK BUTTON + BRAND + PROJECT NAME */}
+      {/* LEFT: EMPTY */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {onBackToApp && (
-          <button
-            onClick={onBackToApp}
-            className="editor-nav-btn"
-            style={{ width: '32px', height: '32px' }}
-            title="Quay lại bảng điều khiển chính"
-          >
-            <ArrowLeft size={16} />
-          </button>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="editor-brand-badge">
-            AD
-          </div>
-          <span style={{ fontWeight: 800, fontSize: '14px', letterSpacing: '0.5px' }} className="gradient-text">
-            AutoDubStudio
-          </span>
-        </div>
-
-        <div style={{ height: '16px', width: '1px', backgroundColor: 'rgba(255, 255, 255, 0.1)' }} />
-
-        <div className="editor-project-pill">
-          <span style={{ fontWeight: 600 }}>{projectName}</span>
-          <span style={{ color: '#64748b', fontSize: '10px' }}>▼</span>
-        </div>
       </div>
 
       {/* CENTER: UNDO, REDO, SNAP, GUIDES */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
         <button
           onClick={onUndo}
           disabled={!canUndo}
@@ -111,6 +90,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <Grid size={14} />
           <span>Guides</span>
         </button>
+
+        <button
+          onClick={onOpenShortcuts}
+          className="editor-nav-btn"
+          style={{ width: 'auto', padding: '0 10px', height: '30px', fontSize: '12px', gap: '5px' }}
+          title="Xem danh sách phím tắt trợ giúp (Shift+?)"
+        >
+          <HelpCircle size={14} />
+          <span>Help</span>
+        </button>
       </div>
 
       {/* RIGHT: SAVE STATUS + SAVE + EXPORT */}
@@ -133,12 +122,25 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <Save size={14} /> Lưu (Ctrl+S)
         </button>
 
-        <button
-          onClick={() => alert('Xuất bản render video chất lượng cao với các layer...')}
-          className="btn-primary"
-          style={{ padding: '6px 14px', fontSize: '12px' }}
+        <select
+          value={selectedRatio}
+          onChange={(e) => setSelectedRatio(e.target.value)}
+          disabled={isRendering}
+          style={{ background: '#0B0D10', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', padding: '6px', borderRadius: '4px', fontSize: '12px', outline: 'none' }}
         >
-          <Download size={14} /> Render / Export
+          <option value="16:9">YouTube (16:9)</option>
+          <option value="9:16">TikTok & Shorts (9:16)</option>
+          <option value="audio">Audio Only (.WAV)</option>
+          <option value="srt">Subtitles Only (.SRT)</option>
+        </select>
+
+        <button
+          onClick={() => onRender(selectedRatio)}
+          disabled={isRendering}
+          className="btn-primary"
+          style={{ padding: '6px 14px', fontSize: '12px', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+        >
+          <Download size={14} /> {isRendering ? 'Rendering...' : 'Render / Export'}
         </button>
       </div>
     </header>

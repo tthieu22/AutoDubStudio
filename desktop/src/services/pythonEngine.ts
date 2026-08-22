@@ -262,12 +262,12 @@ export class PythonEngineService {
     return invoke<string[]>('read_pipeline_log', { projectDir, limit });
   }
 
-  static async startPipeline(projectDir: string, force: boolean = false): Promise<void> {
+  static async startPipeline(projectDir: string, force: boolean = false, stopAt?: string): Promise<void> {
     if (!isTauri()) {
       this.simulateMockPipeline(projectDir);
       return;
     }
-    return invoke<void>('start_pipeline', { projectDir, force });
+    return invoke<void>('start_pipeline', { projectDir, force, stopAt });
   }
 
   static async cancelPipeline(): Promise<void> {
@@ -287,12 +287,12 @@ export class PythonEngineService {
     return invoke<void>('cancel_pipeline');
   }
 
-  static async resumePipeline(projectDir: string): Promise<void> {
+  static async resumePipeline(projectDir: string, stopAt?: string): Promise<void> {
     if (!isTauri()) {
       this.simulateMockPipeline(projectDir);
       return;
     }
-    return invoke<void>('resume_pipeline', { projectDir });
+    return invoke<void>('resume_pipeline', { projectDir, stopAt });
   }
 
   static async retryPipeline(projectDir: string, stage: string, force: boolean = false): Promise<void> {

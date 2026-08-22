@@ -26,24 +26,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRefreshList,
   onDeleteProject
 }) => {
-  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredProjects = projectsList.filter(name => 
     name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const navItems = [
+  const topNavItems = [
     { id: 'pipeline', label: 'Pipeline Process', icon: Activity, color: '#06b6d4' },
     { id: 'subtitles', label: 'Subtitle Editor', icon: FileText, color: '#6366f1' },
-    { id: 'timeline', label: 'Timeline & Layers', icon: Layers, color: '#10b981' },
     { id: 'voices', label: 'Voice Studio', icon: Mic, color: '#a855f7' },
     { id: 'qc', label: 'Quality Control', icon: ShieldCheck, color: '#f59e0b' },
-    { id: 'logs', label: 'Console Logs', icon: Terminal, color: '#94a3b8' },
-    { id: 'preview', label: 'Video Preview', icon: Video, color: '#3b82f6' },
+    { id: 'timeline', label: 'Timeline & Layers', icon: Layers, color: '#10b981' },
+    { id: 'preview', label: 'Video Preview', icon: Video, color: '#3b82f6' }
+  ];
+
+  const bottomNavItems = [
     { id: 'export', label: 'Export Presets', icon: Share2, color: '#ec4899' },
+    { id: 'logs', label: 'Console Logs', icon: Terminal, color: '#94a3b8' },
     { id: 'settings', label: 'Settings', icon: Settings, color: '#64748b' }
   ];
+
+  const renderNavItem = (item: typeof topNavItems[0]) => {
+    const Icon = item.icon;
+    const isActive = activeTab === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => setActiveTab(item.id)}
+        style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: '8px',
+          background: isActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+          color: isActive ? item.color : '#94a3b8',
+          border: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          position: 'relative'
+        }}
+        title={item.label}
+      >
+        <Icon size={20} />
+        {isActive && (
+          <div 
+            style={{ 
+              position: 'absolute', 
+              left: 0, 
+              top: '10px', 
+              width: '3px', 
+              height: '20px', 
+              background: item.color, 
+              borderRadius: '0 2px 2px 0' 
+            }} 
+          />
+        )}
+      </button>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', height: '100%', zIndex: 10 }}>
@@ -57,7 +101,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           flexDirection: 'column', 
           alignItems: 'center', 
           padding: '16px 0', 
-          gap: '8px' 
+          gap: '8px',
+          height: '100%'
         }}
       >
         {/* Toggle Projects panel button */}
@@ -82,47 +127,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Folder size={20} />
         </button>
 
-        {/* Navigation Tabs */}
-        {navItems.map(item => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '8px',
-                background: isActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-                color: isActive ? item.color : '#94a3b8',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                position: 'relative'
-              }}
-              title={item.label}
-            >
-              <Icon size={20} />
-              {isActive && (
-                <div 
-                  style={{ 
-                    position: 'absolute', 
-                    left: 0, 
-                    top: '10px', 
-                    width: '3px', 
-                    height: '20px', 
-                    background: item.color, 
-                    borderRadius: '0 2px 2px 0' 
-                  }} 
-                />
-              )}
-            </button>
-          );
-        })}
+        {/* Top Navigation Tabs */}
+        {selectedProjectDir && topNavItems.map(renderNavItem)}
+
+        {/* Spacer to push next group to the bottom */}
+        {selectedProjectDir && <div style={{ flexGrow: 1 }} />}
+
+        {/* Bottom Navigation Tabs */}
+        {selectedProjectDir && bottomNavItems.map(renderNavItem)}
       </div>
 
       {/* 2. EXPANDABLE PROJECT EXPLORER PANEL */}

@@ -18,6 +18,7 @@ import { ExportPresets } from './components/ExportPresets';
 import { EditorLayout } from './components/editor/EditorLayout';
 import { CompositionBuilder } from './editor/state/compositionBuilder';
 import { editorStore } from './editor/state/editorStore';
+import { TitleBar } from './components/TitleBar';
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
@@ -54,9 +55,59 @@ export default function App() {
     elapsedTime,
     setElapsedTime,
     startPipeline: handleStartPipeline,
+    resumePipeline: handleResumePipeline,
     cancelPipeline: handleCancelPipeline,
     retryStage: handleRetryStage
   } = usePipeline(selectedProjectDir, (path: string) => loadProjectJson(path));
+
+  const startPhase1Pipeline = (force = false) => {
+    handleStartPipeline(force, 'translate');
+  };
+
+  const handleTimelineRender = async (preset: string) => {
+    if (!selectedProjectDir) return;
+    try {
+      const json = await PythonEngineService.readProjectJson(selectedProjectDir);
+      if (!json.settings) json.settings = {};
+      if (!json.settings.render) json.settings.render = {};
+      
+      if (preset === '16:9') {
+        json.settings.render.subtitle_mode = 'BURN_IN';
+        json.settings.render.audio_mode = 'DUCK_ORIGINAL';
+        json.settings.render.video_codec = 'H264';
+      } else if (preset === '9:16') {
+        json.settings.render.subtitle_mode = 'BURN_IN';
+        json.settings.render.audio_mode = 'DUCK_ORIGINAL';
+        json.settings.render.video_codec = 'H264'; // Custom crop options can be read on python backend
+      } else if (preset === 'audio') {
+        json.settings.render.subtitle_mode = 'NONE';
+        json.settings.render.audio_mode = 'DUB_ONLY';
+      } else if (preset === 'srt') {
+        json.settings.render.subtitle_mode = 'COPY';
+        json.settings.render.audio_mode = 'ORIGINAL_ONLY';
+      }
+
+      await PythonEngineService.writeProjectJson(selectedProjectDir, json);
+      await handleResumePipeline('render');
+    } catch (err: any) {
+      alert(`Khởi động Render thất bại: ${err}`);
+    }
+  };
+
+  const prevStatusRef = useRef(pipelineStatus);
+  // Auto-navigation on pipeline progress/stage transitions
+  useEffect(() => {
+    if (prevStatusRef.current === 'RUNNING' && pipelineStatus === 'COMPLETED') {
+      if (stageProgresses['RENDER']?.status === 'COMPLETED') {
+        setActiveTab('preview');
+      } else if (stageProgresses['SYNC']?.status === 'COMPLETED') {
+        setActiveTab('timeline');
+      } else if (stageProgresses['TRANSLATE']?.status === 'COMPLETED') {
+        setActiveTab('subtitles');
+      }
+    }
+    prevStatusRef.current = pipelineStatus;
+  }, [pipelineStatus, stageProgresses]);
   
   // Timer Reference
   const timerRef = useRef<any>(null);
@@ -246,14 +297,21 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
-      {/* SIDEBAR activity bar */}
-      <Sidebar
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
+      <TitleBar selectedProjectDir={selectedProjectDir} stageProgresses={stageProgresses} />
+      <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden', width: '100%', minHeight: 0 }}>
+        {/* SIDEBAR activity bar */}
+        <Sidebar
         projectsList={projectsList}
         selectedProjectDir={selectedProjectDir}
         activeTab={activeTab}
         setActiveTab={(tab) => {
-          if (selectedProjectDir) setActiveTab(tab);
+          if (selectedProjectDir) {
+            setActiveTab(tab);
+            if (tab === 'subtitles' || tab === 'timeline' || tab === 'voices' || tab === 'qc') {
+              setIsConsoleDrawerOpen(false);
+            }
+          }
         }}
         onSelectProject={handleSelectProject}
         onCreateNewProjectClick={() => setCurrentScreen('home')}
@@ -262,28 +320,16 @@ export default function App() {
       />
 
       {/* MAIN CONTAINER */}
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative', minHeight: 0 }}>
         {currentScreen === 'home' && (
           <NewProjectModal isCreating={isCreatingProject} onCreateProject={handleCreateProject} />
         )}
 
         {currentScreen === 'project' && selectedProjectDir && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, overflow: 'hidden' }}>
-            {/* WORKSPACE HEADER */}
-            <Header
-              selectedProjectDir={selectedProjectDir}
-              pipelineStatus={pipelineStatus}
-              stageProgresses={stageProgresses}
-              onStartPipeline={handleStartPipeline}
-              onCancelPipeline={handleCancelPipeline}
-              onOpenOutputFolder={handleOpenOutputFolder}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, overflow: 'hidden', minHeight: 0 }}>
             {/* TAB CONTENTS CONTAINER */}
-            <div style={{ flexGrow: 1, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ display: activeTab === 'pipeline' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
+            <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ display: activeTab === 'pipeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <PipelineWorkflow
                   overallProgress={overallProgress}
                   elapsedTime={elapsedTime}
@@ -292,42 +338,55 @@ export default function App() {
                   onRetryStage={handleRetryStage}
                   onOpenTimeline={() => setActiveTab('timeline')}
                   formatTime={formatTime}
+                  pipelineStatus={pipelineStatus}
+                  onStartPipeline={startPhase1Pipeline}
+                  onCancelPipeline={handleCancelPipeline}
+                  onResumePipeline={handleResumePipeline}
                 />
               </div>
 
-              <div style={{ display: activeTab === 'subtitles' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
-                <SubtitleEditor projectDir={selectedProjectDir} />
+              <div style={{ display: activeTab === 'subtitles' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
+                <SubtitleEditor projectDir={selectedProjectDir} onProceedToVoices={() => setActiveTab('voices')} />
               </div>
 
-              <div style={{ display: activeTab === 'timeline' ? 'block' : 'none', height: '100%', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: 'calc(100vh - 82px)', position: 'relative' }}>
-                  <EditorLayout onBackToApp={() => setActiveTab('pipeline')} />
+              <div style={{ display: activeTab === 'timeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                  <EditorLayout 
+                    onBackToApp={() => setActiveTab('pipeline')} 
+                    onRender={handleTimelineRender}
+                    isRendering={pipelineStatus === 'RUNNING'}
+                  />
                 </div>
               </div>
 
-              <div style={{ display: activeTab === 'voices' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
-                <VoiceStudio projectDir={selectedProjectDir} />
+              <div style={{ display: activeTab === 'voices' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
+                <VoiceStudio 
+                  projectDir={selectedProjectDir} 
+                  pipelineStatus={pipelineStatus}
+                  stageProgresses={stageProgresses}
+                  onResumePipeline={handleResumePipeline}
+                />
               </div>
 
-              <div style={{ display: activeTab === 'qc' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
+              <div style={{ display: activeTab === 'qc' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <QualityControl projectDir={selectedProjectDir} />
               </div>
 
-              <div style={{ display: activeTab === 'logs' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
+              <div style={{ display: activeTab === 'logs' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
               </div>
 
               {activeTab === 'preview' && (
-                <div style={{ height: '100%', padding: '24px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                   <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
                 </div>
               )}
 
-              <div style={{ display: activeTab === 'export' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
+              <div style={{ display: activeTab === 'export' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <ExportPresets projectDir={selectedProjectDir} />
               </div>
 
-              <div style={{ display: activeTab === 'settings' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
+              <div style={{ display: activeTab === 'settings' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <SystemSettings settings={settings} onSettingsChange={setSettings} />
               </div>
             </div>
@@ -347,56 +406,42 @@ export default function App() {
                 <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
               </div>
             )}
-
-            {/* STATUS BAR */}
-            <div 
-              style={{ 
-                height: '30px', 
-                background: '#0B0D10', 
-                borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                padding: '0 16px', 
-                fontSize: '11px', 
-                color: '#64748b', 
-                flexShrink: 0 
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: pipelineStatus === 'RUNNING' ? '#06b6d4' : '#10b981' }} />
-                  {pipelineStatus === 'RUNNING' ? 'AI Sync Active' : 'System Ready'}
-                </span>
-                <button
-                  onClick={() => setIsConsoleDrawerOpen(!isConsoleDrawerOpen)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: isConsoleDrawerOpen ? '#6366f1' : '#64748b',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '11px'
-                  }}
-                >
-                  <Terminal size={12} /> {isConsoleDrawerOpen ? 'Hide Terminal' : 'Show Terminal'}
-                </button>
-              </div>
-
-              {/* Hardware Telemetry stats */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Cpu size={12} /> RAM: <strong style={{ color: '#cbd5e1' }}>{realRam.split(' ')[0] || '10.1'} GB</strong>
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Video size={12} /> VRAM: <strong style={{ color: '#06b6d4' }}>{realVram.split(' ')[0] || '0.28'} GB</strong>
-                </span>
-              </div>
-            </div>
           </div>
         )}
+      </div>
+      </div>
+
+      {/* GLOBAL STATUS BAR */}
+      <div 
+        style={{ 
+          height: '30px', 
+          background: '#0B0D10', 
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          padding: '0 16px', 
+          fontSize: '11px', 
+          color: '#64748b', 
+          flexShrink: 0 
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: pipelineStatus === 'RUNNING' ? '#06b6d4' : '#10b981' }} />
+            {pipelineStatus === 'RUNNING' ? 'AI Sync Active' : 'System Ready'}
+          </span>
+        </div>
+
+        {/* Hardware Telemetry stats */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Cpu size={12} /> RAM: <strong style={{ color: '#cbd5e1' }}>{realRam.split(' ')[0] || '10.1'} GB</strong>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Video size={12} /> VRAM: <strong style={{ color: '#06b6d4' }}>{realVram.split(' ')[0] || '0.28'} GB</strong>
+          </span>
+        </div>
       </div>
     </div>
   );

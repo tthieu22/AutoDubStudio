@@ -16,10 +16,7 @@ interface HeaderProps {
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
   'TRANSCRIBE',
-  'TRANSLATE',
-  'TTS',
-  'SYNC',
-  'RENDER'
+  'TRANSLATE'
 ];
 
 const STAGE_SHORT_LABELS: Record<StageName, string> = {
@@ -97,35 +94,11 @@ export const Header: React.FC<HeaderProps> = ({
         flexShrink: 0
       }}
     >
-      {/* BRAND & PROJECT INFO */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={14} color="#fff" />
-          </div>
-          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '14px', letterSpacing: '0.5px' }}>AutoDub Studio</span>
-          <span style={{ fontSize: '10px', color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>PRO</span>
-        </div>
-        <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' }} />
-        <div>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>{projectName}</span>
-        </div>
-      </div>
+      {/* Left section empty to keep alignment or add spacing if needed */}
+      <div></div>
 
       {/* COMPACT PIPELINE STEP TRACKER */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#0B0D10', padding: '4px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
-        {STAGE_ORDER.map((st, idx) => {
-          const info = stageProgresses[st] || { status: 'PENDING' };
-          return (
-            <React.Fragment key={st}>
-              {renderStageIndicator(st, info.status)}
-              {idx < STAGE_ORDER.length - 1 && (
-                <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px' }}>➔</span>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
+
 
       {/* ACTIONS TOOLBAR */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -50,14 +50,16 @@ def main():
     batch_sp.add_argument("--force", action="store_true", help="Force re-processing duplicate jobs")
     batch_sp.add_argument("--json", action="store_true", help="Output machine-readable JSON results")
 
-    # run <project_or_job> [--force]
+    # run <project_or_job> [--force] [--stop-at <stage>]
     run_sp = subparsers.add_parser("run", help="Run full pipeline for a project or job")
     run_sp.add_argument("target", help="Project name/path or Job ID")
     run_sp.add_argument("--force", action="store_true", help="Force re-running completed stages")
+    run_sp.add_argument("--stop-at", choices=[s.value for s in PipelineStage], default=None, help="Stage to stop after completing")
 
-    # resume <target>
+    # resume <target> [--stop-at <stage>]
     resume_sp = subparsers.add_parser("resume", help="Resume pipeline/job from checkpoint")
     resume_sp.add_argument("target", help="Project name/path or Job ID")
+    resume_sp.add_argument("--stop-at", choices=[s.value for s in PipelineStage], default=None, help="Stage to stop after completing")
 
     # pause <job_id>
     pause_sp = subparsers.add_parser("pause", help="Pause a running job")
@@ -263,7 +265,8 @@ def main():
                 pool.stop()
             else:
                 mgr = PipelineManager(target)
-                mgr.run_all(force=getattr(args, "force", False))
+                stop_at_enum = PipelineStage(args.stop_at) if args.stop_at else None
+                mgr.run_all(force=getattr(args, "force", False), stop_at=stop_at_enum)
 
         elif args.command == "resume":
             if job:
@@ -271,7 +274,8 @@ def main():
                 print(f"Job '{job.job_id}' resumed.")
             else:
                 mgr = PipelineManager(target)
-                mgr.resume()
+                stop_at_enum = PipelineStage(args.stop_at) if args.stop_at else None
+                mgr.resume(stop_at=stop_at_enum)
 
         elif args.command == "cancel":
             if job:

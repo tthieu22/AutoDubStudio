@@ -226,7 +226,7 @@ class PipelineManager:
             )
         self.logger.info("All pipeline stages reset to PENDING.")
 
-    def run_all(self, fail_at_stage: Optional[PipelineStage] = None, fail_at_step: Optional[int] = None, force: bool = False):
+    def run_all(self, fail_at_stage: Optional[PipelineStage] = None, fail_at_step: Optional[int] = None, force: bool = False, stop_at: Optional[PipelineStage] = None):
         if force:
             self.reset_all_stages()
         self.preflight_check()
@@ -235,6 +235,10 @@ class PipelineManager:
         start_t = time.time()
         try:
             for stage in STAGE_ORDER:
+                if stop_at and STAGE_ORDER.index(stage) > STAGE_ORDER.index(stop_at):
+                    self.logger.info(f"Stopping pipeline at {stage.value} as stop_at={stop_at.value} is reached.")
+                    break
+
                 stage_info = self.project.get_stage_info(stage.value)
 
                 if not force and stage_info["status"] == StageStatus.COMPLETED.value and self.validate_stage_artifact(stage):
@@ -262,11 +266,11 @@ class PipelineManager:
             emit_event("pipeline_error", stage="PIPELINE", error=str(e))
             raise
 
-    def resume(self):
+    def resume(self, stop_at: Optional[PipelineStage] = None):
         """Find first non-COMPLETED stage and continue execution from checkpoint."""
         self.preflight_check()
         self.logger.info(f"Resuming pipeline for project '{self.project.data.get('name')}'")
-        self.run_all()
+        self.run_all(stop_at=stop_at)
 
     def retry(self, stage_enum: PipelineStage, force: bool = False):
         """Retry a failed or cancelled stage (or completed stage if force=True)."""

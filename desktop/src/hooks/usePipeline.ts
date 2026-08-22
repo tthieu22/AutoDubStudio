@@ -131,7 +131,7 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
     }
   };
 
-  const startPipeline = async (force = false) => {
+  const startPipeline = async (force = false, stopAt?: string) => {
     if (!selectedProjectDir) return;
     setPipelineStatus('RUNNING');
     setErrorDetails(null);
@@ -150,10 +150,23 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
     }
 
     try {
-      await PythonEngineService.startPipeline(selectedProjectDir, force);
+      await PythonEngineService.startPipeline(selectedProjectDir, force, stopAt);
     } catch (err: any) {
       setPipelineStatus('FAILED');
       setErrorDetails(`Lỗi chạy tiến trình: ${err}`);
+    }
+  };
+
+  const resumePipeline = async (stopAt?: string) => {
+    if (!selectedProjectDir) return;
+    setPipelineStatus('RUNNING');
+    setErrorDetails(null);
+    setLogs(prev => [...prev, `[INFO] Tiếp tục tiến trình AutoDub...`]);
+    try {
+      await PythonEngineService.resumePipeline(selectedProjectDir, stopAt);
+    } catch (err: any) {
+      setPipelineStatus('FAILED');
+      setErrorDetails(`Lỗi tiếp tục tiến trình: ${err}`);
     }
   };
 
@@ -215,6 +228,7 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
     elapsedTime,
     setElapsedTime,
     startPipeline,
+    resumePipeline,
     cancelPipeline,
     retryStage
   };

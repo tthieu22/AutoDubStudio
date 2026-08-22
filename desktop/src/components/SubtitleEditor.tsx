@@ -5,9 +5,10 @@ import { editorStore } from '../editor/state/editorStore';
 
 interface SubtitleEditorProps {
   projectDir: string;
+  onProceedToVoices: () => void;
 }
 
-export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) => {
+export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir, onProceedToVoices }) => {
   const [subtitles, setSubtitles] = useState<any[]>([]);
   const [selectedSegId, setSelectedSegId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,7 +76,7 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflow: 'hidden', minHeight: 0 }}>
       {/* 1. CONTROL HEADER */}
       <div 
         style={{ 
@@ -125,11 +126,19 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
           <button className="btn-primary" onClick={handleSave} disabled={isSaving || !hasChanges} style={{ padding: '6px 14px', fontSize: '12px' }}>
             <Save size={13} /> {isSaving ? 'Saving...' : 'Save Subtitles'}
           </button>
+          <button 
+            className="btn-primary" 
+            onClick={onProceedToVoices} 
+            disabled={hasChanges || isSaving} 
+            style={{ padding: '6px 14px', fontSize: '12px', background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}
+          >
+            Proceed to Voice Casting ➔
+          </button>
         </div>
       </div>
 
       {/* 2. DUAL-PANEL WORKSPACE */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '16px', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', gap: '16px', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* TRANSCRIPT VIEW PANEL */}
         <div 
           style={{ 
@@ -139,7 +148,10 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
             padding: '16px', 
             display: 'flex', 
             flexDirection: 'column', 
-            overflowY: 'auto' 
+            overflowY: 'auto',
+            flexGrow: 1,
+            minWidth: 0,
+            minHeight: 0
           }}
         >
           {/* Table Header */}
@@ -231,7 +243,11 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir }) =>
             padding: '20px', 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: '16px' 
+            gap: '16px',
+            width: '300px',
+            flexShrink: 0,
+            minHeight: 0,
+            overflowY: 'auto'
           }}
         >
           <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px' }}>

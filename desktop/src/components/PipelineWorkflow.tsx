@@ -3,7 +3,7 @@ import {
   Loader2, RefreshCw, AlertCircle, Layers, FileText, 
   Globe, Zap, Clock, Video, CheckCircle
 } from 'lucide-react';
-import { StageName, StageProgressInfo } from '../types/pipeline';
+import { StageName, StageProgressInfo, PipelineStatus } from '../types/pipeline';
 
 interface PipelineWorkflowProps {
   overallProgress: number;
@@ -13,24 +13,25 @@ interface PipelineWorkflowProps {
   onRetryStage: (stage: StageName) => void;
   onOpenTimeline?: () => void;
   formatTime: (seconds: number) => string;
+  pipelineStatus: PipelineStatus;
+  onStartPipeline: (force?: boolean) => void;
+  onCancelPipeline: () => void;
+  onResumePipeline: (stopAt?: string) => void;
 }
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
   'TRANSCRIBE',
-  'TRANSLATE',
-  'TTS',
-  'SYNC',
-  'RENDER'
+  'TRANSLATE'
 ];
 
 const STAGE_LABELS: Record<StageName, string> = {
   EXTRACT: 'Audio Extraction',
-  TRANSCRIBE: 'Whisper Speech-to-Text',
-  TRANSLATE: 'Ollama AI Translation',
-  TTS: 'Piper Voice Synthesis',
-  SYNC: 'Audio Time-Sync & Pacing',
-  RENDER: 'FFmpeg NVENC Video Render'
+  TRANSCRIBE: 'Transcription (STT)',
+  TRANSLATE: 'Translation',
+  TTS: 'Voice Synthesis (TTS)',
+  SYNC: 'Timeline Audio Sync',
+  RENDER: 'Video Composite Render'
 };
 
 const STAGE_ICONS: Record<StageName, React.ReactNode> = {
@@ -49,7 +50,11 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
   errorDetails,
   onRetryStage,
   onOpenTimeline,
-  formatTime
+  formatTime,
+  pipelineStatus,
+  onStartPipeline,
+  onCancelPipeline,
+  onResumePipeline
 }) => {
   const [activeInspectorStage, setActiveInspectorStage] = useState<StageName>('EXTRACT');
 
@@ -125,39 +130,35 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
           </div>
           <span style={{ fontSize: '18px', fontWeight: 800, color: '#fff', minWidth: '45px', textAlign: 'right' }}>{overallProgress}%</span>
         </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {pipelineStatus === 'RUNNING' ? (
+            <button 
+              className="btn-secondary" 
+              onClick={onCancelPipeline} 
+              style={{ 
+                borderColor: 'rgba(239, 68, 68, 0.4)', 
+                color: '#ef4444', 
+                padding: '6px 14px', 
+                fontSize: '12px', 
+                background: 'rgba(239, 68, 68, 0.08)',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel Pipeline
+            </button>
+          ) : (
+            <button 
+              className="btn-primary" 
+              onClick={() => onStartPipeline(true)}
+              style={{ padding: '6px 14px', fontSize: '12px', cursor: 'pointer' }}
+            >
+              START PIPELINE ➔
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* COMPLETED CTA BANNER */}
-      {overallProgress >= 100 && onOpenTimeline && (
-        <div 
-          style={{ 
-            padding: '16px 20px', 
-            borderRadius: '10px', 
-            border: '1px solid #10b981', 
-            backgroundColor: 'rgba(16, 185, 129, 0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px'
-          }}
-        >
-          <div>
-            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#10b981' }}>
-              ✓ All AI Stages Completed Successfully
-            </h4>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#cbd5e1' }}>
-              Ready to adjust voiceovers, edit translation segments, or customize overlay properties.
-            </p>
-          </div>
-          <button
-            onClick={onOpenTimeline}
-            className="btn-primary"
-            style={{ padding: '8px 16px', fontSize: '12px', background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}
-          >
-            <Layers size={14} /> OPEN TIMELINE STUDIO
-          </button>
-        </div>
-      )}
 
       {/* 2. LAYOUT: HORIZONTAL PIPELINE ROW + INSPECTOR PANEL */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', flexGrow: 1, minHeight: 0 }}>
