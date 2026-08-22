@@ -278,25 +278,35 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
 
             <div>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>Progress</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <div style={{ flexGrow: 1, background: '#0B0D10', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div 
-                    style={{ 
-                      width: `${selectedProgressInfo.progress}%`, 
-                      background: getStatusColor(selectedProgressInfo.status), 
-                      height: '100%', 
-                      transition: 'width 0.3s ease' 
-                    }} 
-                  />
-                </div>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{selectedProgressInfo.progress}%</span>
-              </div>
-              <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '4px' }}>
-                {selectedProgressInfo.total > 0 
-                  ? `Completed: ${selectedProgressInfo.current} / ${selectedProgressInfo.total} items` 
-                  : `Percentage: ${selectedProgressInfo.progress}%`
-                }
-              </span>
+              {(() => {
+                const isFinalizing = selectedProgressInfo.progress >= 100 && selectedProgressInfo.status === 'RUNNING';
+                const displayProgress = isFinalizing ? 99 : selectedProgressInfo.progress;
+                return (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <div style={{ flexGrow: 1, background: '#0B0D10', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            width: `${displayProgress}%`, 
+                            background: getStatusColor(selectedProgressInfo.status), 
+                            height: '100%', 
+                            transition: 'width 0.3s ease' 
+                          }} 
+                        />
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{displayProgress}%</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '4px' }}>
+                      {selectedProgressInfo.total > 0 && activeInspectorStage !== 'RENDER' && activeInspectorStage !== 'SYNC' && activeInspectorStage !== 'EXTRACT'
+                        ? `Completed: ${selectedProgressInfo.current} / ${selectedProgressInfo.total} items` 
+                        : isFinalizing
+                          ? `Status: Finalizing output files...`
+                          : `Percentage: ${displayProgress}%`
+                      }
+                    </span>
+                  </>
+                );
+              })()}
             </div>
 
             {selectedProgressInfo.error && (

@@ -82,7 +82,7 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
       if (event.message) {
         setLogs(prev => [...prev, `[${st}] ${event.message}`]);
       }
-    } else if (event.event === 'stage_complete' && event.stage) {
+    } else if ((event.event === 'stage_complete' || event.event === 'stage_skipped') && event.stage) {
       const st = event.stage.toUpperCase() as StageName;
       setStageProgresses(prev => {
         const updated = {

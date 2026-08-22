@@ -311,6 +311,18 @@ fn create_project(name: String, source_video_path: String) -> Result<String, Str
 }
 
 #[tauri::command]
+fn delete_project(name: String) -> Result<(), String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let sanitized_name = name.replace(" ", "-").replace("/", "_").replace("\\", "_");
+    let project_dir = ws_root.join("projects").join(&sanitized_name);
+    
+    if project_dir.exists() {
+        fs::remove_dir_all(&project_dir).map_err(|e| format!("Failed to delete project: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn read_project_json(project_dir: String) -> Result<serde_json::Value, String> {
     let p_file = Path::new(&project_dir).join("project.json");
     if p_file.exists() {
@@ -867,6 +879,7 @@ fn main() {
             list_projects,
             open_output_folder,
             create_project,
+            delete_project,
             read_project_json,
             write_project_json,
             read_pipeline_log,

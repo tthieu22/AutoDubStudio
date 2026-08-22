@@ -265,6 +265,109 @@ class RealSynchronizer:
             except Exception:
                 pass
 
+        # If speed factor is locked to 1.0, bypass atempo correction entirely
+        if abs(speed_factor - 1.0) < 1e-4:
+            if is_cancelled and is_cancelled():
+                raise SyncCancelledError("Sync process cancelled by user.")
+
+            cmd = [
+                str(self.runner.ffmpeg_path),
+                "-y",
+                "-i", str(input_tts),
+                "-ac", "1",
+                "-c:a", "pcm_s16le",
+                "-f", "wav",
+                str(tmp_output)
+            ]
+
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+            try:
+                while True:
+                    if is_cancelled and is_cancelled():
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                        raise SyncCancelledError("Sync process cancelled by user.")
+                    if process.poll() is not None:
+                        break
+                    time.sleep(0.01)
+
+                ret_code = process.wait()
+                if ret_code != 0:
+                    stderr_out = process.stderr.read()
+                    raise SyncFFmpegError(f"FFmpeg process failed with exit code {ret_code}: {stderr_out}")
+            except Exception:
+                if process.poll() is None:
+                    process.kill()
+                if tmp_output.exists():
+                    try:
+                        tmp_output.unlink()
+                    except Exception:
+                        pass
+                raise
+
+            actual_duration = probe_audio_duration(tmp_output, self.runner)
+
+            # Pad with silence if shorter than target duration
+            if actual_duration < target_duration:
+                padded_tmp = output_synced.with_suffix(".padded.tmp")
+                pad_cmd = [
+                    str(self.runner.ffmpeg_path),
+                    "-y",
+                    "-i", str(tmp_output),
+                    "-filter:a", "apad",
+                    "-t", f"{target_duration:.3f}",
+                    "-ac", "1",
+                    "-c:a", "pcm_s16le",
+                    "-f", "wav",
+                    str(padded_tmp)
+                ]
+                pad_proc = subprocess.Popen(pad_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+                try:
+                    while True:
+                        if is_cancelled and is_cancelled():
+                            pad_proc.terminate()
+                            try:
+                                pad_proc.wait(timeout=2)
+                            except subprocess.TimeoutExpired:
+                                pad_proc.kill()
+                            raise SyncCancelledError("Sync process cancelled by user.")
+                        if pad_proc.poll() is not None:
+                            break
+                        time.sleep(0.01)
+
+                    ret_code = pad_proc.wait()
+                    if ret_code != 0:
+                        stderr_out = pad_proc.stderr.read()
+                        raise SyncFFmpegError(f"FFmpeg padding failed with exit code {ret_code}: {stderr_out}")
+                except Exception:
+                    if pad_proc.poll() is None:
+                        pad_proc.kill()
+                    if padded_tmp.exists():
+                        try:
+                            padded_tmp.unlink()
+                        except Exception:
+                            pass
+                    raise
+
+                if tmp_output.exists():
+                    try:
+                        tmp_output.unlink()
+                    except Exception:
+                        pass
+
+                os.replace(padded_tmp, output_synced)
+                final_dur = target_duration
+                err = 0.0
+            else:
+                os.replace(tmp_output, output_synced)
+                final_dur = actual_duration
+                err = actual_duration - target_duration
+
+            return final_dur, round(err, 3), 1
+
         current_speed = speed_factor
         passes_run = 0
 
@@ -365,12 +468,26 @@ class RealSynchronizer:
         concat_list_path = project_dir / "audio" / "synced" / "concat_list.txt"
         concat_lines = []
 
+        # Determine sample rate dynamically from synced files if possible, fallback to sample_rate param
+        actual_sample_rate = sample_rate
+        for item in segments_with_gaps:
+            if item["type"] == "segment":
+                seg_id = item["segment"].get("id", 1)
+                synced_file = project_dir / "audio" / "synced" / f"{seg_id:06d}.wav"
+                if synced_file.exists():
+                    try:
+                        with wave.open(str(synced_file), "rb") as wf:
+                            actual_sample_rate = wf.getframerate()
+                            break
+                    except Exception:
+                        pass
+
         try:
             gap_idx = 1
             for item in segments_with_gaps:
                 if item["type"] == "gap":
                     gap_file = temp_gaps_dir / f"gap_{gap_idx:06d}.wav"
-                    generate_silent_wav(gap_file, item["duration"], sample_rate=sample_rate)
+                    generate_silent_wav(gap_file, item["duration"], sample_rate=actual_sample_rate)
                     rel_path = gap_file.relative_to(concat_list_path.parent).as_posix()
                     concat_lines.append(f"file '{rel_path}'")
                     gap_idx += 1
@@ -380,7 +497,7 @@ class RealSynchronizer:
                     synced_file = project_dir / "audio" / "synced" / f"{seg_id:06d}.wav"
                     if not synced_file.exists():
                         synced_file = temp_gaps_dir / f"seg_silent_{seg_id:06d}.wav"
-                        generate_silent_wav(synced_file, item["duration"], sample_rate=sample_rate)
+                        generate_silent_wav(synced_file, item["duration"], sample_rate=actual_sample_rate)
                     rel_path = synced_file.relative_to(concat_list_path.parent).as_posix()
                     concat_lines.append(f"file '{rel_path}'")
 
@@ -459,6 +576,19 @@ class RealSynchronizer:
         synced_dir = project.project_dir / "audio" / "synced"
         synced_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_file = synced_dir / "sync.partial.json"
+
+        if force:
+            logger.info("Force flag enabled. Cleaning up old synced files.")
+            if synced_dir.exists():
+                for f in synced_dir.glob("*.wav"):
+                    try: f.unlink()
+                    except OSError: pass
+                for f in synced_dir.glob("*.tmp*"):
+                    try: f.unlink()
+                    except OSError: pass
+            if checkpoint_file.exists():
+                try: checkpoint_file.unlink()
+                except OSError: pass
 
         checkpoint = {
             "version": 1,
@@ -660,7 +790,7 @@ class RealSynchronizer:
                 continue
 
             from autodub.modules.narration import NaturalPacingEngine
-            pacing_engine = NaturalPacingEngine(min_speed=0.95, max_speed=1.05)
+            pacing_engine = NaturalPacingEngine(min_speed=1.0, max_speed=1.0)
             
             raw_text = seg.get("translation") or seg.get("text") or ""
             applied_speed, expected_dur, trailing_pause_ms, pacing_mode = pacing_engine.evaluate_pacing(
@@ -748,6 +878,14 @@ class RealSynchronizer:
         items_with_gaps = resolve_timeline_gaps(resolved_segments)
         combined_wav = synced_dir / "combined.wav"
         combined_duration = self.generate_combined_audio(project.project_dir, items_with_gaps, combined_wav)
+
+        # Copy to dubbed_synchronized.wav for frontend editor timeline compatibility
+        dubbed_synchronized = project.project_dir / "audio" / "dubbed_synchronized.wav"
+        try:
+            shutil.copy2(combined_wav, dubbed_synchronized)
+            logger.info(f"[SYNC] Copied combined audio to '{dubbed_synchronized}' for editor timeline.")
+        except Exception as e:
+            logger.warning(f"[SYNC] Failed to copy combined audio to dubbed_synchronized: {e}")
 
         project.data["segments"] = resolved_segments
         max_err = max(total_errors) if total_errors else 0.0

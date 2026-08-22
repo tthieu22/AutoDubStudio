@@ -178,7 +178,8 @@ class ValidateStageExecutor(BaseStageExecutor):
         final_mp4 = ctx.project.project_dir / "output" / "final.mp4"
         runner = FFmpegRunner()
         try:
-            validate_rendered_output(runner, final_mp4, src_video_path=src)
+            src_meta = runner.probe(src)
+            validate_rendered_output(final_mp4, src_meta, runner)
         except Exception as e:
             if final_mp4.exists() and final_mp4.stat().st_size > 0:
                 logger.info(f"[VALIDATE] Output file exists ({final_mp4.stat().st_size} bytes). Skipping FFprobe deep stream validation for synthetic test artifact.")
@@ -190,7 +191,8 @@ class ValidateStageExecutor(BaseStageExecutor):
         final_mp4 = ctx.project.project_dir / "output" / "final.mp4"
         runner = FFmpegRunner()
         try:
-            validate_rendered_output(runner, final_mp4, src_video_path=src)
+            src_meta = runner.probe(src)
+            validate_rendered_output(final_mp4, src_meta, runner)
         except Exception as e:
             if not final_mp4.exists() or final_mp4.stat().st_size == 0:
                 raise ArtifactValidationError(f"Rendered output file missing or invalid: {e}")

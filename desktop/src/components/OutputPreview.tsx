@@ -12,6 +12,8 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
   onOpenOutputFolder
 }) => {
   const isTauri = typeof (window as any).__TAURI_IPC__ === 'function';
+  const [loadTime] = React.useState(() => Date.now());
+
   const videoSrc = selectedProjectDir
     ? isTauri
       ? convertFileSrc(`${selectedProjectDir.replace(/\\/g, '/')}/output/final.mp4`)
@@ -33,7 +35,7 @@ export const OutputPreview: React.FC<OutputPreviewProps> = ({
         }}
       >
         <video 
-          key={selectedProjectDir}
+          key={`${selectedProjectDir}-${loadTime}`}
           src={videoSrc}
           controls
           style={{ width: '100%', borderRadius: '6px', display: 'block', maxHeight: '420px' }}

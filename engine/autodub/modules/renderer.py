@@ -179,7 +179,7 @@ class RealRenderer:
             return 0.0
 
         validate_state_transition(stage_info.get("status"), StageStatus.RUNNING, force=force)
-        project.update_stage(stage_name, StageStatus.RUNNING.value, current=0, error=None)
+        project.update_stage(stage_name, StageStatus.RUNNING.value, current=0, progress=0, total=100, error=None)
 
         # Retrieve or initialize RenderConfig
         if render_config is None:
@@ -215,12 +215,8 @@ class RealRenderer:
         if not isinstance(src_meta, dict):
             src_meta = {"format": {"duration": "10.0"}, "streams": []}
 
-        fmt = src_meta.get("format", {})
-        if not isinstance(fmt, dict):
-            fmt = {"duration": "10.0"}
-
-        src_duration = float(fmt.get("duration", 10.0))
-        config_hash = render_config.compute_hash(fmt)
+        src_duration = float(src_meta.get("duration", 10.0))
+        config_hash = render_config.compute_hash(src_meta)
 
         output_dir = project.project_dir / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -231,7 +227,7 @@ class RealRenderer:
         # Check existing valid output & hash
         if not force and final_mp4.exists() and final_mp4.stat().st_size > 0:
             try:
-                validate_rendered_output(final_mp4, src_meta.get("format", {}), self.runner)
+                validate_rendered_output(final_mp4, src_meta, self.runner)
                 if checkpoint_file.exists():
                     with open(checkpoint_file, "r", encoding="utf-8") as f:
                         chk = json.load(f)
@@ -307,52 +303,55 @@ class RealRenderer:
         comp_file = project.project_dir / "composition.json"
         comp_filtergraph = ""
         comp_extra_inputs: List[str] = []
+        final_video_label = "[0:v]"
 
         if comp_file.exists():
             try:
                 from autodub.modules.composition import Composition
                 comp = Composition.load(comp_file)
-                comp_filtergraph, comp_extra_inputs = comp.build_ffmpeg_filtergraph(base_video_stream="[0:v]")
+                comp_filtergraph, comp_extra_inputs, comp_final_label = comp.build_ffmpeg_filtergraph(base_video_stream="[0:v]")
+                final_video_label = comp_final_label
             except Exception as e:
                 logger.warning(f"[RENDERER] Failed to load composition filtergraph: {e}")
 
         # Video stream encoding / filtering / copy
-        vf_filters = []
+        filter_complex_parts = []
         if comp_filtergraph:
-            vf_filters.append(comp_filtergraph)
+            filter_complex_parts.append(comp_filtergraph)
 
         if render_config.subtitle_mode == "BURN_IN" and srt_file:
             escaped_srt = escape_ffmpeg_subtitle_path(srt_file)
-            vf_filters.append(f"subtitles=filename='{escaped_srt}'")
+            sub_out_label = "[v_sub_out]"
+            filter_complex_parts.append(f"{final_video_label}subtitles=filename='{escaped_srt}'{sub_out_label}")
+            final_video_label = sub_out_label
 
         for extra_in in comp_extra_inputs:
             cmd.extend(["-i", extra_in])
 
-        if vf_filters:
-            full_vf = ",".join(vf_filters)
+        if filter_complex_parts:
+            full_filter = ";".join(filter_complex_parts)
             cmd.extend([
-                "-vf", full_vf,
+                "-filter_complex", full_filter,
+                "-map", final_video_label,
+                "-map", "1:a:0",
                 "-c:v", selected_enc
             ])
             cmd.extend(preset_args)
         else:
             # Re-encode if specific codec chosen, or copy if compatible
-            cmd.extend(["-c:v", selected_enc])
+            cmd.extend([
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-c:v", selected_enc
+            ])
             cmd.extend(preset_args)
 
         # Subtitle COPY stream embedding
         if render_config.subtitle_mode == "COPY" and srt_file:
             cmd.extend([
                 "-i", str(srt_file),
-                "-map", "0:v:0",
-                "-map", "1:a:0",
                 "-map", "2:s:0",
                 "-c:s", "mov_text"
-            ])
-        else:
-            cmd.extend([
-                "-map", "0:v:0",
-                "-map", "1:a:0"
             ])
 
         # Audio stream codec

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sparkles, FolderOpen, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, FolderOpen, Loader2, RefreshCw } from 'lucide-react';
 import { open } from '@tauri-apps/api/dialog';
 
 interface NewProjectModalProps {
@@ -11,8 +11,24 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   isCreating,
   onCreateProject
 }) => {
-  const [projectName, setProjectName] = useState('');
+  const generateTimestampName = () => {
+    const now = new Date();
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    const DD = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `Project_${YYYY}-${MM}-${DD}_${hh}-${mm}-${ss}`;
+  };
+
+  const [projectName, setProjectName] = useState(generateTimestampName);
   const [videoPath, setVideoPath] = useState('');
+
+  // Automatically refresh name on mount
+  useEffect(() => {
+    setProjectName(generateTimestampName());
+  }, []);
 
   const handleSelectVideoFile = async () => {
     try {
@@ -49,22 +65,33 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>Tên Dự Án</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={e => setProjectName(e.target.value)}
-              placeholder="ví dụ: Video-Review-Game-01"
-              style={{
-                width: '100%',
-                background: 'rgba(15, 23, 42, 0.8)',
-                border: '1px solid var(--border-glass)',
-                borderRadius: '10px',
-                padding: '12px 16px',
-                color: '#fff',
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="text"
+                value={projectName}
+                onChange={e => setProjectName(e.target.value)}
+                placeholder="ví dụ: Video-Review-Game-01"
+                style={{
+                  flexGrow: 1,
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  border: '1px solid var(--border-glass)',
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+              />
+              <button 
+                type="button" 
+                className="btn-secondary" 
+                onClick={() => setProjectName(generateTimestampName())}
+                title="Tạo tên theo thời gian hiện tại"
+                style={{ padding: '0 16px', gap: '6px' }}
+              >
+                <RefreshCw size={15} /> Tự động đặt tên
+              </button>
+            </div>
           </div>
 
           <div>

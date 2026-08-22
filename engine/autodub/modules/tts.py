@@ -377,6 +377,19 @@ class RealTTS:
         audio_tts_dir.mkdir(parents=True, exist_ok=True)
         partial_json_path = audio_tts_dir / "tts.partial.json"
 
+        if force:
+            logger.info("Force flag enabled. Cleaning up old TTS files.")
+            if audio_tts_dir.exists():
+                for f in audio_tts_dir.glob("*.wav"):
+                    try: f.unlink()
+                    except OSError: pass
+                for f in audio_tts_dir.glob("*.tmp"):
+                    try: f.unlink()
+                    except OSError: pass
+            if partial_json_path.exists():
+                try: partial_json_path.unlink()
+                except OSError: pass
+
         # Determine voice model name
         target_voice = (
             voice_name
@@ -439,6 +452,35 @@ class RealTTS:
             translated_srt = project.project_dir / "transcript" / "translated.srt"
             if translated_srt.exists():
                 segments = self._parse_srt(translated_srt)
+
+        # Apply SentenceGrouper to group translated segments into complete sentences
+        from autodub.modules.narration import SentenceGrouper
+        grouper = SentenceGrouper(max_chars_per_chunk=250, max_gap_seconds=0.8)
+        grouped_narration = grouper.group_segments(segments)
+        
+        grouped_segments = []
+        for g_seg in grouped_narration:
+            speaker = None
+            for seg_id in g_seg.original_segment_ids:
+                for orig_seg in segments:
+                    if orig_seg.get("id") == seg_id:
+                        if orig_seg.get("speaker"):
+                            speaker = orig_seg.get("speaker")
+                            break
+                if speaker:
+                    break
+            
+            grouped_segments.append({
+                "id": g_seg.id,
+                "start": g_seg.target_start_time,
+                "end": g_seg.target_end_time,
+                "text": g_seg.text,
+                "translation": g_seg.text,
+                "original_segment_ids": g_seg.original_segment_ids,
+                "target_duration": g_seg.target_duration,
+                "speaker": speaker
+            })
+        segments = grouped_segments
 
         total_segments = len(segments)
         if total_segments == 0:

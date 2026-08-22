@@ -143,6 +143,14 @@ export class PythonEngineService {
     return invoke<string>('create_project', { name, sourceVideoPath });
   }
 
+  static async deleteProject(name: string): Promise<void> {
+    if (!isTauri()) {
+      delete mockProjects[name];
+      return;
+    }
+    return invoke<void>('delete_project', { name });
+  }
+
   static async readProjectJson(projectDir: string): Promise<any> {
     if (!isTauri()) {
       return mockProjects[projectDir] || mockProjects["vietnam-tourism-dubbed"];

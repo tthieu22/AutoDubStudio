@@ -147,6 +147,7 @@ class AudioMixer:
                     "-i", str(synced_combined),
                     "-filter:a", f"volume={config.tts_volume:.2f}",
                     "-c:a", "pcm_s16le",
+                    "-f", "wav",
                     str(tmp_wav)
                 ]
                 subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -158,6 +159,7 @@ class AudioMixer:
                 "-i", str(src_video),
                 "-filter:a", f"volume={config.original_volume:.2f}",
                 "-vn", "-c:a", "pcm_s16le",
+                "-f", "wav",
                 str(tmp_wav)
             ]
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -180,6 +182,7 @@ class AudioMixer:
                 "-c:a", "pcm_s16le",
                 "-ar", "16000",
                 "-ac", "1",
+                "-f", "wav",
                 str(tmp_wav)
             ]
             try:

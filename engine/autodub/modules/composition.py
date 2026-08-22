@@ -137,4 +137,4 @@ class Composition:
                 last_stream = out_label
 
         filtergraph = ";".join(filter_chains)
-        return filtergraph, extra_inputs
+        return filtergraph, extra_inputs, last_stream

@@ -124,6 +124,11 @@ export default function App() {
     loadProjectJson(fullPath);
   };
 
+  const isPipelineRunningRef = useRef(false);
+  useEffect(() => {
+    isPipelineRunningRef.current = pipelineStatus === 'RUNNING';
+  }, [pipelineStatus]);
+
   const loadProjectJson = async (path: string) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
@@ -156,7 +161,9 @@ export default function App() {
         console.error('Failed to sync to timeline editorStore:', syncErr);
       }
 
-      if (json.pipeline) {
+      // Only reload pipeline progress states from disk if the pipeline is not currently running.
+      // This prevents race conditions where stale disk data (lagging behind stdout events) overwrites active state.
+      if (json.pipeline && !isPipelineRunningRef.current) {
         const progresses = { ...stageProgresses };
         let totalCompleted = 0;
         let isAllCompleted = true;
@@ -207,6 +214,22 @@ export default function App() {
     }
   };
 
+  const handleDeleteProject = async (name: string) => {
+    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa dự án "${name}" không? Thao tác này sẽ xóa toàn bộ tệp tin liên quan và không thể khôi phục.`);
+    if (!confirmDelete) return;
+
+    try {
+      await PythonEngineService.deleteProject(name);
+      await loadProjects();
+      if (selectedProjectDir && (selectedProjectDir.endsWith(name) || selectedProjectDir.endsWith(name + '/') || selectedProjectDir.endsWith(name + '\\'))) {
+        setSelectedProjectDir(null);
+        setCurrentScreen('home');
+      }
+    } catch (err: any) {
+      alert(`Xóa dự án thất bại: ${err}`);
+    }
+  };
+
   const handleOpenOutputFolder = async () => {
     if (!selectedProjectDir) return;
     try {
@@ -235,6 +258,7 @@ export default function App() {
         onSelectProject={handleSelectProject}
         onCreateNewProjectClick={() => setCurrentScreen('home')}
         onRefreshList={loadProjects}
+        onDeleteProject={handleDeleteProject}
       />
 
       {/* MAIN CONTAINER */}
@@ -293,9 +317,11 @@ export default function App() {
                 <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
               </div>
 
-              <div style={{ display: activeTab === 'preview' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
-                <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
-              </div>
+              {activeTab === 'preview' && (
+                <div style={{ height: '100%', padding: '24px', overflowY: 'auto' }}>
+                  <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
+                </div>
+              )}
 
               <div style={{ display: activeTab === 'export' ? 'block' : 'none', height: '100%', padding: '24px', overflowY: 'auto' }}>
                 <ExportPresets projectDir={selectedProjectDir} />

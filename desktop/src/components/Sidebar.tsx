@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Folder, Activity, FileText, Layers, Mic, ShieldCheck, 
   Terminal, Video, Share2, Settings, PlusCircle, RefreshCw, 
-  ChevronLeft, ChevronRight, Search, FileVideo
+  ChevronLeft, ChevronRight, Search, FileVideo, Trash2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -13,6 +13,7 @@ interface SidebarProps {
   onSelectProject: (name: string) => void;
   onCreateNewProjectClick: () => void;
   onRefreshList: () => void;
+  onDeleteProject: (name: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -22,7 +23,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   onSelectProject,
   onCreateNewProjectClick,
-  onRefreshList
+  onRefreshList,
+  onDeleteProject
 }) => {
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,6 +223,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         {name}
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteProject(name);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '4px',
+                          borderRadius: '4px',
+                          opacity: 0.6,
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = '1';
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = '0.6';
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                        title="Delete project"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   );
                 })
