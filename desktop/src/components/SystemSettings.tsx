@@ -5,6 +5,7 @@ interface SystemSettingsProps {
   settings: {
     whisperModel: string;
     translationModel: string;
+    translationBatchSize?: number;
     ttsVoice: string;
     encoder: string;
   };
@@ -101,22 +102,47 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </select>
         </div>
 
-        {/* 3. OLLAMA TRANSLATION MODEL */}
+        {/* 3. GPU TRANSLATION MODEL */}
         <div className="glass-card" style={{ padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>🤖 Mô Hình Dịch Thuật AI (Ollama LLM)</label>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Dịch lời thoại tự động</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>⚡ Mô Hình Dịch Thuật GPU (Chinese → Vietnamese)</label>
+              <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '4px', padding: '2px 6px', fontWeight: 700 }}>
+                100% GPU CUDA
+              </span>
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>GTX 1650 Ti (4GB)</span>
           </div>
 
           <select 
-            value={settings.translationModel} 
+            value={settings.translationModel || "hachimi-60m"} 
             onChange={e => onSettingsChange({ ...settings, translationModel: e.target.value })}
-            style={{ width: '100%', background: '#020617', border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '12px 16px', color: '#fff', fontSize: '14px', outline: 'none' }}
+            style={{ width: '100%', background: '#020617', border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '12px 16px', color: '#fff', fontSize: '14px', outline: 'none', marginBottom: '14px' }}
           >
-            <option value="qwen3:4b">Qwen3 4B (Mặc định - Tối ưu GPU Local, Dịch Trung-Việt siêu chuẩn)</option>
-            <option value="qwen3:8b">Qwen3 8B (Độ chính xác cao hơn cho ngữ cảnh phức tạp)</option>
-            <option value="gemma3:4b">Gemma3 4B (Google AI Model)</option>
-            <option value="qwen2.5:3b">Qwen2.5 3B (Tốc độ xử lý nhanh)</option>
+            <option value="hachimi-60m">🟢 HachimiMT-60 (Siêu Tốc - GPU FP16, ~260MB VRAM) [Khuyên Dùng Mặc Định]</option>
+            <option value="qwen2.5:3b">🔵 Qwen2.5:3B (Chuyên Sâu - GPU Ollama, ~2.1GB VRAM)</option>
+          </select>
+
+          <div style={{ marginBottom: '14px', padding: '10px 12px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>Chế độ thực thi phần cứng (Hardware Execution):</div>
+            <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5 }}>
+              🔒 <strong>Khóa độc quyền 1 Model:</strong> Hệ thống tự động giải phóng VRAM ngay sau khi dịch xong trước khi nạp TTS / STT để bảo vệ tối đa 4GB VRAM.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 700, color: '#cbd5e1' }}>📦 Kích Thước Batch Phụ Đề (Batch Size)</label>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Số câu dịch song song trên GPU</span>
+          </div>
+          <select 
+            value={settings.translationBatchSize || 20} 
+            onChange={e => onSettingsChange({ ...settings, translationBatchSize: Number(e.target.value) })}
+            style={{ width: '100%', background: '#020617', border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '10px 14px', color: '#fff', fontSize: '13px', outline: 'none' }}
+          >
+            <option value={5}>5 câu / batch</option>
+            <option value={10}>10 câu / batch (Nhanh)</option>
+            <option value={20}>20 câu / batch (Mặc định tối ưu GPU GTX 1650 Ti)</option>
+            <option value={50}>50 câu / batch (Tối đa - Siêu tốc)</option>
           </select>
         </div>
 

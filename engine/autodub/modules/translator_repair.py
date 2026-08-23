@@ -2,6 +2,7 @@ import re
 import json
 import logging
 from typing import Dict, Any, Optional, List
+from autodub.config import TRANSLATION_MODEL
 from autodub.modules.ollama_client import OllamaClient
 from autodub.modules.translator_qa import TranslationQaChecker
 from autodub.modules.output_sanitizer import TranslationOutputSanitizer
@@ -15,9 +16,9 @@ class TranslationRepairService:
     Executes EXACTLY 1 AI Repair attempt, sanitizes format, evaluates QA #2, and falls back to HUMAN_REVIEW if QA #2 fails.
     """
 
-    def __init__(self, ollama_client: Optional[OllamaClient] = None, model_name: str = "qwen3:4b"):
+    def __init__(self, ollama_client: Optional[OllamaClient] = None, model_name: str = TRANSLATION_MODEL):
         self.client = ollama_client or OllamaClient()
-        self.model_name = model_name
+        self.model_name = TRANSLATION_MODEL
 
     def repair_segment(
         self,
@@ -95,42 +96,49 @@ RULES:
         try:
             available, _msg = self.client.check_availability(self.model_name)
             if available:
-                raw_reply = self.client.generate(
-                    prompt=prompt,
-                    system=system_prompt,
-                    model=self.model_name,
-                    timeout=30
-                )
-                
-                # Parse structured output
-                parsed_valid, extracted_text, parse_err = StructuredParser.parse_translation_response(raw_reply)
-                if parsed_valid:
-                    repaired_text = TranslationOutputSanitizer.sanitize(extracted_text)
-                else:
-                    logger.warning(f"Repair JSON parse failed for segment #{seg_id}: {parse_err}")
-                    repaired_text = TranslationOutputSanitizer.sanitize(raw_reply)
+                for attempt in range(1, 3):
+                    raw_reply = self.client.generate(
+                        prompt=prompt,
+                        system=system_prompt,
+                        model=self.model_name,
+                        timeout=30
+                    )
+                    
+                    # Parse structured output
+                    parsed_valid, extracted_text, parse_err = StructuredParser.parse_translation_response(raw_reply)
+                    if parsed_valid:
+                        repaired_text = TranslationOutputSanitizer.sanitize(extracted_text)
+                    else:
+                        logger.warning(f"Repair JSON parse failed for segment #{seg_id}: {parse_err}")
+                        repaired_text = TranslationOutputSanitizer.sanitize(raw_reply)
+
+                    candidate_seg = {**segment, "translated_text": repaired_text}
+                    qa2_result = TranslationQaChecker.check_segment(candidate_seg, locked_entities=locked_entities)
+                    repair_pass_num = attempt
+                    if qa2_result["status"] == "PASS":
+                        break
             else:
-                source = "offline"
+                source = "fallback_offline"
                 repaired_text = current_trans
+                repair_pass_num = 1
+                qa2_result = TranslationQaChecker.check_segment({**segment, "translated_text": current_trans})
         except Exception as e:
             logger.warning(f"AI Repair attempt failed for segment #{seg_id}: {e}")
-            source = "offline"
+            source = "fallback_offline"
+            repaired_text = current_trans
+            repair_pass_num = 1
+            qa2_result = TranslationQaChecker.check_segment({**segment, "translated_text": current_trans})
 
-        # Evaluate candidate segment with QA #2
-        candidate_seg = {**segment, "translated_text": repaired_text}
-        qa2_result = TranslationQaChecker.check_segment(candidate_seg, locked_entities=locked_entities)
-
-        # Final decision policy: Strict 1-Pass Repair Limit
-        if qa2_result["status"] == "PASS":
-            decision = "AUTO_ACCEPT"
-        else:
+        if source == "fallback_offline" or qa2_result["status"] != "PASS":
             decision = "HUMAN_REVIEW"
+        else:
+            decision = "AUTO_ACCEPT"
 
         provenance = {
             "source": source,
             "model": self.model_name,
             "repair": True,
-            "repair_pass": 1,
+            "repair_pass": repair_pass_num,
             "qa2_status": qa2_result["status"],
             "qa2_score": qa2_result["score"],
             "decision": decision

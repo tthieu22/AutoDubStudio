@@ -9,10 +9,10 @@ export interface TranslationRepairResult {
 
 export class TranslationRepairService {
   private static OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
-  private static DEFAULT_MODEL = 'qwen2.5:3b';
+  private static DEFAULT_MODEL = 'qwen3:4b';
 
   /**
-   * Pure Dynamic AI LLM Translation Repair calling local Ollama (Qwen2.5:3b) at runtime.
+   * Pure Dynamic AI LLM Translation Repair calling local Ollama (Qwen3:4b) at runtime.
    * Uses natural dialogue translation rules and QA feedback.
    */
   public static async repairSegmentAi(
@@ -62,7 +62,7 @@ CORRECTED VIETSUB:`;
     let suggested = '';
     let isAiGenerated = false;
 
-    // 1. Runtime HTTP Call to Local Ollama LLM Server (Qwen2.5:3b)
+    // 1. Runtime HTTP Call to Local Ollama LLM Server (Qwen3:4b)
     try {
       const response = await fetch(this.OLLAMA_ENDPOINT, {
         method: 'POST',
@@ -103,7 +103,7 @@ CORRECTED VIETSUB:`;
       suggestedTranslation: suggested,
       confidence,
       reason: isAiGenerated
-        ? `Runtime Ollama AI (Qwen2.5:3b) generated translation (Confidence: ${(confidence * 100).toFixed(0)}%)`
+        ? `Runtime Ollama AI (Qwen3:4b) generated translation (Confidence: ${(confidence * 100).toFixed(0)}%)`
         : `Offline fallback requires human review (Confidence: ${(confidence * 100).toFixed(0)}%)`
     };
   }

@@ -1,0 +1,7 @@
+{
+  "id": "wuxia",
+  "name": "Kiếm hiệp",
+  "description": "Phong cách kiếm hiệp giang hồ, sử dụng từ ngữ võ hiệp, môn phái, xưng hô huynh đệ, sư đồ, các hạ chuẩn mực.",
+  "tone": "martial_arts",
+  "prompt_instruction": "TRANSLATION STYLE: MARTIAL ARTS / WUXIA (KIẾM HIỆP)\n- Use authentic Vietnamese martial arts / wuxia literature translation style.\n- Natural terms for martial arts sects, internal energy, pugilistic chivalry, honorifics (huynh đệ, các hạ, tại hạ, tiền bối, vãn bối, sư huynh, sư muội).\n- Avoid modern slang. Preserve rhythmic, sharp, chivalric spoken dialogue tone."
+}

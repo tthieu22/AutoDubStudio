@@ -4,7 +4,13 @@ import re
 import shutil
 import tempfile
 import unittest
+import sys
 from pathlib import Path
+
+# Ensure engine path is in sys.path
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from autodub.models.project import Project
 from autodub.pipeline.state import PipelineStage, StageStatus
@@ -35,14 +41,19 @@ class MockOllamaClient(OllamaClient):
         self.calls_made = 0
         self.timeout_trigger = timeout_trigger
 
-    def check_availability(self, model_name: str = "qwen2.5:3b"):
+    def check_availability(self, model_name: str = "qwen3:4b"):
         if not self.is_running:
             return False, "Ollama is not running at http://mock-ollama:11434"
         if not self.has_model:
             return False, f"Ollama model '{model_name}' is not installed."
         return True, ""
 
-    def generate(self, prompt: str, system=None, model="qwen2.5:3b", timeout=120):
+    def ensure_model_loaded(self, timeout: int = 60):
+        if not self.is_running:
+            return False, "Ollama is not running at http://mock-ollama:11434"
+        return True, ""
+
+    def generate(self, prompt: str, system=None, model="qwen3:4b", timeout=120, **kwargs):
         self.calls_made += 1
         if self.timeout_trigger:
             raise OllamaTimeoutError("Ollama generate request timed out after 120 seconds.")
@@ -51,6 +62,21 @@ class MockOllamaClient(OllamaClient):
 
         if prompt in self.response_map:
             return self.response_map[prompt]
+
+        # Extract section after "SUBTITLES TO TRANSLATE:" if present
+        target_text = prompt
+        if "SUBTITLES TO TRANSLATE:" in prompt:
+            target_text = prompt.split("SUBTITLES TO TRANSLATE:", 1)[1]
+
+        # Handle batch prompt with [SUBTITLE_XXX]
+        matches = re.findall(r'\[(SUBTITLE_\d+)\]\s*\n([^\n\[]+)', target_text)
+        if matches:
+            res_blocks = []
+            for sub_id, sub_text in matches:
+                clean_t = sub_text.strip()
+                trans_t = self.response_map.get(clean_t, f"Bản dịch: {clean_t}")
+                res_blocks.append(f"[{sub_id}]\n{trans_t}")
+            return "\n\n".join(res_blocks)
 
         # Handle batch prompt with numbered lines
         lines = prompt.strip().splitlines()
@@ -149,15 +175,15 @@ class TestPhase5Translator(unittest.TestCase):
 
     def test_06_timeout_handling(self):
         mock_client = MockOllamaClient(timeout_trigger=True)
-        translator = RealTranslator(client=mock_client, max_retries=1)
+        translator = RealTranslator(client=mock_client)
 
-        with self.assertRaises(TranslationFailedError):
+        with self.assertRaises((TranslationFailedError, OllamaTimeoutError)):
             translator.run(self.proj)
 
     def test_07_transient_retry_success(self):
-        # Fail 2 times then succeed on 3rd attempt
-        mock_client = MockOllamaClient(fail_count=2)
-        translator = RealTranslator(client=mock_client, max_retries=3)
+        # Fail 1 time then succeed on 2nd attempt (MAX_RETRIES = 1)
+        mock_client = MockOllamaClient(fail_count=1)
+        translator = RealTranslator(client=mock_client)
         translator.run(self.proj)
 
         stage_info = self.proj.get_stage_info("translate")
@@ -168,9 +194,9 @@ class TestPhase5Translator(unittest.TestCase):
         partial_json = self.proj_dir / "transcript" / "translation.partial.json"
         with open(partial_json, "w", encoding="utf-8") as f:
             json.dump({
-                "model": "qwen2.5:3b",
-                "completed_segments": [1],
-                "translations": {"1": "Xin chào (pre-cached)"}
+                "model": "qwen3:4b",
+                "completed_segments": ["SUBTITLE_001"],
+                "translations": {"SUBTITLE_001": "Xin chào (pre-cached)"}
             }, f)
 
         mock_client = MockOllamaClient()

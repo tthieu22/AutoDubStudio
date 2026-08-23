@@ -190,7 +190,7 @@ class TestFullDubbingWorkstationValidationSuite(unittest.TestCase):
             "tts_text": "bằng cách chà hai que này vào nhau.",
             "translation": {
                 "source": "ollama",
-                "model": "qwen2.5:3b",
+                "model": "qwen3:4b",
                 "repair": True,
                 "repair_pass": 1,
                 "qa": {"status": "PASS", "score": 98},

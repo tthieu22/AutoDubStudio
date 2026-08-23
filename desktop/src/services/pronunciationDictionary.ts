@@ -56,11 +56,153 @@ export const DEFAULT_GLOBAL_DICTIONARY: DictionaryEntry[] = [
   { id: 'g-24', word: 'app', pronunciation: 'áp', language: 'en', source: 'global', enabled: true },
   { id: 'g-25', word: 'clip', pronunciation: 'clíp', language: 'en', source: 'global', enabled: true },
   { id: 'g-26', word: 'Daddy', pronunciation: 'Bố', language: 'en', source: 'global', enabled: true },
-  { id: 'g-27', word: 'Mummy', pronunciation: 'Mẹ', language: 'en', source: 'global', enabled: true }
+  { id: 'g-27', word: 'Mummy', pronunciation: 'Mẹ', language: 'en', source: 'global', enabled: true },
+  { id: 'g-28', word: 'OK', pronunciation: 'ô kê', language: 'en', source: 'global', enabled: true },
+  { id: 'g-29', word: 'Okay', pronunciation: 'ô kê', language: 'en', source: 'global', enabled: true },
+  { id: 'g-30', word: 'Bye-bye', pronunciation: 'bái bai', language: 'en', source: 'global', enabled: true },
+  { id: 'g-31', word: 'Bye', pronunciation: 'bái bai', language: 'en', source: 'global', enabled: true },
+  { id: 'g-32', word: 'Hello', pronunciation: 'hê-lô', language: 'en', source: 'global', enabled: true },
+  { id: 'g-33', word: 'Hi', pronunciation: 'hai', language: 'en', source: 'global', enabled: true },
+  { id: 'g-34', word: 'Yes', pronunciation: 'dét', language: 'en', source: 'global', enabled: true },
+  { id: 'g-35', word: 'No', pronunciation: 'nô', language: 'en', source: 'global', enabled: true },
+  { id: 'g-36', word: 'Boss', pronunciation: 'sếp', language: 'en', source: 'global', enabled: true },
+  { id: 'g-37', word: 'VIP', pronunciation: 'víp', language: 'en', source: 'global', enabled: true },
+  { id: 'g-38', word: 'Game', pronunciation: 'gêm', language: 'en', source: 'global', enabled: true },
+  { id: 'g-39', word: 'Show', pronunciation: 'sô', language: 'en', source: 'global', enabled: true },
+  { id: 'g-40', word: 'Team', pronunciation: 'tim', language: 'en', source: 'global', enabled: true },
+  { id: 'g-41', word: 'Fan', pronunciation: 'phan', language: 'en', source: 'global', enabled: true },
+  { id: 'g-42', word: 'Link', pronunciation: 'linh', language: 'en', source: 'global', enabled: true },
+  { id: 'g-43', word: 'Pass', pronunciation: 'pát', language: 'en', source: 'global', enabled: true },
+  { id: 'g-44', word: 'Deal', pronunciation: 'điêu', language: 'en', source: 'global', enabled: true },
+  { id: 'g-45', word: 'Ship', pronunciation: 'síp', language: 'en', source: 'global', enabled: true },
+  { id: 'g-46', word: 'TikTok', pronunciation: 'Tích-tốc', language: 'en', source: 'global', enabled: true },
+  { id: 'g-47', word: 'iPhone', pronunciation: 'Ai-phôn', language: 'en', source: 'global', enabled: true },
+  { id: 'g-48', word: 'KFC', pronunciation: 'Cây-ép-xi', language: 'en', source: 'global', enabled: true },
+  { id: 'g-49', word: 'Live', pronunciation: 'lai', language: 'en', source: 'global', enabled: true },
+  { id: 'g-50', word: 'Stream', pronunciation: 'sờ-trim', language: 'en', source: 'global', enabled: true },
+  { id: 'g-51', word: 'Vlog', pronunciation: 'vơ-lóc', language: 'en', source: 'global', enabled: true }
 ];
 
 export class PronunciationDictionaryService {
   private static STORAGE_KEY_PREFIX = 'autodub_dict_';
+  private static OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
+  private static DEFAULT_MODEL = 'qwen2.5:3b';
+
+  /**
+   * Scan entire subtitle list for foreign / English / acronym words not yet registered in active dictionary.
+   */
+  public static extractForeignWords(subtitles: any[], existingDict: DictionaryEntry[]): string[] {
+    const existingWords = new Set(
+      existingDict
+        .filter(e => e.enabled && e.word.trim())
+        .map(e => e.word.trim().toLowerCase())
+    );
+
+    const foundWordsMap = new Map<string, number>();
+
+    subtitles.forEach(seg => {
+      const text = `${seg.translated_text || ''} ${seg.text || ''} ${seg.original_text || ''}`;
+      // Regex match words with Latin characters (2+ letters, including hyphens)
+      const matches = text.match(/\b[A-Za-z][A-Za-z0-9\-_]{1,}\b/g) || [];
+      matches.forEach(w => {
+        const clean = w.trim();
+        const lower = clean.toLowerCase();
+        if (
+          clean.length >= 2 &&
+          !existingWords.has(lower) &&
+          !COMMON_ENGLISH_STOPWORDS.has(lower) &&
+          !/^\d+$/.test(clean)
+        ) {
+          foundWordsMap.set(clean, (foundWordsMap.get(clean) || 0) + 1);
+        }
+      });
+    });
+
+    // Return unique words sorted by frequency descending
+    return Array.from(foundWordsMap.keys()).slice(0, 30);
+  }
+
+  /**
+   * Request Qwen 2.5:3B to generate natural Vietnamese TTS pronunciations for words.
+   */
+  public static async generatePhoneticsWithAi(words: string[]): Promise<Record<string, string>> {
+    if (!words || words.length === 0) return {};
+
+    const wordListStr = words.map(w => `"${w}"`).join(', ');
+    const prompt = `Bạn là chuyên gia ngữ âm và lồng tiếng phim Tiếng Việt (TTS Audio Dubbing).
+Nhiệm vụ: Chuyển danh sách các từ tiếng Anh / tên riêng / từ viết tắt sau thành phiên âm Tiếng Việt chuẩn để máy đọc TTS (Piper TTS) phát âm tự nhiên, dễ nghe và đúng ngữ điệu người Việt.
+
+Danh sách từ cần phiên âm: [${wordListStr}]
+
+QUY TẮC PHIÊN ÂM:
+1. Phiên âm tự nhiên theo cách người Việt Nam hay đọc (Ví dụ: Peppa -> Pép-pa, George -> Gióoc, iPhone -> Ai-phôn, OK -> ô kê, TikTok -> Tích-tốc, KFC -> Cây-ép-xi, Superman -> Siêu nhân).
+2. Dùng dấu gạch nối giữa các âm tiết phiên âm nếu là từ ghép (ví dụ: Ai-phôn, Pép-pa).
+3. Chỉ trả về duy nhất 1 JSON object hợp lệ mapping: {"Từ_Gốc": "Phiên_Âm_Tiếng_Việt"}. Không viết giải thích thêm.
+
+JSON:`;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const response = await fetch(this.OLLAMA_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.DEFAULT_MODEL,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.2,
+            top_p: 0.9,
+            num_predict: 500
+          }
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawResponse = data.response || '';
+        
+        // Extract JSON object from LLM response
+        const jsonMatch = rawResponse.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const result: Record<string, string> = {};
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === 'string' && v.trim()) {
+              result[k.trim()] = (v as string).trim();
+            }
+          }
+          if (Object.keys(result).length > 0) {
+            return result;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Ollama Qwen2.5 phonetic generation failed, falling back to rule engine:', e);
+    }
+
+    // Deterministic Rule Fallback if Ollama is not running
+    const fallbackMap: Record<string, string> = {};
+    words.forEach(w => {
+      const lower = w.toLowerCase();
+      if (lower === 'ok' || lower === 'okay') fallbackMap[w] = 'ô kê';
+      else if (lower === 'peppa') fallbackMap[w] = 'Pép-pa';
+      else if (lower === 'george') fallbackMap[w] = 'Gióoc';
+      else if (lower === 'iphone') fallbackMap[w] = 'Ai-phôn';
+      else if (lower === 'tiktok') fallbackMap[w] = 'Tích-tốc';
+      else if (lower === 'kfc') fallbackMap[w] = 'Cây-ép-xi';
+      else if (lower === 'bye' || lower === 'byebye') fallbackMap[w] = 'bái bai';
+      else if (lower === 'hello' || lower === 'hi') fallbackMap[w] = 'hê-lô';
+      else fallbackMap[w] = w;
+    });
+
+    return fallbackMap;
+  }
 
   public static getDictionaryForProject(projectDir: string): DictionaryEntry[] {
     const key = this.STORAGE_KEY_PREFIX + projectDir;

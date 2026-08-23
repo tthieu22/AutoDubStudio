@@ -37,11 +37,11 @@ def run_benchmark():
         from autodub.modules.translator import RealTranslator, OllamaClient
         from tests.test_translator_phase5 import MockOllamaClient
         client_ollama = OllamaClient()
-        avail, _ = client_ollama.check_availability("qwen2.5:3b")
+        avail, _ = client_ollama.check_availability("qwen3:4b")
         if avail:
-            translator = RealTranslator(model_name="qwen2.5:3b", client=client_ollama)
+            translator = RealTranslator(model_name="qwen3:4b", client=client_ollama)
         else:
-            translator = RealTranslator(model_name="qwen2.5:3b", client=MockOllamaClient())
+            translator = RealTranslator(model_name="qwen3:4b", client=MockOllamaClient())
         translator.run(mgr.project)
 
     segments = mgr.project.data.get("segments", [])

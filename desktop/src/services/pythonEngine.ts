@@ -26,7 +26,8 @@ const mockProjects: Record<string, any> = {
     "settings": {
       "whisper_model": "small",
       "whisper_compute_type": "int8",
-      "translation_model": "qwen2.5:3b",
+      "translation_model": "qwen3:4b",
+      "translation_batch_size": 3,
       "tts_engine": "piper",
       "chunk_duration": 600
     },

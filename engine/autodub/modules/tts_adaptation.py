@@ -3,6 +3,8 @@ import logging
 from typing import Dict, Any, List, Optional
 from autodub.modules.ollama_client import OllamaClient
 
+from autodub.config import DEFAULT_TRANSLATION_MODEL
+
 logger = logging.getLogger("autodub")
 
 class TtsAdaptationEngine:
@@ -19,7 +21,7 @@ class TtsAdaptationEngine:
         return vietsub_text.strip()
 
     @staticmethod
-    def optimize_tts_text_for_duration(tts_text: str, available_duration: float, ollama_client: Optional[OllamaClient] = None, model_name: str = "qwen2.5:3b") -> Dict[str, Any]:
+    def optimize_tts_text_for_duration(tts_text: str, available_duration: float, ollama_client: Optional[OllamaClient] = None, model_name: str = DEFAULT_TRANSLATION_MODEL) -> Dict[str, Any]:
         """Naturally compresses TTS text to fit available duration at 1.00x fixed speed.
         Prioritizes: Natural speaking speed (1.00x) > Meaning preservation > Entity preservation > Duration fit.
         """

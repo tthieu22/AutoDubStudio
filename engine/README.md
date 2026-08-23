@@ -4,7 +4,7 @@ CLI engine responsible for project management, pipeline state machine execution,
 
 ## Local Dependencies
 1. **FFmpeg**: Standalone binaries inside `runtime/ffmpeg/` or PATH (`ffmpeg.exe`, `ffprobe.exe`).
-2. **Ollama**: Local LLM runner listening at `http://localhost:11434`. Model: `ollama pull qwen2.5:3b`.
+2. **Ollama**: Local LLM runner listening at `http://localhost:11434`. Model: `ollama pull qwen3:4b`.
 3. **Piper TTS**: Local neural TTS binary in `runtime/piper/piper.exe` or system PATH. Voice models in `runtime/piper/voices/<voice>.onnx` and `<voice>.onnx.json`.
 
 ## CLI Usage

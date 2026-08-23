@@ -60,7 +60,20 @@ export default function App() {
     retryStage: handleRetryStage
   } = usePipeline(selectedProjectDir, (path: string) => loadProjectJson(path));
 
-  const startPhase1Pipeline = (force = false) => {
+  const startPhase1Pipeline = async (force = false) => {
+    if (selectedProjectDir) {
+      try {
+        const json = await PythonEngineService.readProjectJson(selectedProjectDir);
+        if (json && json.pipeline) {
+          json.pipeline.tts = { status: 'pending', progress: 0, current: 0, total: 0, error: null };
+          json.pipeline.sync = { status: 'pending', progress: 0, current: 0, total: 0, error: null };
+          json.pipeline.render = { status: 'pending', progress: 0, current: 0, total: 0, error: null };
+          await PythonEngineService.writeProjectJson(selectedProjectDir, json);
+        }
+      } catch (e) {
+        console.error('Failed to reset downstream stages in project.json:', e);
+      }
+    }
     handleStartPipeline(force, 'translate');
   };
 
@@ -98,12 +111,13 @@ export default function App() {
   // Auto-navigation on pipeline progress/stage transitions
   useEffect(() => {
     if (prevStatusRef.current === 'RUNNING' && pipelineStatus === 'COMPLETED') {
-      if (stageProgresses['RENDER']?.status === 'COMPLETED') {
-        setActiveTab('preview');
-      } else if (stageProgresses['SYNC']?.status === 'COMPLETED') {
-        setActiveTab('timeline');
-      } else if (stageProgresses['TRANSLATE']?.status === 'COMPLETED') {
+      // Prioritize workflow step: If translate just finished and TTS is pending, jump directly to Subtitle Editor
+      if (stageProgresses['TRANSLATE']?.status === 'COMPLETED' && stageProgresses['TTS']?.status !== 'COMPLETED') {
         setActiveTab('subtitles');
+      } else if (stageProgresses['SYNC']?.status === 'COMPLETED' && stageProgresses['RENDER']?.status !== 'COMPLETED') {
+        setActiveTab('timeline');
+      } else if (stageProgresses['RENDER']?.status === 'COMPLETED') {
+        setActiveTab('preview');
       }
     }
     prevStatusRef.current = pipelineStatus;
@@ -119,7 +133,8 @@ export default function App() {
   // Settings state
   const [settings, setSettings] = useState({
     whisperModel: 'small',
-    translationModel: 'qwen2.5:3b',
+    translationModel: 'hachimi-60m',
+    translationBatchSize: 20,
     ttsVoice: 'vi_VN-vais1000-medium',
     encoder: 'NVENC'
   });
@@ -183,10 +198,15 @@ export default function App() {
   const loadProjectJson = async (path: string) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
-      if (json && json.settings && json.settings.translation_style) {
-        setActiveProjectStyle(json.settings.translation_style);
-      } else {
-        setActiveProjectStyle('general');
+      if (json && json.settings) {
+        if (json.settings.translation_style) {
+          setActiveProjectStyle(json.settings.translation_style);
+        } else {
+          setActiveProjectStyle('general');
+        }
+        if (json.settings.translation_model) {
+          setSettings(prev => ({ ...prev, translationModel: json.settings.translation_model }));
+        }
       }
       
       // Auto Sync to Timeline Editor Store
@@ -306,6 +326,34 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleChangeTranslationModel = async (newModel: string) => {
+    setSettings(prev => ({ ...prev, translationModel: newModel }));
+    if (selectedProjectDir) {
+      try {
+        const json = await PythonEngineService.readProjectJson(selectedProjectDir);
+        if (!json.settings) json.settings = {};
+        json.settings.translation_model = newModel;
+        await PythonEngineService.writeProjectJson(selectedProjectDir, json);
+      } catch (e) {
+        console.error('Failed to save translation_model:', e);
+      }
+    }
+  };
+
+  const handleChangeTranslationStyle = async (newStyle: string) => {
+    setActiveProjectStyle(newStyle);
+    if (selectedProjectDir) {
+      try {
+        const json = await PythonEngineService.readProjectJson(selectedProjectDir);
+        if (!json.settings) json.settings = {};
+        json.settings.translation_style = newStyle;
+        await PythonEngineService.writeProjectJson(selectedProjectDir, json);
+      } catch (e) {
+        console.error('Failed to save translation_style:', e);
+      }
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
       <TitleBar selectedProjectDir={selectedProjectDir} stageProgresses={stageProgresses} />
@@ -354,6 +402,8 @@ export default function App() {
                   onResumePipeline={handleResumePipeline}
                   translationStyle={activeProjectStyle}
                   translationModel={settings.translationModel}
+                  onChangeTranslationModel={handleChangeTranslationModel}
+                  onChangeTranslationStyle={handleChangeTranslationStyle}
                 />
               </div>
 

@@ -12,7 +12,7 @@ from autodub.pipeline.state import PipelineStage
 from autodub.modules.translator import RealTranslator, OllamaClient
 
 def run_benchmark():
-    print("=== PHASE 5 LOCAL TRANSLATION (OLLAMA QWEN2.5 3B) BENCHMARK ===")
+    print("=== PHASE 5 LOCAL TRANSLATION (OLLAMA QWEN3 4B) BENCHMARK ===")
 
     project_name = "benchmark_p5"
     mgr = PipelineManager(project_name)
@@ -40,16 +40,16 @@ def run_benchmark():
 
     # 2. Check Ollama Availability
     client = OllamaClient()
-    available, err_msg = client.check_availability("qwen2.5:3b")
+    available, err_msg = client.check_availability("qwen3:4b")
 
     if not available:
         print(f"\n[NOTICE] Local Ollama status: {err_msg}")
         print("Switching to MockOllamaClient benchmark demonstration mode...")
         from tests.test_translator_phase5 import MockOllamaClient
-        translator = RealTranslator(model_name="qwen2.5:3b", client=MockOllamaClient())
+        translator = RealTranslator(model_name="qwen3:4b", client=MockOllamaClient())
     else:
         print(f"\n[SUCCESS] Connected to Ollama at {client.base_url}")
-        translator = RealTranslator(model_name="qwen2.5:3b", client=client)
+        translator = RealTranslator(model_name="qwen3:4b", client=client)
 
     # 3. Resource Monitoring & Run
     process = psutil.Process(os.getpid())
@@ -72,7 +72,7 @@ def run_benchmark():
     print("         PHASE 5 BENCHMARK RESULTS         ")
     print("==========================================")
     print(f"Provider:             Ollama Local")
-    print(f"Model:                qwen2.5:3b")
+    print(f"Model:                qwen3:4b")
     print(f"Source Language:      en")
     print(f"Target Language:      vi")
     print(f"Segments Count:       {total_segments}")

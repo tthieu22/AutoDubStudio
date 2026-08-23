@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Save, RotateCcw, Sparkles, AlertCircle, Search, 
-  Globe, Volume2, Edit3, BookOpen, Undo, Redo, CheckCircle2, 
+import {
+  Save, RotateCcw, Sparkles, AlertCircle, Search,
+  Globe, Volume2, Edit3, BookOpen, Undo, Redo, CheckCircle2,
   AlertTriangle, Clock, Zap, Check, Play, User, Sliders, ShieldCheck, ArrowRight
 } from 'lucide-react';
 import { PythonEngineService } from '../services/pythonEngine';
@@ -550,7 +550,7 @@ VIETNAMESE TRANSLATION:`;
   const handlePreviewTts = (seg: any) => {
     setPreviewingSegId(seg.id);
     const ttsText = seg.tts_text || seg.translated_text || seg.text || '';
-    
+
     if (seg.dirty?.translation || seg.dirty?.tts || seg.tts?.status === 'NEEDS_REGENERATION') {
       setPreviewMessage('Đang phát xem thử với văn bản TTS mới...');
     } else {
@@ -631,6 +631,35 @@ VIETNAMESE TRANSLATION:`;
     pushHistoryState(updated);
   };
 
+  const handleApplyDictionaryToSubtitles = (updatedEntries: DictionaryEntry[], targetMode: 'tts' | 'both' = 'tts') => {
+    setDictionary(updatedEntries);
+    PronunciationDictionaryService.saveDictionaryForProject(projectDir, updatedEntries);
+
+    const updated = subtitles.map(seg => {
+      const currentVietsub = seg.translated_text || seg.translation || '';
+      const newTts = PronunciationDictionaryService.processText(currentVietsub, updatedEntries);
+      const newVietsub = targetMode === 'both'
+        ? PronunciationDictionaryService.processText(currentVietsub, updatedEntries)
+        : currentVietsub;
+
+      return {
+        ...seg,
+        translated_text: newVietsub,
+        tts_text: newTts,
+        tts: { ...seg.tts, status: 'NEEDS_REGENERATION' },
+        dirty: {
+          ...seg.dirty,
+          translation: targetMode === 'both' ? true : seg.dirty?.translation,
+          tts: true
+        }
+      };
+    });
+
+    setSubtitles(updated);
+    setHasChanges(true);
+    pushHistoryState(updated);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', height: '100%', overflow: 'hidden', minHeight: 0 }}>
       {/* 1. GLOBAL STATUS BAR */}
@@ -649,31 +678,20 @@ VIETNAMESE TRANSLATION:`;
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Globe size={15} color={translatedCount === totalCount ? "#10b981" : "#f59e0b"} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>TRANSLATION</span>
+              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>VIETSUB REVIEW</span>
               <span style={{ fontSize: '11px', fontWeight: 700, color: translatedCount === totalCount ? "#10b981" : "#f59e0b" }}>
                 {translatedCount === totalCount ? '✓ Completed' : `⚠ ${totalCount - translatedCount} Pending`}
               </span>
             </div>
           </div>
 
-          {/* Indicator 2: Vietsub Review */}
+          {/* Indicator 2: Timeline */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Edit3 size={15} color={needsRegenCount === 0 ? "#10b981" : "#06b6d4"} />
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>VIETSUB REVIEW</span>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: needsRegenCount === 0 ? "#10b981" : "#06b6d4" }}>
-                {needsRegenCount === 0 ? '✓ Completed' : `⚠ ${needsRegenCount} Modified`}
-              </span>
-            </div>
-          </div>
-
-          {/* Indicator 3: Timing */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={15} color={overflowCount === 0 ? "#10b981" : "#ef4444"} />
+            <Clock size={15} color={overflowCount > 0 ? "#f59e0b" : "#10b981"} />
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>TIMING</span>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: overflowCount === 0 ? "#10b981" : "#ef4444" }}>
-                {overflowCount === 0 ? `✓ All ${totalCount} segments fit` : `⚠ ${overflowCount} Issues | ✓ ${totalCount - overflowCount} Fits`}
+              <span style={{ fontSize: '11px', fontWeight: 700, color: overflowCount > 0 ? "#f59e0b" : "#10b981" }}>
+                {overflowCount > 0 ? `⚠ ${overflowCount} Issues` : `✓ ${totalCount} Fits`}
               </span>
             </div>
           </div>
@@ -709,8 +727,21 @@ VIETNAMESE TRANSLATION:`;
           <button className="btn-secondary" onClick={handleRedo} disabled={!canRedo} style={{ padding: '4px 10px', fontSize: '11px', opacity: canRedo ? 1 : 0.4 }}>
             <Redo size={12} /> Redo
           </button>
-          <button className="btn-secondary" onClick={() => setIsDictModalOpen(true)} style={{ padding: '4px 12px', fontSize: '11px', borderColor: 'rgba(99, 102, 241, 0.4)', color: '#818cf8' }}>
-            <BookOpen size={12} /> Từ Điển Phát Âm
+          <button
+            className="btn-secondary"
+            onClick={() => setIsDictModalOpen(true)}
+            style={{
+              padding: '4px 12px',
+              fontSize: '11px',
+              borderColor: 'rgba(99, 102, 241, 0.4)',
+              color: '#a5b4fc',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(99, 102, 241, 0.1)'
+            }}
+          >
+            <Sparkles size={13} color="#c084fc" /> Từ Điển Phát Âm (AI)
           </button>
         </div>
       </div>
@@ -922,7 +953,7 @@ VIETNAMESE TRANSLATION:`;
                     type="checkbox"
                     checked={isBatchSelected}
                     onClick={(e) => handleToggleRowSelect(seg.id, e)}
-                    onChange={() => {}}
+                    onChange={() => { }}
                     style={{ cursor: 'pointer' }}
                   />
 
@@ -1243,11 +1274,13 @@ VIETNAMESE TRANSLATION:`;
       <PronunciationDictionaryModal
         isOpen={isDictModalOpen}
         entries={dictionary}
+        subtitles={subtitles}
         onClose={() => setIsDictModalOpen(false)}
         onSave={(updatedEntries) => {
           setDictionary(updatedEntries);
           PronunciationDictionaryService.saveDictionaryForProject(projectDir, updatedEntries);
         }}
+        onApplyToSubtitles={handleApplyDictionaryToSubtitles}
       />
 
       <BulkVietsubModal

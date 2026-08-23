@@ -20,9 +20,32 @@ DEFAULT_BEST_OF = 1
 DEFAULT_VAD_FILTER = True
 DEFAULT_CHUNK_DURATION_SEC = 600  # 10 minutes
 
-# Translation Defaults (Central Config)
-DEFAULT_TRANSLATION_MODEL = "qwen3:4b"
+# Translation Configuration (HachimiMT-60 Fast GPU Mode Default)
+TRANSLATION_MODEL = "hachimi-60m"
+DEFAULT_TRANSLATION_MODEL = "hachimi-60m"
 DEFAULT_TRANSLATION_LANGUAGE = "zh-vi"
+DEFAULT_TRANSLATION_BATCH_SIZE = 20
+MAX_TRANSLATION_BATCH_SIZE = 50
+MIN_TRANSLATION_BATCH_SIZE = 1
+MAX_CONCURRENT_BATCHES = 1
+
+# Supported Production Translation Models (Exclusive GPU Execution)
+TRANSLATION_MODELS = {
+    "hachimi-60m": {
+        "id": "ngocdang83/HachimiMT-60-zh-vi",
+        "name": "HachimiMT-60 (Siêu Tốc - GPU FP16)",
+        "type": "specialized_mt_gpu",
+        "device": "cuda",
+        "vram_mb": 260
+    },
+    "qwen2.5:3b": {
+        "id": "qwen2.5:3b",
+        "name": "Qwen2.5:3B (Chuyên Sâu - GPU)",
+        "type": "ollama_llm",
+        "device": "cuda",
+        "vram_mb": 2100
+    }
+}
 
 # Centralized Hardware-Aware Profile (GTX 1650 Ti 4GB VRAM / 4C 8T CPU)
 HARDWARE_PROFILE = {

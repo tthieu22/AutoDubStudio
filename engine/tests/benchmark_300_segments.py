@@ -65,12 +65,8 @@ def run_benchmark():
     model_name = "qwen3:4b"
     available, msg = client.check_availability(model_name)
     if not available:
-        print(f"Model '{model_name}' not found. Checking fallback model 'qwen2.5:3b'...")
-        fallback_avail, _ = client.check_availability("qwen2.5:3b")
-        if fallback_avail:
-            model_name = "qwen2.5:3b"
-            available = True
-            print(f"Using installed Ollama model: '{model_name}'")
+        print(f"Error: Required model '{model_name}' not available: {msg}")
+        return
 
     translator = RealTranslator(model_name=model_name)
 

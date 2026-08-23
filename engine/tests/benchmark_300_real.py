@@ -127,7 +127,7 @@ def run_full_300_benchmark():
     print("==========================================================")
 
     client = OllamaClient()
-    model_name = "qwen2.5:3b"
+    model_name = "qwen3:4b"
     available, msg = client.check_availability(model_name)
     if not available:
         print(f"Model '{model_name}' not available.")

@@ -6,19 +6,19 @@ from pathlib import Path
 from typing import List
 
 # Add NVIDIA CUDA DLL paths from pip-installed packages to OS PATH
-# This is required for ctranslate2/faster-whisper to find cublas64_12.dll, cudnn, etc.
+# Fast direct lookup instead of slow recursive rglob
 _venv_site = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
 if _venv_site.exists():
-    for _dll_dir in _venv_site.rglob("bin"):
-        if _dll_dir.is_dir():
-            os.add_dll_directory(str(_dll_dir))
-            os.environ["PATH"] = str(_dll_dir) + os.pathsep + os.environ.get("PATH", "")
+    try:
+        for _pkg_dir in _venv_site.iterdir():
+            _dll_dir = _pkg_dir / "bin"
+            if _dll_dir.is_dir():
+                os.add_dll_directory(str(_dll_dir))
+                os.environ["PATH"] = str(_dll_dir) + os.pathsep + os.environ.get("PATH", "")
+    except Exception:
+        pass
 
-from autodub.pipeline.manager import PipelineManager
 from autodub.pipeline.state import PipelineStage
-from autodub.jobs.job_manager import JobManager
-from autodub.workers.worker_pool import WorkerPool
-from autodub.exceptions import AutoDubError, PipelineCancelledError
 
 
 def main():
@@ -121,7 +121,8 @@ def main():
         elif stage_enum == PipelineStage.TRANSLATE:
             sp.add_argument("--source-language", default="en", help="Source language code")
             sp.add_argument("--target-language", default="vi", help="Target language code")
-            sp.add_argument("--model", default="qwen2.5:3b", help="Ollama LLM model name")
+            sp.add_argument("--model", default="qwen3:4b", help="Ollama LLM model name")
+            sp.add_argument("--batch-size", type=int, default=30, help="Batch size for subtitle translation")
         elif stage_enum == PipelineStage.TTS:
             sp.add_argument("--voice", default=None, help="Piper voice model name")
             sp.add_argument("--language", default="vi", help="Target TTS language code")
@@ -141,6 +142,17 @@ def main():
             sp.add_argument("--subtitle-mode", default="BURN_IN", choices=["NONE", "COPY", "BURN_IN"], help="Subtitle processing mode")
 
     args = parser.parse_args()
+
+    # Fast path for telemetry to ensure ultra-low latency (<0.1s)
+    if args.command == "telemetry":
+        from autodub.utils.telemetry import get_telemetry
+        print(json.dumps(get_telemetry()))
+        return
+
+    from autodub.pipeline.manager import PipelineManager
+    from autodub.jobs.job_manager import JobManager
+    from autodub.workers.worker_pool import WorkerPool
+    from autodub.exceptions import AutoDubError, PipelineCancelledError
 
     try:
         job_mgr = JobManager()
@@ -226,11 +238,6 @@ def main():
         elif args.command == "clean":
             count = job_mgr.clean_jobs(status=args.status)
             print(f"Cleaned {count} jobs from database.")
-            return
-
-        elif args.command == "telemetry":
-            from autodub.utils.telemetry import get_telemetry
-            print(json.dumps(get_telemetry()))
             return
 
         # Commands supporting both job_id and project_id target

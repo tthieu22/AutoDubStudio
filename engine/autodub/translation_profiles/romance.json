@@ -1,0 +1,7 @@
+{
+  "id": "romance",
+  "name": "Ngôn tình",
+  "description": "Phong cách tình cảm lãng mạn, ngọt ngào hoặc sâu lắng, xưng hô anh/em, chàng/nàng mượt mà và tự nhiên.",
+  "tone": "romantic",
+  "prompt_instruction": "TRANSLATION STYLE: ROMANCE (NGÔN TÌNH)\n- Translate with emotional, tender, and natural romantic Vietnamese tone.\n- Flexible and affectionate pronoun usage (anh/em, cậu/tớ, chàng/nàng) matching the emotional dynamics.\n- Smooth, expressive, and heart-felt phrasing without feeling clunky or overly literal."
+}

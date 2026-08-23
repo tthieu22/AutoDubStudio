@@ -8,7 +8,7 @@ Desktop Application for 100% Local, Free AI Video Translation & Dubbing.
 - **Sequential AI Pipeline**:
   - Audio Extraction (FFmpeg)
   - Speech-to-Text (`faster-whisper`)
-  - Translation (Ollama / `Qwen2.5 3B`)
+  - Translation (Ollama / `Qwen3 4B`)
   - TTS (`piper`)
   - Audio Sync (Time-stretching / dynamic alignment)
   - Video Render (FFmpeg)
@@ -34,7 +34,7 @@ Make sure standalone `ffmpeg` is available on system PATH or in `runtime/ffmpeg/
 ### 2. Ollama & Translation Model (Phase 5)
 - Download and install Ollama from [https://ollama.com](https://ollama.com).
 - Start Ollama server: `ollama serve`
-- Pull translation model: `ollama pull qwen2.5:3b`
+- Pull translation model: `ollama pull qwen3:4b`
 
 ### 3. Piper Local TTS (Phase 6)
 - Place `piper.exe` binary in `runtime/piper/piper.exe` or system PATH.

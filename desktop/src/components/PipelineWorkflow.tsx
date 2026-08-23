@@ -19,6 +19,8 @@ interface PipelineWorkflowProps {
   onResumePipeline: (stopAt?: string) => void;
   translationStyle?: string;
   translationModel?: string;
+  onChangeTranslationModel?: (model: string) => void;
+  onChangeTranslationStyle?: (style: string) => void;
 }
 
 const STYLE_NAME_MAP: Record<string, string> = {
@@ -72,7 +74,9 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
   onCancelPipeline,
   onResumePipeline,
   translationStyle = 'general',
-  translationModel = 'qwen3:4b'
+  translationModel = 'hachimi-60m',
+  onChangeTranslationModel,
+  onChangeTranslationStyle
 }) => {
   const [activeInspectorStage, setActiveInspectorStage] = useState<StageName>('EXTRACT');
   const styleDisplayName = STYLE_NAME_MAP[translationStyle] || translationStyle;
@@ -146,20 +150,65 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
         </div>
 
         {/* Translation Meta Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', fontSize: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', fontSize: '12px' }}>
           <div>
             <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Translation</span>
-            <span style={{ color: '#f8fafc', fontWeight: 600 }}>🇨🇳 Chinese → 🇻🇳 Vietnamese</span>
+            <span style={{ color: '#f8fafc', fontWeight: 600 }}>🇨🇳 ZH → 🇻🇳 VI</span>
           </div>
           <div style={{ height: '24px', width: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
           <div>
-            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Style</span>
-            <span style={{ color: '#38bdf8', fontWeight: 600 }}>🎬 {styleDisplayName}</span>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>Style</span>
+            {onChangeTranslationStyle ? (
+              <select
+                value={translationStyle}
+                onChange={e => onChangeTranslationStyle(e.target.value)}
+                disabled={pipelineStatus === 'RUNNING'}
+                style={{
+                  background: 'rgba(14, 165, 233, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '6px',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  outline: 'none',
+                  cursor: pipelineStatus === 'RUNNING' ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {Object.entries(STYLE_NAME_MAP).map(([val, label]) => (
+                  <option key={val} value={val} style={{ background: '#0f172a', color: '#fff' }}>🎬 {label}</option>
+                ))}
+              </select>
+            ) : (
+              <span style={{ color: '#38bdf8', fontWeight: 600 }}>🎬 {styleDisplayName}</span>
+            )}
           </div>
           <div style={{ height: '24px', width: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
           <div>
-            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Model</span>
-            <span style={{ color: '#a855f7', fontWeight: 600 }}>{translationModel}</span>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>Model</span>
+            {onChangeTranslationModel ? (
+              <select
+                value={translationModel === 'hachimi-60m' ? 'hachimi-60m' : 'qwen2.5:3b'}
+                onChange={e => onChangeTranslationModel(e.target.value)}
+                disabled={pipelineStatus === 'RUNNING'}
+                style={{
+                  background: translationModel === 'hachimi-60m' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                  border: translationModel === 'hachimi-60m' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(168, 85, 247, 0.4)',
+                  borderRadius: '6px',
+                  color: translationModel === 'hachimi-60m' ? '#34d399' : '#c084fc',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  outline: 'none',
+                  cursor: pipelineStatus === 'RUNNING' ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <option value="hachimi-60m" style={{ background: '#0f172a', color: '#34d399' }}>🟢 HachimiMT-60 (GPU FP16, ~260MB)</option>
+                <option value="qwen2.5:3b" style={{ background: '#0f172a', color: '#c084fc' }}>🔵 Qwen2.5:3B (Ollama LLM)</option>
+              </select>
+            ) : (
+              <span style={{ color: '#a855f7', fontWeight: 600 }}>{translationModel}</span>
+            )}
           </div>
         </div>
 
@@ -189,10 +238,15 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
           ) : (
             <button 
               className="btn-primary" 
-              onClick={() => onStartPipeline(true)}
-              style={{ padding: '6px 14px', fontSize: '12px', cursor: 'pointer' }}
+              onClick={() => {
+                const isPartiallyDone = stageProgresses['EXTRACT']?.status === 'COMPLETED';
+                onStartPipeline(!isPartiallyDone);
+              }}
+              style={{ padding: '6px 16px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              START PIPELINE ➔
+              {stageProgresses['TRANSCRIBE']?.status === 'COMPLETED' && stageProgresses['TRANSLATE']?.status !== 'COMPLETED'
+                ? 'TIẾP TỤC DỊCH (TRANSLATE) ➔'
+                : 'START PIPELINE ➔'}
             </button>
           )}
         </div>
@@ -370,13 +424,23 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '12px' }}>
-            <button 
-              className="btn-secondary" 
-              onClick={() => onRetryStage(activeInspectorStage)}
-              style={{ width: '100%', justifyContent: 'center', padding: '8px', fontSize: '12px' }}
-            >
-              <RefreshCw size={13} /> Restart Stage
-            </button>
+            {selectedProgressInfo.status === 'PENDING' ? (
+              <button 
+                className="btn-primary" 
+                onClick={() => onResumePipeline(activeInspectorStage.toLowerCase())}
+                style={{ width: '100%', justifyContent: 'center', padding: '8px', fontSize: '12px' }}
+              >
+                ▶️ Chạy Bước Này ({STAGE_LABELS[activeInspectorStage]})
+              </button>
+            ) : (
+              <button 
+                className="btn-secondary" 
+                onClick={() => onRetryStage(activeInspectorStage)}
+                style={{ width: '100%', justifyContent: 'center', padding: '8px', fontSize: '12px' }}
+              >
+                <RefreshCw size={13} /> Chạy Lại Stage Này
+              </button>
+            )}
           </div>
         </div>
       </div>

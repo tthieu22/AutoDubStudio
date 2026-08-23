@@ -21,7 +21,7 @@ export interface TtsOptimizationResult {
 
 export class TtsAdaptationEngine {
   private static OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
-  private static DEFAULT_MODEL = 'qwen2.5:3b';
+  private static DEFAULT_MODEL = 'qwen3:4b';
 
   /**
    * Adapts Vietsub subtitle text to speech-optimized TTS text at FIXED 1.00x speed.
