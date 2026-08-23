@@ -21,6 +21,8 @@ interface ToolbarProps {
   onBackToApp?: () => void;
   onRender: (preset: string) => void;
   isRendering?: boolean;
+  selectedRatio: string;
+  onRatioChange: (ratio: string) => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -40,8 +42,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onBackToApp,
   onRender,
   isRendering = false,
+  selectedRatio,
+  onRatioChange,
 }) => {
-  const [selectedRatio, setSelectedRatio] = React.useState('16:9');
   return (
     <header className="editor-topbar">
       {/* LEFT: BRAND */}
@@ -125,7 +128,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         <select
           value={selectedRatio}
-          onChange={(e) => setSelectedRatio(e.target.value)}
+          onChange={(e) => onRatioChange(e.target.value)}
           disabled={isRendering}
           style={{ background: '#0B0D10', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#fff', padding: '6px', borderRadius: '4px', fontSize: '12px', outline: 'none' }}
         >

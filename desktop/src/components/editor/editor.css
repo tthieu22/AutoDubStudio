@@ -127,10 +127,10 @@
 
 .editor-canvas-screen {
   position: relative;
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  max-width: 960px;
-  max-height: calc(100% - 20px);
+  /* aspect-ratio is set dynamically via inline style from React */
+  /* Height-first: take available height, let aspect-ratio determine width */
+  height: calc(100% - 20px);
+  max-width: min(960px, 100%);
   background-color: #000000;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);

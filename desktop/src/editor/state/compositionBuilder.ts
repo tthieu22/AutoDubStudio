@@ -33,6 +33,8 @@ export interface ProjectArtifacts {
     videoProps?: any;
     style?: Record<string, any>;
   }>;
+  compositionWidth?: number;
+  compositionHeight?: number;
 }
 
 /**
@@ -44,6 +46,8 @@ export class CompositionBuilder {
   static buildFromArtifacts(artifacts: ProjectArtifacts): CompositionState {
     const videoDuration = artifacts.videoDuration ?? 0;
     const clips: TimelineClip[] = [];
+    const cW = artifacts.compositionWidth || 1920;
+    const cH = artifacts.compositionHeight || 1080;
 
     // 1. VIDEO LAYER
     if (artifacts.sourceVideoPath || artifacts.videoDuration) {
@@ -96,8 +100,8 @@ export class CompositionBuilder {
         locked: savedVideo?.locked || false,
         opacity: savedVideo?.opacity ?? 1,
         zIndex: 1,
-        x: savedVideo ? (savedVideo.x / 1920) * 100 : 50,
-        y: savedVideo ? (savedVideo.y / 1080) * 100 : 50,
+        x: savedVideo ? (savedVideo.x / cW) * 100 : 50,
+        y: savedVideo ? (savedVideo.y / cH) * 100 : 50,
         width: 100,
         height: 100,
         rotation: savedVideo?.rotation ?? 0,
@@ -191,8 +195,8 @@ export class CompositionBuilder {
           locked: l.locked || false,
           opacity: 1,
           zIndex: 10 + idx,
-          x: (l.x / 1920) * 100 || 50,
-          y: (l.y / 1080) * 100 || 20,
+          x: (l.x / cW) * 100 || 50,
+          y: (l.y / cH) * 100 || 20,
           width: isLogo ? 15 : 40,
           height: isLogo ? 15 : 12,
           rotation: 0,
@@ -227,8 +231,8 @@ export class CompositionBuilder {
     return {
       id: artifacts.projectId || 'project-active',
       name: artifacts.projectName || 'Active Composition',
-      width: 1920,
-      height: 1080,
+      width: cW,
+      height: cH,
       fps: 30,
       duration: Math.ceil(timelineDuration),
       tracks: INITIAL_TRACKS,

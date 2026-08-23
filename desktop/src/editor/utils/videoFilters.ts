@@ -73,7 +73,7 @@ export function getCSSFilterString(props: VideoProps): string {
   return filters.join(' ');
 }
 
-export function getCSSStyle(props: VideoProps): React.CSSProperties {
+export function getCSSStyle(props: VideoProps, canvasWidth = 1920, canvasHeight = 1080): React.CSSProperties {
   const filterStr = getCSSFilterString(props);
   
   const scaleVal = props.transform.scale ?? 1;
@@ -83,9 +83,12 @@ export function getCSSStyle(props: VideoProps): React.CSSProperties {
   const posX = props.transform.x ?? 0;
   const posY = props.transform.y ?? 0;
 
+  const pctX = canvasWidth > 0 ? (posX / canvasWidth) * 100 : 0;
+  const pctY = canvasHeight > 0 ? (posY / canvasHeight) * 100 : 0;
+
   return {
     filter: filterStr || undefined,
     opacity: props.opacity ?? 1,
-    transform: `translate(${posX}px, ${posY}px) rotate(${rotateVal}deg) scale(${scaleVal}) scaleX(${flipXVal}) scaleY(${flipYVal})`,
+    transform: `translate(${pctX.toFixed(4)}%, ${pctY.toFixed(4)}%) rotate(${rotateVal}deg) scale(${scaleVal}) scaleX(${flipXVal}) scaleY(${flipYVal})`,
   };
 }

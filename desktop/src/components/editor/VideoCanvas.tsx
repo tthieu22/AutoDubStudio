@@ -24,6 +24,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const isSeekingRef = useRef<boolean>(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<number | null>(null);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -56,7 +57,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
     filter: { ...DEFAULT_VIDEO_PROPS.filter, ...(rawProps?.filter || {}) },
     playback: { ...DEFAULT_VIDEO_PROPS.playback, ...(rawProps?.playback || {}) }
   };
-  const cssStyles = getCSSStyle(videoProps);
+  const cssStyles = getCSSStyle(videoProps, composition.width, composition.height);
 
   // Sync original video properties (volume, muted, speed) to video DOM element
   useEffect(() => {
@@ -138,6 +139,10 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
     const video = videoRef.current;
     if (!video) return;
 
+    if (video.videoWidth && video.videoHeight) {
+      setVideoAspectRatio(video.videoWidth / video.videoHeight);
+    }
+
     const dur = video.duration;
     if (isFinite(dur) && !isNaN(dur) && dur > 0) {
       const newComp = { ...editorStore.getComposition(), duration: dur };
@@ -198,35 +203,64 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
     }
   };
 
+  const canvasRatio = (composition.width && composition.height) ? (composition.width / composition.height) : (16 / 9);
+  const currentRatio = videoAspectRatio || canvasRatio;
+
+  let vWidth = '100%';
+  let vHeight = '100%';
+  let vLeft = '0%';
+  let vTop = '0%';
+
+  if (currentRatio > canvasRatio) {
+    const hPct = (canvasRatio / currentRatio) * 100;
+    vHeight = `${hPct}%`;
+    vTop = `${(100 - hPct) / 2}%`;
+  } else if (currentRatio < canvasRatio) {
+    const wPct = (currentRatio / canvasRatio) * 100;
+    vWidth = `${wPct}%`;
+    vLeft = `${(100 - wPct) / 2}%`;
+  }
+
   return (
     <div 
       ref={containerRef}
       onClick={() => editorStore.clearSelection()}
       className="editor-canvas-screen"
-      style={{ position: 'relative', width: '100%', height: '100%', maxWidth: '960px', aspectRatio: '16/9', overflow: 'hidden', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{ aspectRatio: `${composition.width || 1920} / ${composition.height || 1080}` }}
     >
       {/* HTML5 VIDEO PLAYER PREVIEW */}
       {!videoError && (sourceVideoPath || !isTauri) ? (
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleEnded}
-          onError={handleVideoError}
-          preload="metadata"
+        <div
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
             pointerEvents: 'none',
             zIndex: 0,
             ...cssStyles,
           }}
-        />
+        >
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onEnded={handleEnded}
+            onError={handleVideoError}
+            preload="metadata"
+            style={{
+              position: 'absolute',
+              top: vTop,
+              left: vLeft,
+              width: vWidth,
+              height: vHeight,
+              objectFit: 'cover',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
       ) : (
         <div style={{ color: '#ef4444', fontSize: '14px', zIndex: 1, textAlign: 'center', pointerEvents: 'none', fontWeight: 600 }}>
           {videoError || "No source video available"}
@@ -308,63 +342,97 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
               userSelect: 'none',
             }}
           >
-            {/* TEXT LAYER */}
-            {clip.type === 'text' && clip.textProps && (
-              <div 
-                style={{
-                  fontFamily: clip.textProps.fontFamily,
-                  fontSize: `${clip.textProps.fontSize}px`,
-                  fontWeight: clip.textProps.fontWeight,
-                  color: clip.textProps.color,
-                  textAlign: clip.textProps.textAlign,
-                  textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {clip.textProps.content}
-              </div>
-            )}
-
-            {/* SUBTITLE LAYER */}
-            {clip.type === 'subtitle' && clip.subtitleProps && (
-              <div 
-                style={{
-                  fontFamily: clip.subtitleProps.fontFamily,
-                  fontSize: `${clip.subtitleProps.fontSize}px`,
-                  color: clip.subtitleProps.color,
-                  backgroundColor: clip.subtitleProps.backgroundColor,
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  textAlign: 'center',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
-                }}
-              >
-                {clip.subtitleProps.text}
-              </div>
-            )}
-
-            {/* SELECTION BOUNDING BOX & HANDLES */}
-            {isSelected && (
-              <div 
+            {isVideo ? (
+              <div
                 style={{
                   position: 'absolute',
-                  inset: 0,
-                  border: '2px solid #6366f1',
+                  left: vLeft,
+                  top: vTop,
+                  width: vWidth,
+                  height: vHeight,
                   pointerEvents: 'none',
-                  borderRadius: '2px'
                 }}
               >
-                <div style={{ position: 'absolute', top: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
-                <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
-                <div style={{ position: 'absolute', bottom: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
-                <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
-                <div style={{ position: 'absolute', top: '-20px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', backgroundColor: '#06b6d4', border: '1px solid #fff', borderRadius: '50%' }} />
+                {/* SELECTION BOUNDING BOX & HANDLES FOR VIDEO */}
+                {isSelected && (
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      border: '2px solid #6366f1',
+                      pointerEvents: 'none',
+                      borderRadius: '2px'
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', bottom: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', top: '-20px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', backgroundColor: '#06b6d4', border: '1px solid #fff', borderRadius: '50%' }} />
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                {/* TEXT LAYER */}
+                {clip.type === 'text' && clip.textProps && (
+                  <div 
+                    style={{
+                      fontFamily: clip.textProps.fontFamily,
+                      fontSize: `${clip.textProps.fontSize}px`,
+                      fontWeight: clip.textProps.fontWeight,
+                      color: clip.textProps.color,
+                      textAlign: clip.textProps.textAlign,
+                      textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {clip.textProps.content}
+                  </div>
+                )}
+
+                {/* SUBTITLE LAYER */}
+                {clip.type === 'subtitle' && clip.subtitleProps && (
+                  <div 
+                    style={{
+                      fontFamily: clip.subtitleProps.fontFamily,
+                      fontSize: `${clip.subtitleProps.fontSize}px`,
+                      color: clip.subtitleProps.color,
+                      backgroundColor: clip.subtitleProps.backgroundColor,
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
+                    }}
+                  >
+                    {clip.subtitleProps.text}
+                  </div>
+                )}
+
+                {/* SELECTION BOUNDING BOX & HANDLES FOR TEXT/SUBTITLE */}
+                {isSelected && (
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      border: '2px solid #6366f1',
+                      pointerEvents: 'none',
+                      borderRadius: '2px'
+                    }}
+                  >
+                    <div style={{ position: 'absolute', top: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', top: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', bottom: '-4px', left: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', width: '8px', height: '8px', backgroundColor: '#6366f1', border: '1px solid #fff', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', top: '-20px', left: '50%', transform: 'translateX(-50%)', width: '8px', height: '8px', backgroundColor: '#06b6d4', border: '1px solid #fff', borderRadius: '50%' }} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         );
@@ -372,7 +440,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
 
       {visibleClips.length === 0 && !sourceVideoPath && isTauri && (
         <div style={{ color: '#475569', fontSize: '12px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '2px', pointerEvents: 'none' }}>
-          Canvas Preview (Khung hình 1920 × 1080)
+          Canvas Preview (Khung hình {composition.width} × {composition.height})
         </div>
       )}
     </div>

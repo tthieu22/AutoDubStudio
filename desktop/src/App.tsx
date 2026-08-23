@@ -204,7 +204,9 @@ export default function App() {
           segments: segments,
           dubbedAudioPath: 'audio/dubbed_synchronized.wav',
           dubbedAudioDuration: segments.length > 0 ? Math.max(...segments.map((s: any) => s.end)) : 60,
-          layers: compData?.layers || []
+          layers: compData?.layers || [],
+          compositionWidth: compData?.width || undefined,
+          compositionHeight: compData?.height || undefined,
         });
 
         editorStore.setComposition(newComp, false);

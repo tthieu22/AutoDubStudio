@@ -27,6 +27,32 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
   const [uiState, setUiState] = useState<EditorUiState>(editorStore.getUiState());
   const [leftTab, setLeftTab] = useState<'media' | 'layers' | 'text' | 'audio'>('media');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [selectedRatio, setSelectedRatio] = useState<string>('16:9');
+  
+  useEffect(() => {
+    if (comp.width === 1080 && comp.height === 1920) {
+      setSelectedRatio('9:16');
+    } else if (comp.width === 1920 && comp.height === 1080) {
+      setSelectedRatio('16:9');
+    }
+  }, [comp.width, comp.height]);
+
+  const handleRatioChange = (ratio: string) => {
+    setSelectedRatio(ratio);
+    if (ratio === '16:9') {
+      editorStore.setComposition({
+        ...comp,
+        width: 1920,
+        height: 1080
+      }, true);
+    } else if (ratio === '9:16') {
+      editorStore.setComposition({
+        ...comp,
+        width: 1080,
+        height: 1920
+      }, true);
+    }
+  };
   
   // Resizable panel states
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -142,6 +168,8 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
         onBackToApp={onBackToApp}
         onRender={onRender || ((p) => alert('Render preset: ' + p))}
         isRendering={isRendering}
+        selectedRatio={selectedRatio}
+        onRatioChange={handleRatioChange}
       />
 
       {/* 2. MAIN WORKSPACE (LEFT NAV + LEFT PANEL | CENTER CANVAS | RIGHT INSPECTOR) */}

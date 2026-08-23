@@ -5,6 +5,8 @@ import { PythonEngineService } from '../../services/pythonEngine';
 function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
   if (!projectDir || projectDir.startsWith('proj-default')) return;
 
+  const cW = comp.width || 1920;
+  const cH = comp.height || 1080;
   const layers: any[] = [];
   
   comp.clips.forEach((clip) => {
@@ -18,8 +20,8 @@ function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
         speaker: clip.subtitleProps?.speaker || 'Speaker',
         visible: clip.visible !== false,
         locked: clip.locked || false,
-        x: Math.round((clip.x / 100) * 1920) || 0,
-        y: Math.round((clip.y / 100) * 1080) || 0,
+        x: Math.round((clip.x / 100) * cW) || 0,
+        y: Math.round((clip.y / 100) * cH) || 0,
         style: {
           font_family: clip.subtitleProps?.fontFamily || 'Plus Jakarta Sans',
           font_size: clip.subtitleProps?.fontSize || 24,
@@ -51,8 +53,8 @@ function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
         text: clip.textProps?.content || '',
         visible: clip.visible !== false,
         locked: clip.locked || false,
-        x: Math.round((clip.x / 100) * 1920) || 0,
-        y: Math.round((clip.y / 100) * 1080) || 0,
+        x: Math.round((clip.x / 100) * cW) || 0,
+        y: Math.round((clip.y / 100) * cH) || 0,
         opacity: clip.opacity,
         rotation: clip.rotation,
         scale: clip.scaleX,
@@ -74,8 +76,8 @@ function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
         source: clip.imageProps?.src || '',
         visible: clip.visible !== false,
         locked: clip.locked || false,
-        x: Math.round((clip.x / 100) * 1920) || 0,
-        y: Math.round((clip.y / 100) * 1080) || 0,
+        x: Math.round((clip.x / 100) * cW) || 0,
+        y: Math.round((clip.y / 100) * cH) || 0,
         opacity: clip.opacity,
         rotation: clip.rotation,
         scale: clip.scaleX
@@ -90,8 +92,8 @@ function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
         source: clip.videoProps?.src || '',
         visible: clip.visible !== false,
         locked: clip.locked || false,
-        x: Math.round((clip.x / 100) * 1920) || 0,
-        y: Math.round((clip.y / 100) * 1080) || 0,
+        x: Math.round((clip.x / 100) * cW) || 0,
+        y: Math.round((clip.y / 100) * cH) || 0,
         opacity: clip.opacity ?? 1,
         rotation: clip.rotation ?? 0,
         scale: clip.scaleX ?? 1,

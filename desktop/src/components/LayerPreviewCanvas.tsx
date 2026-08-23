@@ -242,10 +242,11 @@ export const LayerPreviewCanvas: React.FC<LayerPreviewCanvasProps> = ({
     <div
       ref={containerRef}
       onMouseDown={handleCanvasClick}
-      className="relative w-full aspect-video bg-black/60 rounded-xl overflow-hidden border border-slate-700/80 shadow-2xl select-none"
+      style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
+      className="relative w-full bg-black/60 rounded-xl overflow-hidden border border-slate-700/80 shadow-2xl select-none"
     >
       <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-mono text-xs pointer-events-none">
-        1920 × 1080 Canvas Preview
+        {canvasWidth} × {canvasHeight} Canvas Preview
       </div>
 
       {activeLayers.map(layer => {
