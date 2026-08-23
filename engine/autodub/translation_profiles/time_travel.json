@@ -1,0 +1,8 @@
+{
+  "id": "time_travel",
+  "name": "Xuyên không",
+  "description": "Kết hợp ngôn ngữ hiện đại và cổ trang tùy theo thời đại của từng nhân vật.",
+  "tone": "era_dynamic",
+  "character_era_sensitive": true,
+  "prompt_instruction": "TRANSLATION STYLE: TIME TRAVEL (XUYÊN KHÔNG)\n- Dynamically balance modern spoken Vietnamese and ancient period-drama speech based on Character Era Metadata.\n- Modern characters (travelers from modern era) speak natural contemporary Vietnamese (tôi, anh, cậu).\n- Ancient native characters speak appropriate historical period-drama Vietnamese (bổn trang, trẫm, vi thần, đại nhân).\n- Preserve contrast in speech style between era-traveling characters and historical natives."
+}

@@ -110,7 +110,12 @@ export class PythonEngineService {
     return invoke<void>('open_output_folder', { projectDir });
   }
 
-  static async createProject(name: string, sourceVideoPath: string): Promise<string> {
+  static async createProject(
+    name: string,
+    sourceVideoPath: string,
+    translationStyle: string = "general",
+    customTranslationStyle?: string
+  ): Promise<string> {
     if (!isTauri()) {
       const sanitizedName = name.replace(/\s+/g, '-');
       const projectPath = `projects/${sanitizedName}`;
@@ -120,12 +125,14 @@ export class PythonEngineService {
         name: name,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        source: { path: sourceVideoPath, language: "en" },
+        source: { path: sourceVideoPath, language: "zh" },
         target: { language: "vi" },
         settings: {
           whisper_model: "small",
           whisper_compute_type: "int8",
-          translation_model: "qwen2.5:3b",
+          translation_model: "qwen3:4b",
+          translation_style: translationStyle,
+          custom_translation_style: customTranslationStyle || null,
           tts_engine: "piper",
           chunk_duration: 600
         },
@@ -140,7 +147,12 @@ export class PythonEngineService {
       };
       return projectPath;
     }
-    return invoke<string>('create_project', { name, sourceVideoPath });
+    return invoke<string>('create_project', {
+      name,
+      sourceVideoPath,
+      translationStyle,
+      customTranslationStyle: customTranslationStyle || null
+    });
   }
 
   static async deleteProject(name: string): Promise<void> {
@@ -264,7 +276,7 @@ export class PythonEngineService {
 
   static async startPipeline(projectDir: string, force: boolean = false, stopAt?: string): Promise<void> {
     if (!isTauri()) {
-      this.simulateMockPipeline(projectDir);
+      this.simulateMockPipeline(projectDir, stopAt);
       return;
     }
     return invoke<void>('start_pipeline', { projectDir, force, stopAt });
@@ -289,7 +301,7 @@ export class PythonEngineService {
 
   static async resumePipeline(projectDir: string, stopAt?: string): Promise<void> {
     if (!isTauri()) {
-      this.simulateMockPipeline(projectDir);
+      this.simulateMockPipeline(projectDir, stopAt);
       return;
     }
     return invoke<void>('resume_pipeline', { projectDir, stopAt });
@@ -334,7 +346,7 @@ export class PythonEngineService {
     });
   }
 
-  private static async simulateMockPipeline(projectDir: string) {
+  private static async simulateMockPipeline(projectDir: string, stopAt?: string) {
     this.isPipelineSimulating = true;
     
     if (this.progressCallback) {
@@ -347,6 +359,8 @@ export class PythonEngineService {
     const stages: Array<'EXTRACT' | 'TRANSCRIBE' | 'TRANSLATE' | 'TTS' | 'SYNC' | 'RENDER'> = [
       'EXTRACT', 'TRANSCRIBE', 'TRANSLATE', 'TTS', 'SYNC', 'RENDER'
     ];
+
+    const completedStagesList: string[] = [];
 
     for (const st of stages) {
       if (!this.isPipelineSimulating) return;
@@ -376,17 +390,25 @@ export class PythonEngineService {
       if (this.logCallback) {
         this.logCallback(`[INFO] Completed stage: ${st}`);
       }
+      completedStagesList.push(st);
       await sleep(200);
+
+      if (stopAt && st.toLowerCase() === stopAt.toLowerCase()) {
+        break;
+      }
     }
 
     if (!this.isPipelineSimulating) return;
     
-    // Save completion state in mock storage
+    // Save completion state in mock storage for executed stages only
     const proj = mockProjects[projectDir] || mockProjects["vietnam-tourism-dubbed"];
     if (proj && proj.pipeline) {
-      Object.keys(proj.pipeline).forEach(key => {
-        proj.pipeline[key].status = 'COMPLETED';
-        proj.pipeline[key].progress = 100;
+      completedStagesList.forEach(st => {
+        const key = st.toLowerCase();
+        if (proj.pipeline[key]) {
+          proj.pipeline[key].status = 'COMPLETED';
+          proj.pipeline[key].progress = 100;
+        }
       });
     }
 
@@ -394,7 +416,7 @@ export class PythonEngineService {
       this.progressCallback({ event: 'pipeline_complete', stage: 'PIPELINE' });
     }
     if (this.logCallback) {
-      this.logCallback('[INFO] Translation and rendering completed successfully!');
+      this.logCallback('[INFO] Pipeline phase completed successfully!');
     }
     if (this.terminatedCallback) {
       this.terminatedCallback(0);

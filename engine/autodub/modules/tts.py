@@ -521,7 +521,22 @@ class RealTTS:
             wav_filename = f"{seg_id:06d}.wav"
             final_wav_path = audio_tts_dir / wav_filename
 
-            raw_text = seg.get("translation") or seg.get("text") or ""
+            # TTS Gate Lock: Block audio generation if subtitle failed QA verification or requires human review
+            qa_status = str(seg.get("qa_status") or "").upper()
+            if qa_status in ["HUMAN_REVIEW", "FAIL", "ERROR"]:
+                logger.warning(f"TTS Gate Lock: Segment {seg_id} blocked due to QA status '{qa_status}'.")
+                seg_meta = {
+                    "audio_file": f"audio/tts/{wav_filename}",
+                    "status": "BLOCKED",
+                    "reason": "TTS_GATE_LOCKED",
+                    "duration": 0.0
+                }
+                seg["tts"] = seg_meta
+                completed_segment_ids.add(seg_id)
+                segment_metadata_map[str(seg_id)] = seg_meta
+                continue
+
+            raw_text = seg.get("tts_text") or seg.get("translated_text") or seg.get("translation") or seg.get("text") or ""
             # Skip segment if it is empty, whitespace-only, or contains no spoken/alphanumeric characters (e.g., "...")
             if not raw_text or not raw_text.strip() or not re.search(r'[a-zA-Z0-9\u00c0-\u1ef9]', raw_text):
                 logger.info(f"Segment {seg_id} text is empty/whitespace or has no spoken characters. Skipping TTS synthesis.")

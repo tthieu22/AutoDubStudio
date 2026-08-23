@@ -113,9 +113,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             onChange={e => onSettingsChange({ ...settings, translationModel: e.target.value })}
             style={{ width: '100%', background: '#020617', border: '1px solid var(--border-glass)', borderRadius: '10px', padding: '12px 16px', color: '#fff', fontSize: '14px', outline: 'none' }}
           >
-            <option value="qwen2.5:3b">Qwen2.5 3B (Chạy GPU Local - Dịch mượt & Tốc độ rất cao)</option>
-            <option value="qwen2.5:7b">Qwen2.5 7B (Biên dịch câu văn tự nhiên chuẩn hơn)</option>
-            <option value="llama3.2:3b">Llama 3.2 3B</option>
+            <option value="qwen3:4b">Qwen3 4B (Mặc định - Tối ưu GPU Local, Dịch Trung-Việt siêu chuẩn)</option>
+            <option value="qwen3:8b">Qwen3 8B (Độ chính xác cao hơn cho ngữ cảnh phức tạp)</option>
+            <option value="gemma3:4b">Gemma3 4B (Google AI Model)</option>
+            <option value="qwen2.5:3b">Qwen2.5 3B (Tốc độ xử lý nhanh)</option>
           </select>
         </div>
 

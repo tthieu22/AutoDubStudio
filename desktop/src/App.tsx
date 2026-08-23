@@ -183,6 +183,11 @@ export default function App() {
   const loadProjectJson = async (path: string) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
+      if (json && json.settings && json.settings.translation_style) {
+        setActiveProjectStyle(json.settings.translation_style);
+      } else {
+        setActiveProjectStyle('general');
+      }
       
       // Auto Sync to Timeline Editor Store
       try {
@@ -254,10 +259,13 @@ export default function App() {
     }
   };
 
-  const handleCreateProject = async (name: string, videoPath: string) => {
+  const [activeProjectStyle, setActiveProjectStyle] = useState<string>('general');
+
+  const handleCreateProject = async (name: string, videoPath: string, style?: string, customStyle?: string) => {
     setIsCreatingProject(true);
     try {
-      const path = await PythonEngineService.createProject(name, videoPath);
+      const path = await PythonEngineService.createProject(name, videoPath, style, customStyle);
+      setActiveProjectStyle(style || 'general');
       await loadProjects();
       handleSelectProject(path);
     } catch (err: any) {
@@ -344,11 +352,13 @@ export default function App() {
                   onStartPipeline={startPhase1Pipeline}
                   onCancelPipeline={handleCancelPipeline}
                   onResumePipeline={handleResumePipeline}
+                  translationStyle={activeProjectStyle}
+                  translationModel={settings.translationModel}
                 />
               </div>
 
               <div style={{ display: activeTab === 'subtitles' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <SubtitleEditor projectDir={selectedProjectDir} onProceedToVoices={() => setActiveTab('voices')} />
+                <SubtitleEditor projectDir={selectedProjectDir} activeTab={activeTab} onProceedToVoices={() => setActiveTab('voices')} />
               </div>
 
               <div style={{ display: activeTab === 'timeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>

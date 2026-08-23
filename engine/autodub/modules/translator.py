@@ -5,13 +5,22 @@ import re
 import time
 import urllib.request
 import urllib.error
+import socket
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable, Tuple
 
+from autodub.config import DEFAULT_TRANSLATION_MODEL, DEFAULT_TRANSLATION_LANGUAGE
 from autodub.models.project import Project
 from autodub.pipeline.state import PipelineStage, StageStatus
 from autodub.pipeline.progress import emit_event
 from autodub.modules.transcriber import format_srt_timestamp, validate_srt_content
+from autodub.modules.ollama_client import OllamaClient
+from autodub.modules.structured_parser import StructuredParser
+from autodub.modules.output_sanitizer import TranslationOutputSanitizer
+from autodub.modules.translator_qa import TranslationQaChecker
+from autodub.modules.translator_repair import TranslationRepairService
+from autodub.modules.style_profiles import TranslationStyleProfileLoader
+from autodub.modules.character_memory import CharacterEraMemory
 from autodub.exceptions import (
     AutoDubError,
     PipelineCancelledError,
@@ -22,180 +31,199 @@ from autodub.exceptions import (
 )
 
 logger = logging.getLogger("autodub")
-
-def clean_translation(raw_text: str) -> str:
-    """Clean raw LLM translation response."""
-    if not raw_text:
-        return ""
-    
-    text = raw_text.strip()
-    
-    # Remove markdown code blocks if wrapped
-    if text.startswith("```") and text.endswith("```"):
-        lines = text.splitlines()
-        if len(lines) >= 2:
-            text = "\n".join(lines[1:-1]).strip()
-            
-    # Remove common prefix hallucinations like "Dịch:", "Bản dịch:", "Translation:"
-    prefix_pattern = r'^(bản dịch|dịch|translation|vietnamese translation|việt nam):\s*'
-    text = re.sub(prefix_pattern, '', text, flags=re.IGNORECASE).strip()
-    
-    # Strip surrounding quotes if matching
-    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
-        text = text[1:-1].strip()
-
-    # Remove Chinese / East Asian characters (hallucinations from Qwen)
-    text = re.sub(r'[\u4e00-\u9fff]+', ' ', text)
-
-    # Collapse repetitive phrases/words (e.g. 'nào đó nào đó...' or 'nào đó' repeated 3+ times)
-    text = re.sub(r'(\b[\w\s]{2,20}\b)(?:\s+\1){2,}', r'\1', text, flags=re.IGNORECASE)
-
-    return re.sub(r'\s+', ' ', text).strip()
-
-class OllamaClient:
-    """HTTP client for communicating with local Ollama REST API server."""
-    def __init__(self, base_url: Optional[str] = None):
-        if not base_url:
-            base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.base_url = base_url.rstrip("/")
-
-    def check_availability(self, model_name: str = "qwen2.5:3b") -> Tuple[bool, str]:
-        """Check if Ollama is reachable and the specified model is installed."""
-        url = f"{self.base_url}/api/tags"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "AutoDubStudio"})
-            with urllib.request.urlopen(req, timeout=5) as response:
-                if response.status != 200:
-                    return False, f"Ollama returned HTTP status {response.status}"
-                data = json.loads(response.read().decode("utf-8"))
-        except Exception as e:
-            return False, f"Ollama is not running at {self.base_url}"
-
-        models = data.get("models", [])
-        installed_names = []
-        for m in models:
-            name = m.get("name", "")
-            model_tag = m.get("model", "")
-            installed_names.extend([name, model_tag])
-
-        target_base = model_name.split(":")[0]
-        found = False
-        for installed in installed_names:
-            if not installed:
-                continue
-            if installed == model_name or installed.startswith(f"{model_name}:"):
-                found = True
-                break
-            if installed == target_base or installed.startswith(f"{target_base}:"):
-                found = True
-                break
-
-        if not found:
-            return False, f"Ollama model '{model_name}' is not installed."
-
-        return True, ""
-
-    def generate(self, prompt: str, system: Optional[str] = None, model: str = "qwen2.5:3b", timeout: int = 120) -> str:
-        """Call Ollama /api/generate REST endpoint synchronously."""
-        url = f"{self.base_url}/api/generate"
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.3
-            }
-        }
-        if system:
-            payload["system"] = system
-
-        data_bytes = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=data_bytes,
-            headers={"Content-Type": "application/json", "User-Agent": "AutoDubStudio"},
-            method="POST"
-        )
-
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                if response.status != 200:
-                    raise TranslationFailedError(f"Ollama returned HTTP error status {response.status}")
-                res_data = json.loads(response.read().decode("utf-8"))
-                return res_data.get("response", "")
-        except urllib.error.URLError as e:
-            if isinstance(e.reason, socket_timeout_types):
-                raise OllamaTimeoutError(f"Ollama generate request timed out after {timeout} seconds.")
-            raise OllamaUnavailableError(f"Failed to connect to Ollama: {e}")
-        except Exception as e:
-            if "timed out" in str(e).lower():
-                raise OllamaTimeoutError(f"Ollama generate request timed out after {timeout} seconds.")
-            raise TranslationFailedError(f"Ollama API request failed: {e}")
-
-import socket
 socket_timeout_types = (socket.timeout, TimeoutError)
 
+
+
+
+class ContextBuilder:
+    """Builds surrounding context (+/- 3 lines) for Chinese subtitle segments."""
+
+    @staticmethod
+    def get_context(segments: List[Dict[str, Any]], current_index: int, window: int = 3) -> Tuple[List[str], List[str]]:
+        prev_lines = []
+        for i in range(max(0, current_index - window), current_index):
+            t = (segments[i].get("text") or "").strip()
+            if t:
+                prev_lines.append(t)
+
+        next_lines = []
+        for i in range(current_index + 1, min(len(segments), current_index + window + 1)):
+            t = (segments[i].get("text") or "").strip()
+            if t:
+                next_lines.append(t)
+
+        return prev_lines, next_lines
+
+
 class RealTranslator:
-    """Real Local Translation module using Ollama REST API (Qwen2.5 3B)."""
+    """Real Local Translation Engine using Ollama REST API.
+    Features:
+    - Central model configuration (default qwen3:4b, zh-vi).
+    - ContextBuilder (+/- 3 lines).
+    - Entity Memory (Priority over LLM: Prompted as LOCKED ENTITY).
+    - Structured JSON Parser with Retry & HUMAN_REVIEW fallback.
+    - Format Output Sanitizer.
+    - 7-Point QA Verification & 1-Pass AI Repair.
+    """
+
     def __init__(
         self,
         step_delay: float = 0.0,
-        model_name: str = "qwen2.5:3b",
-        source_language: str = "en",
+        model_name: Optional[str] = None,
+        source_language: str = "zh",
         target_language: str = "vi",
         base_url: Optional[str] = None,
         timeout: int = 120,
-        max_retries: int = 3,
+        max_retries: int = 2,
         client: Optional[OllamaClient] = None
     ):
         self.step_delay = step_delay
-        self.model_name = model_name
+        self.model_name = model_name or DEFAULT_TRANSLATION_MODEL
         self.source_language = source_language
         self.target_language = target_language
         self.timeout = timeout
         self.max_retries = max_retries
         self.client = client if client is not None else OllamaClient(base_url=base_url)
 
-    def translate_segments(
+    def translate_segment_single(
         self,
-        segments: List[Dict[str, Any]],
-        source_language: Optional[str] = None,
-        target_language: Optional[str] = None,
+        text: str,
+        prev_context: List[str] = None,
+        next_context: List[str] = None,
+        locked_entities: Optional[Dict[str, str]] = None,
+        glossary: Optional[Dict[str, str]] = None,
+        translation_style: str = "general",
+        custom_translation_style: Optional[str] = None,
+        character_metadata: Optional[List[Dict[str, Any]]] = None,
         model: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """API method for direct segment list translation."""
-        src_lang = source_language or self.source_language
-        tgt_lang = target_language or self.target_language
-        mdl = model or self.model_name
+    ) -> Tuple[str, str, Dict[str, Any]]:
+        """
+        Translates a single subtitle text with context, locked entity memory, glossary, style profile, structured JSON parsing, sanitizer, and 7-Point QA.
+        Returns (final_translation, status, qa_result).
+        Status options: 'QA_PASS', 'REPAIR_PASS', 'HUMAN_REVIEW'.
+        """
+        target_model = model or self.model_name
+        prev_str = "\n".join(prev_context) if prev_context else "N/A"
+        next_str = "\n".join(next_context) if next_context else "N/A"
 
-        system_prompt = (
-            f"You are a professional subtitle translator and voiceover scriptwriter.\n"
-            f"Translate the following subtitle text from {src_lang} to {tgt_lang}.\n\n"
-            f"Rules:\n"
-            f"- Return ONLY the final {tgt_lang} translation text.\n"
-            f"- Use natural, grammatically correct Vietnamese spelling (tiếng Việt chuẩn chính tả, đúng dấu câu).\n"
-            f"- Transliterate English loanwords, proper names, or technical acronyms into standard Vietnamese phonetics so speech synthesis pronounces them clearly (e.g. 'video' -> 'vi-đê-ô', 'podcast' -> 'pót cát', 'AI' -> 'A I', 'website' -> 'trang web').\n"
-            f"- Do not explain or add commentary.\n"
-            f"- Do not enclose output in quotes, markdown code blocks, or tags.\n"
-            f"- Keep output concise and natural for voiceover audio."
+        # 1. System Translation Rules
+        system_rules = "SYSTEM TRANSLATION RULES:\n- Translate Chinese subtitle dialogue into natural, fluent Vietnamese spoken text.\n- Maintain 0% foreign text leakage and output strictly valid JSON."
+
+        # 2. Translation Style Profile
+        style_data = TranslationStyleProfileLoader.get_profile(translation_style, custom_translation_style)
+        style_block = f"TRANSLATION STYLE PROFILE ({style_data['name'].upper()}):\n{style_data['prompt_instruction']}"
+
+        # 3. Character / Era Memory
+        char_block = CharacterEraMemory.format_character_era_prompt(character_metadata)
+
+        # 4. Locked Entity Memory
+        entity_prompt_block = ""
+        if locked_entities:
+            entity_lines = [f"- {zh} = {vi}" for zh, vi in locked_entities.items()]
+            entity_prompt_block = "LOCKED ENTITY MEMORY (MUST STRICTLY FOLLOW):\n" + "\n".join(entity_lines) + "\n"
+
+        # 5. Glossary
+        glossary_block = ""
+        if glossary:
+            glossary_lines = [f"- {zh} = {vi}" for zh, vi in glossary.items()]
+            glossary_block = "GLOSSARY TERMINOLOGY:\n" + "\n".join(glossary_lines) + "\n"
+
+        # Strict Prompt Construction with 9-Point Priority Order
+        prompt = f"""# CHINESE TO VIETNAMESE SUBTITLE TRANSLATION
+
+1. {system_rules}
+
+2. {style_block}
+
+3. {char_block if char_block else 'CHARACTER / ERA MEMORY: Standard'}
+
+4. {entity_prompt_block if entity_prompt_block else 'LOCKED ENTITY MEMORY: None'}
+
+5. {glossary_block if glossary_block else 'GLOSSARY: None'}
+
+6. PREVIOUS SUBTITLES (+/-3 LINES):
+{prev_str}
+
+7. CURRENT CHINESE SUBTITLE TO TRANSLATE:
+"{text}"
+
+8. NEXT SUBTITLES (+/-3 LINES):
+{next_str}
+
+9. OUTPUT REQUIREMENTS:
+- Return ONLY a JSON object formatted as: {{"translation": "YOUR_VIETNAMESE_TRANSLATION"}}
+- Do NOT add explanations, extra keys, commentary, or markdown blocks."""
+
+        system_prompt = "You are an expert Chinese to Vietnamese subtitle translator. You MUST ALWAYS translate Chinese text into natural Vietnamese spoken dialogue. Output valid JSON only."
+
+        # Structured JSON generation with retry
+        raw_response = ""
+        translation_candidate = ""
+        parse_success = False
+
+        for attempt in range(1, self.max_retries + 2):
+            try:
+                raw_response = self.client.generate(
+                    prompt=prompt,
+                    system=system_prompt,
+                    model=target_model,
+                    temperature=0.15,
+                    format_json=True,
+                    timeout=self.timeout
+                )
+                valid, extracted_text, err_msg = StructuredParser.parse_translation_response(raw_response)
+                if valid:
+                    translation_candidate = TranslationOutputSanitizer.sanitize(extracted_text)
+                    parse_success = True
+                    break
+                else:
+                    logger.warning(f"JSON Parse attempt #{attempt} failed: {err_msg}")
+            except Exception as e:
+                logger.warning(f"Generate attempt #{attempt} failed: {e}")
+
+        if not parse_success:
+            logger.error(f"Structured JSON output parsing failed after retries for segment '{text}'")
+            return text, "HUMAN_REVIEW", {
+                "score": 0,
+                "status": "FAIL",
+                "issues": [{"type": "JSON_PARSER_FAILURE", "severity": "ERROR", "message": "Failed to parse structured JSON from Ollama"}]
+            }
+
+        # Step: 7-Point QA Verification #1
+        segment_dict = {"id": 1, "text": text, "translated_text": translation_candidate}
+        qa1_result = TranslationQaChecker.check_segment(
+            segment_dict,
+            context_prev=prev_str,
+            context_next=next_str,
+            locked_entities=locked_entities
         )
 
-        translated_segments = []
-        for seg in segments:
-            text = seg.get("text", "").strip()
-            if not text:
-                seg_copy = dict(seg)
-                seg_copy["translation"] = ""
-                translated_segments.append(seg_copy)
-                continue
+        if qa1_result["status"] == "PASS":
+            return translation_candidate, "QA_PASS", qa1_result
 
-            raw_res = self.client.generate(prompt=text, system=system_prompt, model=mdl, timeout=self.timeout)
-            cleaned = clean_translation(raw_res)
-            seg_copy = dict(seg)
-            seg_copy["translation"] = cleaned
-            translated_segments.append(seg_copy)
+        # Step: 1-Pass AI Repair
+        repair_service = TranslationRepairService(ollama_client=self.client, model_name=target_model)
+        repair_res = repair_service.repair_segment(
+            segment_dict,
+            issues=qa1_result["issues"],
+            prev_context=prev_context,
+            next_context=next_context,
+            locked_entities=locked_entities,
+            glossary=glossary,
+            translation_style=translation_style,
+            custom_translation_style=custom_translation_style,
+            character_metadata=character_metadata
+        )
 
-        return translated_segments
+        if repair_res["decision"] == "AUTO_ACCEPT":
+            return repair_res["repaired_translation"], "REPAIR_PASS", {
+                "score": repair_res["qa_score_after"],
+                "status": "PASS",
+                "issues": []
+            }
+        else:
+            return translation_candidate, "HUMAN_REVIEW", qa1_result
 
     def run(
         self,
@@ -214,16 +242,38 @@ class RealTranslator:
         translated_srt_path = transcript_dir / "translated.srt"
         partial_json_path = transcript_dir / "translation.partial.json"
 
-        completed_segment_ids = set()
-        translations_dict: Dict[str, str] = {}
+        # Read configured model & translation style from project settings
+        settings_dict = project.data.get("settings", {})
+        config_dict = project.data.get("config", {})
 
-        # Handle simulated step failure for pipeline state machine unit tests
-        if fail_at_step is not None:
-            err_msg = f"Simulated error in stage {stage_name} at step {fail_at_step}"
-            failed_current = max(0, fail_at_step - 1)
-            project.update_stage(stage_name, StageStatus.FAILED.value, current=failed_current, total=10, error=err_msg)
-            emit_event("stage_error", stage_name, current=failed_current, total=10, error=err_msg)
-            raise RuntimeError(err_msg)
+        model_name = (
+            settings_dict.get("translation_model")
+            or config_dict.get("translation", {}).get("model")
+            or self.model_name
+        )
+
+        translation_style = (
+            settings_dict.get("translation_style")
+            or config_dict.get("translation_style")
+            or "general"
+        )
+        custom_translation_style = (
+            settings_dict.get("custom_translation_style")
+            or config_dict.get("custom_translation_style")
+        )
+
+        # Load Entity Memory, Glossary & Character Metadata from project metadata if present
+        metadata_dict = project.data.get("metadata", {})
+        entity_memory = metadata_dict.get("entity_memory", {
+            "爸爸": "Bố",
+            "妈妈": "Mẹ",
+            "爷爷": "Ông",
+            "奶奶": "Bà",
+            "佩奇": "Peppa",
+            "乔治": "George"
+        })
+        glossary = metadata_dict.get("glossary", {})
+        character_metadata = metadata_dict.get("character_metadata", [])
 
         # 1. Idempotency Check
         if not force and stage_info.get("status") == StageStatus.COMPLETED.value and translated_srt_path.exists():
@@ -232,8 +282,8 @@ class RealTranslator:
             emit_event("stage_complete", stage_name, current=100, total=100, percent=100.0)
             return 0.0
 
-        # 2. Ollama Availability & Model Check
-        available, err_msg = self.client.check_availability(self.model_name)
+        # 2. Ollama Availability Check
+        available, err_msg = self.client.check_availability(model_name)
         if not available:
             project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg)
             emit_event("stage_error", stage_name, error=err_msg)
@@ -247,15 +297,13 @@ class RealTranslator:
         # 3. Load Source Segments
         segments = project.data.get("segments", [])
         if not segments:
-            # Fallback: parse original.srt if segments array is empty
             original_srt_path = transcript_dir / "original.srt"
             if original_srt_path.exists():
                 segments = self._parse_srt(original_srt_path)
 
         total_segments = len(segments)
-
         if total_segments == 0:
-            logger.warning("No segments found for translation. Creating empty translated SRT.")
+            logger.warning("No segments found for translation.")
             with open(translated_srt_path, "w", encoding="utf-8") as f:
                 f.write("")
             project.update_stage(stage_name, StageStatus.COMPLETED.value, progress=100, current=0, total=0)
@@ -264,127 +312,92 @@ class RealTranslator:
 
         # 4. Load Partial Checkpoint
         completed_segment_ids = set()
-        translations_dict: Dict[str, str] = {}
+        translations_dict: Dict[str, Dict[str, Any]] = {}
         if not force and partial_json_path.exists():
             try:
                 with open(partial_json_path, "r", encoding="utf-8") as f:
                     ckpt = json.load(f)
                     completed_segment_ids = set(ckpt.get("completed_segments", []))
                     translations_dict = ckpt.get("translations", {})
-                logger.info(f"Resuming translation checkpoint: {len(completed_segment_ids)}/{total_segments} segments completed.")
             except Exception as e:
                 logger.warning(f"Failed to read translation partial checkpoint ({e}). Starting fresh.")
 
-        # 5. Execute Stage Loop
+        # 5. Execute Translation Loop per Segment with Context
         project.update_stage(stage_name, StageStatus.RUNNING.value, current=len(completed_segment_ids), total=total_segments)
         emit_event("stage_start", stage_name, current=len(completed_segment_ids), total=total_segments)
 
-        system_prompt = (
-            f"You are a professional subtitle translator and voiceover scriptwriter.\n"
-            f"Translate subtitle segments from {self.source_language} to {self.target_language}.\n\n"
-            f"Rules:\n"
-            f"- Return ONLY the final translations, matching the input order.\n"
-            f"- Use natural, grammatically correct Vietnamese spelling (tiếng Việt chuẩn chính tả).\n"
-            f"- Correct accidental foreign language words/contamination (e.g. Chinese fragments) into natural Vietnamese.\n"
-            f"- Preserve intentional loanwords/terms ('Shadowing', 'podcast', 'chill').\n"
-            f"- Do not add explanations, quotes, or markdown code blocks."
-        )
-
-        BATCH_SIZE = 15
-
-        # Build list of pending segments
-        pending_batches = []
-        current_batch = []
         for idx, seg in enumerate(segments):
             seg_id = seg.get("id", idx + 1)
-            if seg_id in completed_segment_ids:
+            if str(seg_id) in completed_segment_ids:
                 continue
-            orig_text = seg.get("text", "").strip()
-            if not orig_text:
-                translations_dict[str(seg_id)] = ""
-                completed_segment_ids.add(seg_id)
-                continue
-            current_batch.append((idx, seg_id, orig_text))
-            if len(current_batch) >= BATCH_SIZE:
-                pending_batches.append(current_batch)
-                current_batch = []
-        if current_batch:
-            pending_batches.append(current_batch)
 
-        for batch_idx, batch in enumerate(pending_batches):
-            # Check user cancellation
             if is_cancelled and is_cancelled():
                 project.update_stage(stage_name, StageStatus.CANCELLED.value, current=len(completed_segment_ids), total=total_segments)
                 emit_event("stage_cancelled", stage_name, current=len(completed_segment_ids), total=total_segments, error="Translation stage cancelled by user.")
-                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
+                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict, model_name)
                 raise PipelineCancelledError("Translation stage cancelled by user.")
 
-            # Build batch prompt
-            batch_lines = []
-            for i, (_, _, text) in enumerate(batch, 1):
-                batch_lines.append(f"{i}. {text}")
-            batch_prompt = "\n".join(batch_lines)
+            text = seg.get("text", "").strip()
+            if not text:
+                translations_dict[str(seg_id)] = {"translation": "", "status": "QA_PASS", "qa_score": 100}
+                completed_segment_ids.add(str(seg_id))
+                continue
 
-            # Call Ollama with retry
-            success = False
-            last_exc = None
-            for attempt in range(1, self.max_retries + 1):
-                try:
-                    raw_res = self.client.generate(
-                        prompt=batch_prompt,
-                        system=system_prompt,
-                        model=self.model_name,
-                        timeout=self.timeout
-                    )
-                    # Parse batch response - one translation per line
-                    raw_lines = [l.strip() for l in raw_res.strip().splitlines() if l.strip()]
-                    # Remove numbering prefixes like "1. ", "2. "
-                    # Map translations to segments
-                    for i, (orig_idx, seg_id, orig_text) in enumerate(batch):
-                        if i < len(raw_lines):
-                            line = raw_lines[i]
-                            # Remove batch index prefix if matches like "1. ", "1) ", "1: "
-                            cleaned = re.sub(r'^\d+[\.\)\:]\s*', '', line).strip()
-                            cleaned = clean_translation(cleaned)
-                            translations_dict[str(seg_id)] = cleaned
-                        else:
-                            fallback_res = self.client.generate(prompt=orig_text, system=system_prompt, model=self.model_name, timeout=self.timeout)
-                            translations_dict[str(seg_id)] = clean_translation(fallback_res)
-                        completed_segment_ids.add(seg_id)
+            prev_ctx, next_ctx = ContextBuilder.get_context(segments, idx, window=3)
 
-                    success = True
-                    break
-                except (OllamaUnavailableError, OllamaModelNotFoundError):
-                    raise
-                except Exception as e:
-                    last_exc = e
-                    logger.warning(f"Batch translation attempt {attempt}/{self.max_retries} failed: {e}")
-                    if attempt < self.max_retries:
-                        backoff_sec = 2 ** (attempt - 1)
-                        time.sleep(backoff_sec)
+            final_trans, qa_status, qa_info = self.translate_segment_single(
+                text=text,
+                prev_context=prev_ctx,
+                next_context=next_ctx,
+                locked_entities=entity_memory,
+                glossary=glossary,
+                translation_style=translation_style,
+                custom_translation_style=custom_translation_style,
+                character_metadata=character_metadata,
+                model=model_name
+            )
 
-            if not success:
-                self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
-                err_msg = f"Batch translation failed after {self.max_retries} retries: {last_exc}"
-                project.update_stage(stage_name, StageStatus.FAILED.value, current=len(completed_segment_ids), total=total_segments, error=err_msg)
-                emit_event("stage_error", stage_name, current=len(completed_segment_ids), total=total_segments, error=err_msg)
-                raise TranslationFailedError(err_msg)
+            translations_dict[str(seg_id)] = {
+                "translation": final_trans,
+                "status": qa_status,
+                "qa_score": qa_info.get("score", 100),
+                "issues": qa_info.get("issues", [])
+            }
+            completed_segment_ids.add(str(seg_id))
 
-            # Save checkpoint after each batch
-            self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict)
+            self._save_partial_checkpoint(partial_json_path, list(completed_segment_ids), translations_dict, model_name)
 
             completed_count = len(completed_segment_ids)
             percent = (completed_count / total_segments) * 100.0
             project.update_stage(stage_name, StageStatus.RUNNING.value, progress=int(percent), current=completed_count, total=total_segments)
             emit_event("progress", stage_name, current=completed_count, total=total_segments, percent=percent)
 
-        # 6. Update Project Data Segments & Metadata
+        # 6. Update Project Data & Save Results
         updated_segments = []
+        translation_json_list = []
         for seg in segments:
             seg_id = seg.get("id")
+            seg_info = translations_dict.get(str(seg_id), {"translation": seg.get("text", ""), "status": "QA_PASS"})
+            trans_val = seg_info["translation"]
+            qa_status = seg_info.get("status", "QA_PASS")
+
             seg_copy = dict(seg)
-            seg_copy["translation"] = translations_dict.get(str(seg_id), seg.get("text", ""))
+            seg_copy["translation"] = trans_val
+            seg_copy["translated_text"] = trans_val
+            seg_copy["tts_text"] = trans_val
+            seg_copy["qa_status"] = qa_status
+
             updated_segments.append(seg_copy)
+            translation_json_list.append({
+                "id": seg_id,
+                "start": seg.get("start"),
+                "end": seg.get("end"),
+                "text": seg.get("text"),
+                "translated_text": trans_val,
+                "tts_text": trans_val,
+                "qa_status": qa_status,
+                "qa_score": seg_info.get("qa_score", 100)
+            })
 
         project.data["segments"] = updated_segments
         if "metadata" not in project.data:
@@ -392,31 +405,32 @@ class RealTranslator:
 
         project.data["metadata"]["translation"] = {
             "provider": "ollama",
-            "model": self.model_name,
+            "model": model_name,
             "source_language": self.source_language,
             "target_language": self.target_language
         }
 
-        # 7. Generate translated.srt (preserve timestamps and count exactly)
+        translation_json_path = transcript_dir / "translation.json"
+        with open(translation_json_path, "w", encoding="utf-8") as f:
+            json.dump(translation_json_list, f, ensure_ascii=False, indent=2)
+
+        # Generate translated.srt
         srt_lines = []
         for idx, seg in enumerate(updated_segments, start=1):
             srt_lines.append(str(idx))
             start_ts = format_srt_timestamp(seg["start"])
             end_ts = format_srt_timestamp(seg["end"])
             srt_lines.append(f"{start_ts} --> {end_ts}")
-            srt_text = seg.get("translation", "").strip()
-            if not srt_text:
-                srt_text = "-"
+            srt_text = seg.get("translation", "").strip() or "-"
             srt_lines.append(srt_text)
             srt_lines.append("")
 
         translated_srt_content = "\n".join(srt_lines).strip() + "\n"
 
-        # Validate SRT content & segment count match
         if not validate_srt_content(translated_srt_content):
-            project.update_stage(stage_name, StageStatus.FAILED.value, error="Generated translated SRT content failed validation.")
-            emit_event("stage_error", stage_name, error="Generated translated SRT content failed validation.")
-            raise AutoDubError("Generated translated SRT content failed validation.")
+            project.update_stage(stage_name, StageStatus.FAILED.value, error="Generated translated SRT failed validation.")
+            emit_event("stage_error", stage_name, error="Generated translated SRT failed validation.")
+            raise AutoDubError("Generated translated SRT failed validation.")
 
         tmp_srt = transcript_dir / "translated.srt.tmp"
         with open(tmp_srt, "w", encoding="utf-8") as f:
@@ -425,25 +439,18 @@ class RealTranslator:
 
         project.save()
 
-        # Mark COMPLETED
         elapsed = time.time() - start_time
         project.update_stage(stage_name, StageStatus.COMPLETED.value, progress=100, current=total_segments, total=total_segments)
         emit_event("stage_complete", stage_name, current=total_segments, total=total_segments, percent=100.0)
 
         return elapsed
 
-    def _save_partial_checkpoint(
-        self,
-        path: Path,
-        completed_segment_ids: List[Any],
-        translations_dict: Dict[str, str]
-    ):
-        """Save translation checkpoint atomically."""
+    def _save_partial_checkpoint(self, path: Path, completed_ids: List[Any], translations_dict: Dict[str, Any], model: str):
         ckpt_data = {
-            "model": self.model_name,
+            "model": model,
             "source_language": self.source_language,
             "target_language": self.target_language,
-            "completed_segments": completed_segment_ids,
+            "completed_segments": completed_ids,
             "translations": translations_dict
         }
         tmp_path = path.with_suffix(".tmp")
@@ -452,13 +459,11 @@ class RealTranslator:
         tmp_path.replace(path)
 
     def _parse_srt(self, srt_path: Path) -> List[Dict[str, Any]]:
-        """Helper to parse SRT into segment dictionaries if project.json segments array is empty."""
         segments = []
         with open(srt_path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         if not content:
             return []
-
         blocks = content.split("\n\n")
         for block in blocks:
             lines = block.strip().split("\n")
@@ -471,49 +476,17 @@ class RealTranslator:
                 start_sec = self._parse_srt_timestamp(start_str.strip())
                 end_sec = self._parse_srt_timestamp(end_str.strip())
                 text = "\n".join(lines[2:]).strip()
-                segments.append({
-                    "id": seg_id,
-                    "start": start_sec,
-                    "end": end_sec,
-                    "text": text
-                })
+                segments.append({"id": seg_id, "start": start_sec, "end": end_sec, "text": text})
             except Exception:
                 continue
         return segments
 
     def _parse_srt_timestamp(self, ts_str: str) -> float:
-        """Parse HH:MM:SS,mmm timestamp string into float seconds."""
         parts = ts_str.replace(",", ".").split(":")
         hours = float(parts[0])
         mins = float(parts[1])
         secs = float(parts[2])
         return hours * 3600.0 + mins * 60.0 + secs
 
-def build_semantic_segmentation_prompt(segments: List[Dict[str, Any]], source_language: str = "en", target_language: str = "vi") -> str:
-    """Build Ollama prompt for semantic segmentation & language cleanup."""
-    system_prompt = (
-        f"# AUTODUBSTUDIO — OLLAMA SUBTITLE SEMANTIC SEGMENTATION & LANGUAGE CLEANUP\n\n"
-        f"## ROLE\n"
-        f"You are the Subtitle Semantic Processing Engine of AutoDubStudio.\n\n"
-        f"INPUT:\n"
-        f"SOURCE_LANGUAGE: {source_language}\n"
-        f"TARGET_LANGUAGE: {target_language}\n\n"
-        f"Analyze segments together and return ONLY valid JSON according to instructions."
-    )
-    user_payload = {
-        "SOURCE_LANGUAGE": source_language,
-        "TARGET_LANGUAGE": target_language,
-        "SEGMENTS": [
-            {
-                "id": s.get("id"),
-                "start": s.get("start"),
-                "end": s.get("end"),
-                "text": s.get("text", "")
-            }
-            for s in segments
-        ]
-    }
-    return f"{system_prompt}\n\n{json.dumps(user_payload, ensure_ascii=False, indent=2)}"
 
 OllamaTranslator = RealTranslator
-

@@ -17,12 +17,28 @@ interface PipelineWorkflowProps {
   onStartPipeline: (force?: boolean) => void;
   onCancelPipeline: () => void;
   onResumePipeline: (stopAt?: string) => void;
+  translationStyle?: string;
+  translationModel?: string;
 }
+
+const STYLE_NAME_MAP: Record<string, string> = {
+  general: 'General / Tự động',
+  modern: 'Hiện đại',
+  ancient: 'Cổ trang',
+  time_travel: 'Xuyên không',
+  xianxia: 'Tiên hiệp / Kiếm hiệp',
+  palace: 'Cung đấu',
+  cartoon: 'Hoạt hình / Trẻ em',
+  custom: 'Tùy chỉnh'
+};
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
   'TRANSCRIBE',
-  'TRANSLATE'
+  'TRANSLATE',
+  'TTS',
+  'SYNC',
+  'RENDER'
 ];
 
 const STAGE_LABELS: Record<StageName, string> = {
@@ -54,9 +70,12 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
   pipelineStatus,
   onStartPipeline,
   onCancelPipeline,
-  onResumePipeline
+  onResumePipeline,
+  translationStyle = 'general',
+  translationModel = 'qwen3:4b'
 }) => {
   const [activeInspectorStage, setActiveInspectorStage] = useState<StageName>('EXTRACT');
+  const styleDisplayName = STYLE_NAME_MAP[translationStyle] || translationStyle;
 
   // Automatically select the running stage in the inspector
   useEffect(() => {
@@ -112,23 +131,43 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
       <div 
         style={{ 
           background: '#111318', 
-          border: '1px solid rgba(255, 255, 255, 0.05)', 
-          borderRadius: '10px', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderRadius: '12px', 
           padding: '16px 20px',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          gap: '20px'
         }}
       >
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
           <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#fff' }}>Global Pipeline Execution</h3>
           <span style={{ fontSize: '12px', color: '#94a3b8' }}>Elapsed Time: {formatTime(elapsedTime)}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexGrow: 0.5, maxWidth: '400px' }}>
-          <div style={{ flexGrow: 1, background: '#0B0D10', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+
+        {/* Translation Meta Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', fontSize: '12px' }}>
+          <div>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Translation</span>
+            <span style={{ color: '#f8fafc', fontWeight: 600 }}>🇨🇳 Chinese → 🇻🇳 Vietnamese</span>
+          </div>
+          <div style={{ height: '24px', width: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+          <div>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Style</span>
+            <span style={{ color: '#38bdf8', fontWeight: 600 }}>🎬 {styleDisplayName}</span>
+          </div>
+          <div style={{ height: '24px', width: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+          <div>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Model</span>
+            <span style={{ color: '#a855f7', fontWeight: 600 }}>{translationModel}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexGrow: 1, maxWidth: '300px' }}>
+          <div style={{ flexGrow: 1, background: '#0B0D10', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
             <div style={{ width: `${overallProgress}%`, background: 'linear-gradient(90deg, #6366f1, #06b6d4, #10b981)', height: '100%', transition: 'width 0.4s ease' }} />
           </div>
-          <span style={{ fontSize: '18px', fontWeight: 800, color: '#fff', minWidth: '45px', textAlign: 'right' }}>{overallProgress}%</span>
+          <span style={{ fontSize: '16px', fontWeight: 800, color: '#fff', minWidth: '40px', textAlign: 'right' }}>{overallProgress}%</span>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

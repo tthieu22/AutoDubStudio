@@ -20,6 +20,10 @@ DEFAULT_BEST_OF = 1
 DEFAULT_VAD_FILTER = True
 DEFAULT_CHUNK_DURATION_SEC = 600  # 10 minutes
 
+# Translation Defaults (Central Config)
+DEFAULT_TRANSLATION_MODEL = "qwen3:4b"
+DEFAULT_TRANSLATION_LANGUAGE = "zh-vi"
+
 # Centralized Hardware-Aware Profile (GTX 1650 Ti 4GB VRAM / 4C 8T CPU)
 HARDWARE_PROFILE = {
     "profile_name": "gtx_1650_4gb",

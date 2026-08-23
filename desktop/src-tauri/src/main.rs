@@ -60,6 +60,14 @@ struct SettingsConfig {
     translation_model: String,
     tts_engine: String,
     chunk_duration: i32,
+    #[serde(default = "default_translation_style")]
+    translation_style: String,
+    #[serde(default)]
+    custom_translation_style: Option<String>,
+}
+
+fn default_translation_style() -> String {
+    "general".to_string()
 }
 
 // Find workspace root by traversing upwards looking for the engine directory
@@ -256,7 +264,12 @@ fn open_output_folder(project_dir: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn create_project(name: String, source_video_path: String) -> Result<String, String> {
+fn create_project(
+    name: String,
+    source_video_path: String,
+    translation_style: Option<String>,
+    custom_translation_style: Option<String>
+) -> Result<String, String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let sanitized_name = name.replace(" ", "-").replace("/", "_").replace("\\", "_");
     let project_dir = ws_root.join("projects").join(&sanitized_name);
@@ -281,6 +294,8 @@ fn create_project(name: String, source_video_path: String) -> Result<String, Str
     let now = chrono::Utc::now().to_rfc3339();
     let project_id = uuid::Uuid::new_v4().to_string();
     
+    let style = translation_style.unwrap_or_else(|| "general".to_string());
+    
     let config = ProjectConfig {
         version: 1,
         project_id,
@@ -289,7 +304,7 @@ fn create_project(name: String, source_video_path: String) -> Result<String, Str
         updated_at: now,
         source: SourceConfig {
             path: format!("source/input.{}", ext),
-            language: "en".to_string(),
+            language: "zh".to_string(),
         },
         target: TargetConfig {
             language: "vi".to_string(),
@@ -297,9 +312,11 @@ fn create_project(name: String, source_video_path: String) -> Result<String, Str
         settings: SettingsConfig {
             whisper_model: "small".to_string(),
             whisper_compute_type: "int8".to_string(),
-            translation_model: "qwen2.5:3b".to_string(),
+            translation_model: "qwen3:4b".to_string(),
             tts_engine: "piper".to_string(),
             chunk_duration: 600,
+            translation_style: style,
+            custom_translation_style,
         },
     };
 

@@ -103,14 +103,6 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
       }
     } else if (event.event === 'pipeline_complete') {
       setPipelineStatus('COMPLETED');
-      setOverallProgress(100);
-      setStageProgresses(prev => {
-        const updated = { ...prev };
-        STAGE_ORDER.forEach(st => {
-          updated[st] = { ...updated[st], status: 'COMPLETED', progress: 100 };
-        });
-        return updated;
-      });
       if (selectedProjectDir) {
         loadProjectJson(selectedProjectDir);
       }

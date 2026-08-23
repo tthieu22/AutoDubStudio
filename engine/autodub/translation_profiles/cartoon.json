@@ -1,0 +1,7 @@
+{
+  "id": "cartoon",
+  "name": "Hoạt hình / Trẻ em",
+  "description": "Tiếng Việt đơn giản, tự nhiên, dễ nghe, phù hợp hoạt hình.",
+  "tone": "playful_simple",
+  "prompt_instruction": "TRANSLATION STYLE: CARTOON / CHILDREN (HOẠT HÌNH / TRẺ EM)\n- Use simple, friendly, vivid, and easy-to-understand Vietnamese spoken sentences.\n- Keep sentences clear, expressive, and pleasant for children and family animation dubbing.\n- Avoid complex or overly formal vocabulary."
+}

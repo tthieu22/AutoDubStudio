@@ -1,0 +1,10 @@
+{
+  "id": "modern",
+  "name": "Hiện đại",
+  "description": "Tiếng Việt hiện đại, tự nhiên, phù hợp phim đô thị và đời thường.",
+  "tone": "contemporary",
+  "pronoun_mode": "relationship_aware",
+  "avoid_archaic_vocabulary": true,
+  "natural_spoken_vietnamese": true,
+  "prompt_instruction": "TRANSLATION STYLE: MODERN / URBAN DRAMA\n- Use natural contemporary spoken Vietnamese dialogue.\n- Select conversational pronouns based on character relationships (tôi/bạn, anh/em, cậu/tớ).\n- Avoid archaic, overly formal, or historical Sino-Vietnamese terms.\n- Express intent and emotion naturally as spoken in modern Vietnamese movies."
+}

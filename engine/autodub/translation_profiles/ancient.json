@@ -1,0 +1,9 @@
+{
+  "id": "ancient",
+  "name": "Cổ trang",
+  "description": "Phong cách tiếng Việt phù hợp phim cổ trang Trung Quốc, chú trọng địa vị và cách xưng hô.",
+  "tone": "historical_period",
+  "pronoun_mode": "status_and_rank_aware",
+  "avoid_modern_slang": true,
+  "prompt_instruction": "TRANSLATION STYLE: ANCIENT / PERIOD DRAMA (CỔ TRANG)\n- Use authentic Vietnamese period-drama translation style suitable for Chinese historical films.\n- Respect social hierarchy, lord/subject (bổn vương, thần, bệ hạ, trẫm), master/disciple (sư phụ, đệ tử), and family ranks.\n- Strictly avoid modern slang or contemporary idioms.\n- Preserve classic literary dignity and proper Sino-Vietnamese honorifics."
+}

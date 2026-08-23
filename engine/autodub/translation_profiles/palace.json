@@ -1,0 +1,7 @@
+{
+  "id": "palace",
+  "name": "Cung đấu",
+  "description": "Phù hợp cung đấu, hoàng cung, quan hệ vua/chúa và tầng lớp quý tộc.",
+  "tone": "imperial_court",
+  "prompt_instruction": "TRANSLATION STYLE: PALACE / IMPERIAL COURT (CUNG ĐẤU)\n- Emphasize royal court hierarchy, rank, power dynamics, and palace decorum.\n- Use proper royal honorifics for emperors (hoàng đế, bệ hạ, trẫm), queens/concubines (hoàng hậu, nương nương, phi tần), princes/princesses (thái tử, vương gia, công chúa), court officials, eunuchs (thái giám), and maids (cung nữ).\n- Speech must reflect formal politeness, veiled intrigue, or royal authority based on context."
+}
