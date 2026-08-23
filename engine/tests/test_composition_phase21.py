@@ -49,7 +49,7 @@ class TestCompositionPhase21(unittest.TestCase):
         )
         comp.layers.append(layer_text)
 
-        filtergraph, extra_inputs = comp.build_ffmpeg_filtergraph(base_video_stream="[0:v]")
+        filtergraph, extra_inputs, last_stream = comp.build_ffmpeg_filtergraph(base_video_stream="[0:v]")
         self.assertIn("drawtext=text='Hello World':x=100:y=200", filtergraph)
         self.assertEqual(len(extra_inputs), 0)
 

@@ -1,12 +1,125 @@
 import { CompositionState, EditorUiState, TimelineClip, Track, LayerType } from './types';
 import { HistoryManager, HistoryActionType } from '../history/historyManager';
+import { PythonEngineService } from '../../services/pythonEngine';
+
+function saveCompositionToDisk(projectDir: string, comp: CompositionState) {
+  if (!projectDir || projectDir.startsWith('proj-default')) return;
+
+  const layers: any[] = [];
+  
+  comp.clips.forEach((clip) => {
+    if (clip.type === 'subtitle') {
+      layers.push({
+        id: clip.id,
+        type: 'subtitle',
+        start: clip.startTime,
+        duration: clip.duration,
+        text: clip.subtitleProps?.text || '',
+        speaker: clip.subtitleProps?.speaker || 'Speaker',
+        visible: clip.visible !== false,
+        locked: clip.locked || false,
+        x: Math.round((clip.x / 100) * 1920) || 0,
+        y: Math.round((clip.y / 100) * 1080) || 0,
+        style: {
+          font_family: clip.subtitleProps?.fontFamily || 'Plus Jakarta Sans',
+          font_size: clip.subtitleProps?.fontSize || 24,
+          color: clip.subtitleProps?.color || '#ffffff',
+          background_color: clip.subtitleProps?.backgroundColor || 'rgba(0,0,0,0.75)'
+        }
+      });
+
+      if (clip.audioProps) {
+        const audioId = clip.id.replace('clip-sub-', 'clip-audio-seg-');
+        layers.push({
+          id: audioId,
+          type: 'audio',
+          start: clip.startTime,
+          duration: clip.duration,
+          source: clip.audioProps.src || '',
+          opacity: clip.audioProps.muted ? 0.0 : (clip.audioProps.volume ?? 1.0),
+          visible: !clip.audioProps.muted,
+          locked: clip.locked || false
+        });
+      }
+    }
+    else if (clip.type === 'text') {
+      layers.push({
+        id: clip.id,
+        type: 'text',
+        start: clip.startTime,
+        duration: clip.duration,
+        text: clip.textProps?.content || '',
+        visible: clip.visible !== false,
+        locked: clip.locked || false,
+        x: Math.round((clip.x / 100) * 1920) || 0,
+        y: Math.round((clip.y / 100) * 1080) || 0,
+        opacity: clip.opacity,
+        rotation: clip.rotation,
+        scale: clip.scaleX,
+        style: {
+          font_family: clip.textProps?.fontFamily || 'Outfit',
+          font_size: clip.textProps?.fontSize || 48,
+          font_weight: clip.textProps?.fontWeight || 'bold',
+          color: clip.textProps?.color || '#38bdf8',
+          text_align: clip.textProps?.textAlign || 'center'
+        }
+      });
+    }
+    else if (clip.type === 'image') {
+      layers.push({
+        id: clip.id,
+        type: 'image',
+        start: clip.startTime,
+        duration: clip.duration,
+        source: clip.imageProps?.src || '',
+        visible: clip.visible !== false,
+        locked: clip.locked || false,
+        x: Math.round((clip.x / 100) * 1920) || 0,
+        y: Math.round((clip.y / 100) * 1080) || 0,
+        opacity: clip.opacity,
+        rotation: clip.rotation,
+        scale: clip.scaleX
+      });
+    }
+    else if (clip.type === 'video') {
+      layers.push({
+        id: clip.id,
+        type: 'video',
+        start: clip.startTime,
+        duration: clip.duration,
+        source: clip.videoProps?.src || '',
+        visible: clip.visible !== false,
+        locked: clip.locked || false,
+        x: Math.round((clip.x / 100) * 1920) || 0,
+        y: Math.round((clip.y / 100) * 1080) || 0,
+        opacity: clip.opacity ?? 1,
+        rotation: clip.rotation ?? 0,
+        scale: clip.scaleX ?? 1,
+        videoProps: clip.videoProps
+      });
+    }
+  });
+
+  const compositionData = {
+    version: 1,
+    width: comp.width || 1920,
+    height: comp.height || 1080,
+    fps: comp.fps || 30,
+    duration: comp.duration || 120,
+    layers: layers
+  };
+
+  PythonEngineService.writeComposition(projectDir, compositionData).catch((err) => {
+    console.error("Failed to write composition to disk:", err);
+  });
+}
+
 
 export const INITIAL_TRACKS: Track[] = [
-  { id: 'track-video', name: 'Video 1', type: 'video', muted: false, locked: false, height: 50, color: '#3b82f6' },
-  { id: 'track-subtitle', name: 'Subtitles', type: 'subtitle', muted: false, locked: false, height: 44, color: '#f59e0b' },
+  { id: 'track-video-main', name: 'Video Main', type: 'video', muted: false, locked: false, height: 50, color: '#2563eb' },
+  { id: 'track-subtitle', name: 'Subtitles & Dubbing', type: 'subtitle_dubbing', muted: false, locked: false, height: 44, color: '#f59e0b' },
   { id: 'track-text', name: 'Text & Titles', type: 'text', muted: false, locked: false, height: 44, color: '#ec4899' },
   { id: 'track-image', name: 'Images & Logos', type: 'image', muted: false, locked: false, height: 44, color: '#8b5cf6' },
-  { id: 'track-audio', name: 'Dubbed Voice', type: 'audio', muted: false, locked: false, height: 44, color: '#10b981' },
 ];
 
 export const INITIAL_COMPOSITION: CompositionState = {
@@ -17,68 +130,14 @@ export const INITIAL_COMPOSITION: CompositionState = {
   fps: 30,
   duration: 180, // 3 minutes default
   tracks: INITIAL_TRACKS,
-  clips: [
-    {
-      id: 'demo-title',
-      name: 'Welcome Title',
-      type: 'text',
-      trackId: 'track-text',
-      startTime: 2,
-      duration: 5,
-      visible: true,
-      locked: false,
-      opacity: 1,
-      zIndex: 10,
-      x: 50, // center %
-      y: 20, // top 20%
-      width: 40,
-      height: 15,
-      rotation: 0,
-      scaleX: 1,
-      scaleY: 1,
-      textProps: {
-        content: 'AutoDub Studio AI Editor',
-        fontFamily: 'Outfit',
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#38bdf8',
-        textAlign: 'center',
-      },
-    },
-    {
-      id: 'demo-sub-1',
-      name: 'Subtitle 1',
-      type: 'subtitle',
-      trackId: 'track-subtitle',
-      startTime: 1.5,
-      duration: 3.5,
-      visible: true,
-      locked: false,
-      opacity: 1,
-      zIndex: 5,
-      x: 50,
-      y: 85,
-      width: 60,
-      height: 10,
-      rotation: 0,
-      scaleX: 1,
-      scaleY: 1,
-      subtitleProps: {
-        text: 'Chào mừng bạn đến với trình chỉnh sửa video AI tự động!',
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 24,
-        color: '#ffffff',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-      },
-    },
-  ],
+  clips: [],
 };
 
 export const INITIAL_UI_STATE: EditorUiState = {
   currentTime: 0,
   isPlaying: false,
   zoomLevel: 50, // 50px per sec
-  selectedClipIds: ['demo-title'],
+  selectedClipIds: [],
   activeLeftTab: 'media',
   showSafeArea: true,
   snapping: {
@@ -124,6 +183,7 @@ class EditorStore {
     }
     this.composition = newComp;
     this.notify();
+    saveCompositionToDisk(this.composition.id, this.composition);
   }
 
   public setUiState(partialUi: Partial<EditorUiState>) {
@@ -161,6 +221,7 @@ class EditorStore {
     } else {
       this.composition = newComp;
       this.notify();
+      saveCompositionToDisk(this.composition.id, this.composition);
     }
   }
 

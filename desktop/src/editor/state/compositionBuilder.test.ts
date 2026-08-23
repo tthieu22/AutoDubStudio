@@ -27,17 +27,22 @@ describe('CompositionBuilder — AI Pipeline to Timeline Integration', () => {
     expect(videoClip).toBeDefined();
     expect(videoClip?.duration).toBe(100);
 
-    // Verify Dubbed Audio Track Clip
-    const audioClip = comp.clips.find(c => c.type === 'audio');
-    expect(audioClip).toBeDefined();
-    expect(audioClip?.name).toBe('AI Dubbed Audio');
+    // Verify Dubbed Audio Segment Clips do not exist standalone
+    const audioClips = comp.clips.filter(c => c.type === 'audio');
+    expect(audioClips.length).toBe(0);
 
-    // Verify Subtitle Clips
+    // Verify Subtitle Clips have linked audioProps and segmentId
     const subClips = comp.clips.filter(c => c.type === 'subtitle');
     expect(subClips.length).toBe(3);
+    
+    expect(subClips[0].segmentId).toBe(1);
     expect(subClips[0].subtitleProps?.text).toBe('Xin chào mọi người');
+    expect(subClips[0].audioProps?.src).toBe('audio/synced/000001.wav');
     expect(subClips[0].startTime).toBe(0);
     expect(subClips[0].duration).toBe(4);
+    
+    expect(subClips[1].segmentId).toBe(2);
     expect(subClips[1].subtitleProps?.text).toBe('Hôm nay chúng ta cùng học video editor');
+    expect(subClips[1].audioProps?.src).toBe('audio/synced/000002.wav');
   });
 });

@@ -44,8 +44,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [selectedRatio, setSelectedRatio] = React.useState('16:9');
   return (
     <header className="editor-topbar">
-      {/* LEFT: EMPTY */}
+      {/* LEFT: BRAND */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontWeight: 800, fontSize: '14px', letterSpacing: '0.5px', color: '#fff', marginLeft: '12px' }}>AutoDubStudio</span>
       </div>
 
       {/* CENTER: UNDO, REDO, SNAP, GUIDES */}

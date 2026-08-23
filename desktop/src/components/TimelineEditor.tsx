@@ -96,9 +96,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ projectDir }) =>
     setSelectedLayerId(id);
   };
 
-  const handleUpdateLayer = (updatedLayer: CanvasLayer) => {
+  const handleUpdateLayer = (updatedLayer: CanvasLayer, pushHistory = true) => {
     const updatedLayers = composition.layers.map(l => l.id === updatedLayer.id ? updatedLayer : l);
-    updateCompositionState({ ...composition, layers: updatedLayers });
+    updateCompositionState({ ...composition, layers: updatedLayers }, pushHistory);
   };
 
   const handleDeleteLayer = (id: string) => {

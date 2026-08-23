@@ -197,9 +197,9 @@ export default function App() {
         }));
 
         const newComp = CompositionBuilder.buildFromArtifacts({
-          projectId: json.name || path.split('/').pop() || 'project',
+          projectId: path,
           projectName: json.name || 'AutoDub Project',
-          videoDuration: json.source?.duration || 120,
+          videoDuration: json.metadata?.media?.duration || json.metadata?.audio?.duration || json.source?.duration || undefined,
           sourceVideoPath: json.source?.path || 'source/input.mp4',
           segments: segments,
           dubbedAudioPath: 'audio/dubbed_synchronized.wav',

@@ -276,6 +276,7 @@ export const EditorLayout: React.FC<EditorLayoutProps> = ({
             selectedClipIds={uiState.selectedClipIds} 
             showSafeArea={uiState.showSafeArea}
             currentTime={uiState.currentTime}
+            isPlaying={uiState.isPlaying}
           />
         </div>
 

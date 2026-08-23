@@ -185,6 +185,7 @@
 }
 
 /* BOTTOM TIMELINE */
+/* BOTTOM TIMELINE */
 .editor-timeline-panel {
   background-color: #0a0e17;
   display: flex;
@@ -205,28 +206,64 @@
   padding: 0 12px;
 }
 
-.editor-timeline-body {
+.timeline-body {
+  display: flex;
+  min-width: 0;
   flex: 1;
+  overflow-y: auto; /* Unified vertical scrolling */
+}
+
+.track-sidebar {
+  flex: 0 0 180px;
+  display: flex;
+  flex-direction: column;
+  background-color: #0f1420;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.timeline-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
   position: relative;
+}
+
+.timeline-content {
+  position: relative;
+  min-width: max-content;
   display: flex;
   flex-direction: column;
 }
 
-.editor-track-row {
+.ruler-corner {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  background-color: #0f1420;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
-  height: 44px;
-  min-height: 44px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  position: relative;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  overflow: hidden;
 }
 
-.editor-track-header {
-  width: 160px;
-  min-width: 160px;
-  background-color: #0f1420;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+.time-ruler {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  background-color: #131926;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.editor-track-row-sidebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -234,15 +271,16 @@
   font-size: 11px;
   font-weight: 600;
   color: #cbd5e1;
-  position: sticky;
-  left: 0;
-  z-index: 10;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-sizing: border-box;
 }
 
 .editor-track-lane {
-  flex: 1;
   position: relative;
   background-color: #090c14;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .editor-clip {
@@ -283,7 +321,7 @@
   bottom: 0;
   width: 2px;
   background-color: #f43f5e;
-  z-index: 25;
+  z-index: 100;
   pointer-events: none;
 }
 
@@ -294,6 +332,8 @@
   transform: translateX(-5px) rotate(45deg);
   border-radius: 2px;
   box-shadow: 0 2px 8px rgba(244, 63, 94, 0.6);
+  position: absolute;
+  top: -6px;
 }
 
 /* FORM CONTROLS & INPUTS */

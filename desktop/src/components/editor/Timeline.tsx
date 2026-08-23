@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
-import { CompositionState, EditorUiState, TimelineClip } from '../../editor/state/types';
+import React, { useRef, useEffect } from 'react';
+import { CompositionState, EditorUiState, TimelineClip, Track } from '../../editor/state/types';
 import { editorStore } from '../../editor/state/editorStore';
-import { Play, Pause, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Magnet } from 'lucide-react';
+import { Play, Pause, Scissors, Copy, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface TimelineProps {
   composition: CompositionState;
@@ -9,18 +9,160 @@ interface TimelineProps {
   onPlayheadChange: (time: number) => void;
 }
 
+// 1. Memoized Track Sidebar Headers
+const TrackSidebarHeaders = React.memo(({ tracks }: { tracks: Track[] }) => {
+  return (
+    <div className="track-sidebar">
+      <div className="ruler-corner">Tracks & Layers</div>
+      {tracks.map((track) => (
+        <div key={track.id} className="editor-track-row-sidebar" style={{ height: `${track.height}px`, minHeight: `${track.height}px` }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.name}</span>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: track.color }} />
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// 2. Memoized Track Lanes & Clips Container
+const TrackLanes = React.memo(({ 
+  tracks, 
+  clips, 
+  pxPerSec, 
+  selectedClipIds 
+}: { 
+  tracks: Track[]; 
+  clips: TimelineClip[]; 
+  pxPerSec: number; 
+  selectedClipIds: string[] 
+}) => {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {tracks.map((track) => {
+        const trackClips = clips.filter((c) => c.trackId === track.id);
+
+        return (
+          <div key={track.id} className="editor-track-lane" style={{ height: `${track.height}px`, minHeight: `${track.height}px` }}>
+            {trackClips.map((clip) => {
+              const isSelected = selectedClipIds.includes(clip.id);
+
+              return (
+                <div
+                  key={clip.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    editorStore.selectClip(clip.id, e.ctrlKey || e.shiftKey);
+                  }}
+                  style={{
+                    left: `${clip.startTime * pxPerSec}px`,
+                    width: `${clip.duration * pxPerSec}px`,
+                    backgroundColor: track.color,
+                  }}
+                  className={`editor-clip ${isSelected ? 'selected' : ''}`}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {clip.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+// 3. Isolated Playhead component to prevent track-lanes/clips re-render
+const Playhead = ({ currentTime, pxPerSec }: { currentTime: number; pxPerSec: number }) => {
+  return (
+    <div
+      className="editor-playhead-line"
+      style={{
+        transform: `translateX(${currentTime * pxPerSec}px)`,
+        willChange: 'transform',
+      }}
+    >
+      <div className="editor-playhead-handle" />
+    </div>
+  );
+};
+
 export const Timeline: React.FC<TimelineProps> = ({
   composition,
   uiState,
   onPlayheadChange,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const timelineViewportRef = useRef<HTMLDivElement>(null);
   const pxPerSec = uiState.zoomLevel;
+  const isAutoScrollingRef = useRef<boolean>(false);
+  const followPlayheadRef = useRef<boolean>(true);
+  const scrollRafRef = useRef<number | null>(null);
+
+  // Re-enable following the playhead when video starts playing
+  useEffect(() => {
+    if (uiState.isPlaying) {
+      followPlayheadRef.current = true;
+    }
+  }, [uiState.isPlaying]);
+
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
+
+  // Handle auto-scroll when playhead leaves 20%-75% safe area
+  useEffect(() => {
+    const viewport = timelineViewportRef.current;
+    if (!viewport || !followPlayheadRef.current) return;
+
+    const playheadX = uiState.currentTime * pxPerSec;
+    const viewportWidth = viewport.clientWidth;
+    if (viewportWidth <= 0) return;
+
+    const viewportLeft = viewport.scrollLeft;
+    const safeLeft = viewportLeft + viewportWidth * 0.20;
+    const safeRight = viewportLeft + viewportWidth * 0.75;
+
+    let targetScrollLeft = -1;
+    if (playheadX > safeRight) {
+      targetScrollLeft = playheadX - viewportWidth * 0.60;
+    } else if (playheadX < safeLeft) {
+      targetScrollLeft = Math.max(0, playheadX - viewportWidth * 0.30);
+    }
+
+    if (targetScrollLeft !== -1 && Math.abs(viewport.scrollLeft - targetScrollLeft) > 5) {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+      scrollRafRef.current = requestAnimationFrame(() => {
+        isAutoScrollingRef.current = true;
+        viewport.scrollLeft = targetScrollLeft;
+        scrollRafRef.current = null;
+        
+        const timeout = setTimeout(() => {
+          isAutoScrollingRef.current = false;
+        }, 100);
+        return () => clearTimeout(timeout);
+      });
+    }
+  }, [uiState.currentTime, pxPerSec]);
+
+  const handleScroll = () => {
+    if (isAutoScrollingRef.current) return;
+    // Manual scroll: disable auto-scroll temporarily
+    followPlayheadRef.current = false;
+  };
 
   const handleTimelineClick = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left - 160; // 160px track header offset
+    const viewport = timelineViewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const clickX = e.clientX - rect.left + viewport.scrollLeft;
     if (clickX < 0) return;
     const time = Math.max(0, Math.min(composition.duration, clickX / pxPerSec));
     onPlayheadChange(Math.round(time * 100) / 100);
@@ -109,92 +251,55 @@ export const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* 2. RULER & TRACKS CONTAINER */}
-      <div 
-        ref={containerRef}
-        onClick={handleTimelineClick}
-        className="editor-timeline-body"
-      >
-        {/* RULER HEADER */}
-        <div style={{ display: 'flex', height: '26px', minHeight: '26px', backgroundColor: '#131926', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', position: 'sticky', top: 0, zIndex: 15 }}>
-          <div style={{ width: '160px', minWidth: '160px', backgroundColor: '#0f1420', borderRight: '1px solid rgba(255, 255, 255, 0.08)', padding: '0 12px', display: 'flex', alignItems: 'center', fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', position: 'sticky', left: 0, zIndex: 20 }}>
-            Tracks & Layers
-          </div>
-          <div style={{ flex: 1, position: 'relative', height: '100%', display: 'flex', alignItems: 'center' }}>
-            {Array.from({ length: Math.ceil(composition.duration) }).map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: `${i * pxPerSec}px`,
-                  top: 0,
-                  bottom: 0,
-                  borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-                  paddingLeft: '4px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                {i % 5 === 0 && (
-                  <span style={{ fontSize: '9px', fontFamily: 'monospace', color: '#64748b' }}>
-                    {formatTime(i)}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* 2. TWO-COLUMN LAYOUT BODY */}
+      <div className="timeline-body">
+        {/* Track Sidebar Headers */}
+        <TrackSidebarHeaders tracks={composition.tracks} />
 
-        {/* PLAYHEAD VERTICAL LINE */}
-        <div
-          className="editor-playhead-line"
-          style={{ left: `${160 + uiState.currentTime * pxPerSec}px` }}
+        {/* Timeline Viewport */}
+        <div 
+          ref={timelineViewportRef}
+          onScroll={handleScroll}
+          onClick={handleTimelineClick}
+          className="timeline-viewport"
         >
-          <div className="editor-playhead-handle" />
-        </div>
-
-        {/* TRACK LIST */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {composition.tracks.map((track) => {
-            const trackClips = composition.clips.filter((c) => c.trackId === track.id);
-
-            return (
-              <div key={track.id} className="editor-track-row">
-                {/* TRACK HEADER */}
-                <div className="editor-track-header">
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.name}</span>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: track.color }} />
+          <div className="timeline-content" style={{ width: `${composition.duration * pxPerSec}px` }}>
+            {/* Time Ruler */}
+            <div className="time-ruler">
+              {Array.from({ length: Math.ceil(composition.duration) }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    left: `${i * pxPerSec}px`,
+                    top: 0,
+                    bottom: 0,
+                    borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+                    paddingLeft: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {i % 5 === 0 && (
+                    <span style={{ fontSize: '9px', fontFamily: 'monospace', color: '#64748b' }}>
+                      {formatTime(i)}
+                    </span>
+                  )}
                 </div>
+              ))}
+            </div>
 
-                {/* TRACK CLIPS CONTAINER */}
-                <div className="editor-track-lane">
-                  {trackClips.map((clip) => {
-                    const isSelected = uiState.selectedClipIds.includes(clip.id);
+            {/* Track Lanes */}
+            <TrackLanes 
+              tracks={composition.tracks} 
+              clips={composition.clips} 
+              pxPerSec={pxPerSec} 
+              selectedClipIds={uiState.selectedClipIds} 
+            />
 
-                    return (
-                      <div
-                        key={clip.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          editorStore.selectClip(clip.id, e.ctrlKey || e.shiftKey);
-                        }}
-                        style={{
-                          left: `${clip.startTime * pxPerSec}px`,
-                          width: `${clip.duration * pxPerSec}px`,
-                          backgroundColor: track.color,
-                        }}
-                        className={`editor-clip ${isSelected ? 'selected' : ''}`}
-                      >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {clip.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+            {/* Playhead */}
+            <Playhead currentTime={uiState.currentTime} pxPerSec={pxPerSec} />
+          </div>
         </div>
       </div>
     </div>

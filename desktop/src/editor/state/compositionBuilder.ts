@@ -1,6 +1,8 @@
 import { CompositionState, TimelineClip, Track } from './types';
 import { INITIAL_TRACKS } from './editorStore';
 
+import { DEFAULT_VIDEO_PROPS, VideoProps } from '../utils/videoDefaults';
+
 export interface ProjectArtifacts {
   projectId: string;
   projectName: string;
@@ -25,6 +27,10 @@ export interface ProjectArtifacts {
     duration: number;
     visible?: boolean;
     locked?: boolean;
+    opacity?: number;
+    rotation?: number;
+    scale?: number;
+    videoProps?: any;
     style?: Record<string, any>;
   }>;
 }
@@ -36,88 +42,104 @@ export interface ProjectArtifacts {
  */
 export class CompositionBuilder {
   static buildFromArtifacts(artifacts: ProjectArtifacts): CompositionState {
-    const duration = Math.max(
-      60,
-      artifacts.videoDuration || 0,
-      artifacts.dubbedAudioDuration || 0,
-      artifacts.segments && artifacts.segments.length > 0 
-        ? Math.max(...artifacts.segments.map(s => s.end)) + 5 
-        : 0
-    );
-
+    const videoDuration = artifacts.videoDuration ?? 0;
     const clips: TimelineClip[] = [];
 
     // 1. VIDEO LAYER
     if (artifacts.sourceVideoPath || artifacts.videoDuration) {
+      const savedVideo = artifacts.layers?.find((l) => l.type === 'video');
+      const savedProps = savedVideo?.videoProps;
+
+      const videoProps: VideoProps & { src: string } = {
+        src: artifacts.sourceVideoPath || 'source/input.mp4',
+        transform: {
+          x: savedProps?.transform?.x ?? DEFAULT_VIDEO_PROPS.transform.x,
+          y: savedProps?.transform?.y ?? DEFAULT_VIDEO_PROPS.transform.y,
+          scale: savedProps?.transform?.scale ?? DEFAULT_VIDEO_PROPS.transform.scale,
+          rotation: savedProps?.transform?.rotation ?? DEFAULT_VIDEO_PROPS.transform.rotation,
+          flipX: savedProps?.transform?.flipX ?? DEFAULT_VIDEO_PROPS.transform.flipX,
+          flipY: savedProps?.transform?.flipY ?? DEFAULT_VIDEO_PROPS.transform.flipY,
+        },
+        opacity: savedProps?.opacity ?? DEFAULT_VIDEO_PROPS.opacity,
+        audio: {
+          volume: savedProps?.audio?.volume ?? DEFAULT_VIDEO_PROPS.audio.volume,
+          muted: savedProps?.audio?.muted ?? DEFAULT_VIDEO_PROPS.audio.muted,
+          fadeIn: savedProps?.audio?.fadeIn ?? DEFAULT_VIDEO_PROPS.audio.fadeIn,
+          fadeOut: savedProps?.audio?.fadeOut ?? DEFAULT_VIDEO_PROPS.audio.fadeOut,
+        },
+        color: {
+          brightness: savedProps?.color?.brightness ?? DEFAULT_VIDEO_PROPS.color.brightness,
+          contrast: savedProps?.color?.contrast ?? DEFAULT_VIDEO_PROPS.color.contrast,
+          saturation: savedProps?.color?.saturation ?? DEFAULT_VIDEO_PROPS.color.saturation,
+          exposure: savedProps?.color?.exposure ?? DEFAULT_VIDEO_PROPS.color.exposure,
+          gamma: savedProps?.color?.gamma ?? DEFAULT_VIDEO_PROPS.color.gamma,
+          hue: savedProps?.color?.hue ?? DEFAULT_VIDEO_PROPS.color.hue,
+          temperature: savedProps?.color?.temperature ?? DEFAULT_VIDEO_PROPS.color.temperature,
+          tint: savedProps?.color?.tint ?? DEFAULT_VIDEO_PROPS.color.tint,
+        },
+        filter: {
+          preset: savedProps?.filter?.preset ?? DEFAULT_VIDEO_PROPS.filter.preset,
+        },
+        playback: {
+          speed: savedProps?.playback?.speed ?? DEFAULT_VIDEO_PROPS.playback.speed,
+        },
+      };
+
       clips.push({
-        id: `clip-video-${artifacts.projectId || 'source'}`,
+        id: savedVideo?.id || `clip-video-${artifacts.projectId || 'source'}`,
         name: 'Original Video',
         type: 'video',
-        trackId: 'track-video',
-        startTime: 0,
-        duration: artifacts.videoDuration || duration,
-        visible: true,
-        locked: false,
-        opacity: 1,
+        trackId: 'track-video-main',
+        startTime: savedVideo?.start ?? 0,
+        duration: videoDuration || (savedVideo?.duration ?? 60),
+        visible: savedVideo?.visible !== false,
+        locked: savedVideo?.locked || false,
+        opacity: savedVideo?.opacity ?? 1,
         zIndex: 1,
-        x: 50,
-        y: 50,
+        x: savedVideo ? (savedVideo.x / 1920) * 100 : 50,
+        y: savedVideo ? (savedVideo.y / 1080) * 100 : 50,
         width: 100,
         height: 100,
-        rotation: 0,
-        scaleX: 1,
-        scaleY: 1,
-        videoProps: {
-          src: artifacts.sourceVideoPath || 'source/input.mp4',
-          volume: 1,
-          muted: false,
-          playbackRate: 1,
-        },
+        rotation: savedVideo?.rotation ?? 0,
+        scaleX: savedVideo?.scale ?? 1,
+        scaleY: savedVideo?.scale ?? 1,
+        videoProps: videoProps,
       });
     }
 
-    // 2. DUB AUDIO LAYER (from TTS & Audio Sync)
-    if (artifacts.dubbedAudioPath || artifacts.dubbedAudioDuration) {
-      clips.push({
-        id: `clip-audio-dubbed`,
-        name: 'AI Dubbed Audio',
-        type: 'audio',
-        trackId: 'track-audio',
-        startTime: 0,
-        duration: artifacts.dubbedAudioDuration || duration,
-        visible: true,
-        locked: false,
-        opacity: 1,
-        zIndex: 2,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        rotation: 0,
-        scaleX: 1,
-        scaleY: 1,
-        audioProps: {
-          src: artifacts.dubbedAudioPath || 'audio/dubbed_synchronized.wav',
-          volume: 1,
-          muted: false,
-          solo: false,
-          fadeIn: 0,
-          fadeOut: 0,
-        },
-      });
-    }
-
-    // 3. SUBTITLE SEGMENTS (from STT & Translation)
+    // 2. SUBTITLE & DUBBING SEGMENTS (Linked Clips)
     if (artifacts.segments && artifacts.segments.length > 0) {
       artifacts.segments.forEach((seg, idx) => {
-        const segDuration = Math.max(0.2, seg.end - seg.start);
+        const padZero = (num: number | string, size: number) => {
+          let s = String(num);
+          while (s.length < size) s = '0' + s;
+          return s;
+        };
+        const segId = !isNaN(Number(seg.id)) ? padZero(seg.id, 6) : seg.id;
+        const defaultDuration = Math.max(0.2, seg.end - seg.start);
+
+        // Find saved subtitle layer custom timings
+        const savedSubLayer = artifacts.layers?.find(
+          (l) => l.type === 'subtitle' && (l.id === `clip-sub-${seg.id}` || l.id === `clip-sub-${idx}`)
+        );
+        const startTime = savedSubLayer ? savedSubLayer.start : seg.start;
+        const duration = savedSubLayer ? savedSubLayer.duration : defaultDuration;
+
+        // Find saved audio layer custom properties (volume, mute)
+        const savedAudioLayer = artifacts.layers?.find(
+          (l) => l.type === 'audio' && (l.id === `clip-audio-seg-${seg.id}` || l.id === `clip-audio-seg-${idx}`)
+        );
+        const volume = savedAudioLayer ? (savedAudioLayer.opacity ?? 1.0) : 1.0;
+        const muted = savedAudioLayer ? (savedAudioLayer.visible === false) : false;
+
         clips.push({
           id: `clip-sub-${seg.id || idx}`,
-          name: `Sub #${idx + 1}: ${seg.text.substring(0, 16)}...`,
+          segmentId: seg.id,
+          name: `Sub & Voice #${idx + 1}: ${seg.text.substring(0, 16)}...`,
           type: 'subtitle',
           trackId: 'track-subtitle',
-          startTime: seg.start,
-          duration: segDuration,
+          startTime: startTime,
+          duration: duration,
           visible: true,
           locked: false,
           opacity: 1,
@@ -137,13 +159,26 @@ export class CompositionBuilder {
             color: '#ffffff',
             backgroundColor: 'rgba(0, 0, 0, 0.75)',
           },
+          audioProps: {
+            src: `audio/synced/${segId}.wav`,
+            volume: volume,
+            muted: muted,
+            solo: false,
+            fadeIn: 0,
+            fadeOut: 0,
+          },
         });
       });
     }
 
     // 4. CUSTOM LAYERS (Title, Text, Image, Logo)
     if (artifacts.layers && artifacts.layers.length > 0) {
-      artifacts.layers.forEach((l, idx) => {
+      const customLayers = artifacts.layers.filter(l => l.type !== 'subtitle' && l.type !== 'audio' && l.type !== 'video');
+      customLayers.forEach((l, idx) => {
+        // Skip corrupt duplicate video layers saved as custom layers
+        if (l.id && l.id.startsWith('clip-video-')) {
+          return;
+        }
         const isLogo = l.type === 'logo' || l.type === 'image';
         clips.push({
           id: l.id || `clip-layer-${idx}`,
@@ -179,13 +214,23 @@ export class CompositionBuilder {
       });
     }
 
+    const maxClipEnd = clips.length > 0
+      ? Math.max(0, ...clips.map(c => c.startTime + c.duration))
+      : 0;
+
+    const timelineDuration = Math.max(
+      videoDuration,
+      maxClipEnd,
+      60
+    );
+
     return {
       id: artifacts.projectId || 'project-active',
       name: artifacts.projectName || 'Active Composition',
       width: 1920,
       height: 1080,
       fps: 30,
-      duration: Math.ceil(duration),
+      duration: Math.ceil(timelineDuration),
       tracks: INITIAL_TRACKS,
       clips,
     };

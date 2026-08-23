@@ -1,3 +1,5 @@
+import { VideoProps } from '../utils/videoDefaults';
+
 export type LayerType = 'video' | 'audio' | 'subtitle' | 'text' | 'image' | 'logo';
 
 export interface BaseLayer {
@@ -77,7 +79,7 @@ export interface AudioLayerProps {
   fadeOut: number;
 }
 
-export type TrackType = LayerType;
+export type TrackType = LayerType | 'subtitle_dubbing';
 
 export interface Track {
   id: string;
@@ -90,10 +92,11 @@ export interface Track {
 }
 
 export type TimelineClip = BaseLayer & {
+  segmentId?: number | string;
   textProps?: Partial<TextLayerProps>;
   subtitleProps?: Partial<SubtitleLayerProps>;
   imageProps?: Partial<ImageLayerProps>;
-  videoProps?: Partial<VideoLayerProps>;
+  videoProps?: VideoProps & { src?: string };
   audioProps?: Partial<AudioLayerProps>;
 };
 

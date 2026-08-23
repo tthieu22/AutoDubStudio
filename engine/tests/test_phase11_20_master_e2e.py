@@ -101,7 +101,7 @@ class TestPhase11To20MasterE2E(unittest.TestCase):
 
         def mock_exec(cmd, *args, **kwargs):
             cmd_str = " ".join(cmd)
-            self.assertIn("-vf", cmd)
+            self.assertIn("-filter_complex", cmd)
             self.assertIn("AUTODUB STUDIO PRO", cmd_str)
             self.assertIn("LOGO WATERMARK", cmd_str)
             out_file = self.project_dir / "output" / ".final.mp4.tmp"
