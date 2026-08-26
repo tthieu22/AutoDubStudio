@@ -294,9 +294,33 @@ class PipelineManager:
             raise
 
     def resume(self, stop_at: Optional[PipelineStage] = None):
-        """Find first non-COMPLETED stage and continue execution from checkpoint."""
+        """Find first non-COMPLETED stage and continue execution from checkpoint without re-running finished work."""
         self.preflight_check()
-        self.logger.info(f"Resuming pipeline for project '{self.project.data.get('name')}'")
+        proj_name = self.project.data.get('name')
+        self.logger.info(f"Resuming pipeline for project '{proj_name}'...")
+        
+        # Analyze current checkpoint status
+        interrupted_stage = None
+        completed_stages = []
+        for stage in STAGE_ORDER:
+            s_info = self.project.get_stage_info(stage.value)
+            s_status = s_info.get("status")
+            if s_status in [StageStatus.COMPLETED.value, StageStatus.APPROVED.value, StageStatus.SKIPPED.value]:
+                completed_stages.append(stage.value.upper())
+            elif interrupted_stage is None:
+                interrupted_stage = stage
+        
+        if interrupted_stage:
+            curr_info = self.project.get_stage_info(interrupted_stage.value)
+            c_done = curr_info.get("current", 0)
+            c_total = curr_info.get("total", 0)
+            msg = f"Resuming project '{proj_name}' at stage {interrupted_stage.value.upper()} ({c_done}/{c_total} items completed). Completed stages: {', '.join(completed_stages) or 'None'}"
+            self.logger.info(msg)
+            print(f"[RESUME CHECKPOINT] {msg}")
+            emit_event("pipeline_resumed", stage=interrupted_stage.value, current=c_done, total=c_total, message=msg)
+        else:
+            self.logger.info(f"All stages already completed for project '{proj_name}'.")
+
         self.run_all(stop_at=stop_at)
 
     def retry(self, stage_enum: PipelineStage, force: bool = False):
