@@ -17,6 +17,9 @@ if _venv_site.exists():
                 os.environ["PATH"] = str(_dll_dir) + os.pathsep + os.environ.get("PATH", "")
     except Exception:
         pass
+ENGINE_DIR = Path(__file__).resolve().parent.parent
+if str(ENGINE_DIR) not in sys.path:
+    sys.path.insert(0, str(ENGINE_DIR))
 
 from autodub.pipeline.state import PipelineStage
 
@@ -121,7 +124,7 @@ def main():
         elif stage_enum == PipelineStage.TRANSLATE:
             sp.add_argument("--source-language", default="en", help="Source language code")
             sp.add_argument("--target-language", default="vi", help="Target language code")
-            sp.add_argument("--model", default="qwen3:4b", help="Ollama LLM model name")
+            sp.add_argument("--model", default="qwen2.5-3b-instruct", help="llama.cpp LLM model name")
             sp.add_argument("--batch-size", type=int, default=30, help="Batch size for subtitle translation")
         elif stage_enum == PipelineStage.TTS:
             sp.add_argument("--voice", default=None, help="Piper voice model name")
@@ -354,7 +357,7 @@ def main():
                 asyncio.run(_gen())
                 b64 = _encode_b64(output_file)
                 print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "edge-tts", "voice": tts_voice}))
-            except Exception as e:
+            except Exception:
                 # Fallback to gTTS
                 try:
                     import gtts

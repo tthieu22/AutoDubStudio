@@ -7,6 +7,7 @@ import { usePipeline } from './hooks/usePipeline';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { NewProjectModal } from './components/NewProjectModal';
+import { Dashboard } from './components/Dashboard';
 import { PipelineWorkflow } from './components/PipelineWorkflow';
 import { ConsoleLogs } from './components/ConsoleLogs';
 import { OutputPreview } from './components/OutputPreview';
@@ -32,7 +33,8 @@ const STAGE_ORDER: StageName[] = [
 export default function App() {
   // Screen & Navigation
   const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'subtitles' | 'timeline' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('pipeline');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pipeline' | 'subtitles' | 'timeline' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('dashboard');
+  const [pipelineMode, setPipelineMode] = useState<'STORY' | 'DUBBING'>('STORY');
   const [isConsoleDrawerOpen, setIsConsoleDrawerOpen] = useState(false);
   
   // Projects state
@@ -195,17 +197,25 @@ export default function App() {
     isPipelineRunningRef.current = pipelineStatus === 'RUNNING';
   }, [pipelineStatus]);
 
+  const [activeProjectStyle, setActiveProjectStyle] = useState<string>('general');
+  const [targetLanguage, setTargetLanguage] = useState<string>('vi');
+
   const loadProjectJson = async (path: string) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
-      if (json && json.settings) {
-        if (json.settings.translation_style) {
-          setActiveProjectStyle(json.settings.translation_style);
-        } else {
-          setActiveProjectStyle('general');
+      if (json) {
+        if (json.settings) {
+          if (json.settings.translation_style) {
+            setActiveProjectStyle(json.settings.translation_style);
+          } else {
+            setActiveProjectStyle('general');
+          }
+          if (json.settings.translation_model) {
+            setSettings(prev => ({ ...prev, translationModel: json.settings.translation_model }));
+          }
         }
-        if (json.settings.translation_model) {
-          setSettings(prev => ({ ...prev, translationModel: json.settings.translation_model }));
+        if (json.target && json.target.language) {
+          setTargetLanguage(json.target.language);
         }
       }
       
@@ -278,8 +288,6 @@ export default function App() {
       console.error('Read project json error:', err);
     }
   };
-
-  const [activeProjectStyle, setActiveProjectStyle] = useState<string>('general');
 
   const handleCreateProject = async (name: string, videoPath: string, style?: string, customStyle?: string) => {
     setIsCreatingProject(true);
@@ -354,6 +362,20 @@ export default function App() {
     }
   };
 
+  const handleChangeTargetLanguage = async (newLang: string) => {
+    setTargetLanguage(newLang);
+    if (selectedProjectDir) {
+      try {
+        const json = await PythonEngineService.readProjectJson(selectedProjectDir);
+        if (!json.target) json.target = {};
+        json.target.language = newLang;
+        await PythonEngineService.writeProjectJson(selectedProjectDir, json);
+      } catch (e) {
+        console.error('Failed to save target language:', e);
+      }
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
       <TitleBar selectedProjectDir={selectedProjectDir} stageProgresses={stageProgresses} />
@@ -387,6 +409,35 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, overflow: 'hidden', minHeight: 0 }}>
             {/* TAB CONTENTS CONTAINER */}
             <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflowY: 'auto' }}>
+                <Dashboard
+                  projectName={selectedProjectDir.split('/').pop()?.split('\\').pop() || 'MyStory'}
+                  mode={pipelineMode}
+                  status={pipelineStatus}
+                  overallProgress={overallProgress}
+                  stageProgresses={stageProgresses}
+                  telemetry={{
+                    gpu_util_percent: 87,
+                    vram_used_gb: parseFloat(realVram.split(' ')[0]) || 2.1,
+                    vram_total_gb: 4.0,
+                    vram_percent: Math.round(((parseFloat(realVram.split(' ')[0]) || 2.1) / 4.0) * 100),
+                    ram_used_gb: parseFloat(realRam.split(' ')[0]) || 11.0,
+                    ram_total_gb: parseFloat(realRam.split('/')[1]?.split('GB')[0]) || 16.0,
+                    ram_percent: Math.round(((parseFloat(realRam.split(' ')[0]) || 11.0) / 16.0) * 100),
+                    cpu_percent: 64,
+                    temp_c: 48,
+                    gpu_name: 'NVIDIA GeForce GTX 1650 Ti'
+                  }}
+                  logs={logs}
+                  onStart={() => startPhase1Pipeline(false)}
+                  onPause={() => setPipelineStatus('PAUSED')}
+                  onResume={() => handleResumePipeline()}
+                  onRetry={() => handleRetryStage('RENDER')}
+                  onCancel={handleCancelPipeline}
+                  onReview={() => setActiveTab('subtitles')}
+                />
+              </div>
+
               <div style={{ display: activeTab === 'pipeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
                 <PipelineWorkflow
                   overallProgress={overallProgress}
@@ -402,8 +453,10 @@ export default function App() {
                   onResumePipeline={handleResumePipeline}
                   translationStyle={activeProjectStyle}
                   translationModel={settings.translationModel}
+                  targetLanguage={targetLanguage}
                   onChangeTranslationModel={handleChangeTranslationModel}
                   onChangeTranslationStyle={handleChangeTranslationStyle}
+                  onChangeTargetLanguage={handleChangeTargetLanguage}
                 />
               </div>
 

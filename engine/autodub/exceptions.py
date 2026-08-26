@@ -18,17 +18,22 @@ class PipelineCancelledError(AutoDubError):
     """Raised when pipeline execution is cancelled by the user."""
     pass
 
-class OllamaUnavailableError(AutoDubError):
-    """Raised when local Ollama server is unreachable."""
+class LlamaCppUnavailableError(AutoDubError):
+    """Raised when local llama.cpp server is unreachable."""
     pass
 
-class OllamaModelNotFoundError(AutoDubError):
-    """Raised when requested LLM model is not installed in Ollama."""
+class LlamaCppModelNotFoundError(AutoDubError):
+    """Raised when requested LLM model is not loaded/found in llama.cpp."""
     pass
 
-class OllamaTimeoutError(AutoDubError):
-    """Raised when Ollama request times out."""
+class LlamaCppTimeoutError(AutoDubError):
+    """Raised when llama.cpp request times out."""
     pass
+
+# Aliases for backward compatibility
+OllamaUnavailableError = LlamaCppUnavailableError
+OllamaModelNotFoundError = LlamaCppModelNotFoundError
+OllamaTimeoutError = LlamaCppTimeoutError
 
 class TranslationFailedError(AutoDubError):
     """Raised when translation fails after maximum retries."""

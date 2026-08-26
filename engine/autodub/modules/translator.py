@@ -1,10 +1,7 @@
 import json
 import logging
-import os
 import re
 import time
-import urllib.request
-import urllib.error
 import socket
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable, Tuple
@@ -20,21 +17,16 @@ from autodub.models.project import Project
 from autodub.pipeline.state import PipelineStage, StageStatus
 from autodub.pipeline.progress import emit_event
 from autodub.modules.transcriber import format_srt_timestamp, validate_srt_content
-from autodub.modules.ollama_client import OllamaClient, strip_think_tags
-from autodub.modules.ollama_model_manager import OllamaModelManager
+from autodub.modules.llamacpp_client import strip_think_tags, OllamaClient
 from autodub.modules.structured_parser import StructuredParser
 from autodub.modules.output_sanitizer import TranslationOutputSanitizer
-from autodub.modules.hachimi_translator import HachimiTranslator
-from autodub.modules.translator_qa import TranslationQaChecker
-from autodub.modules.translator_repair import TranslationRepairService
 from autodub.modules.style_profiles import TranslationStyleProfileLoader
 from autodub.modules.character_memory import CharacterEraMemory
 from autodub.exceptions import (
     AutoDubError,
     PipelineCancelledError,
-    OllamaUnavailableError,
-    OllamaModelNotFoundError,
-    OllamaTimeoutError,
+    LlamaCppUnavailableError,
+    LlamaCppModelNotFoundError,
     TranslationFailedError
 )
 
@@ -223,6 +215,16 @@ class RealTranslator:
         self.step_delay = step_delay
         self.max_retries = 1
         self.client = client if client is not None else OllamaClient(base_url=base_url)
+        self.LANGUAGE_NAMES: Dict[str, str] = {
+            "vi": "VIETNAMESE (Tiếng Việt)",
+            "en": "ENGLISH",
+            "ja": "JAPANESE",
+            "ko": "KOREAN",
+            "zh": "CHINESE",
+            "th": "THAI",
+            "fr": "FRENCH",
+            "es": "SPANISH"
+        }
 
     def _build_system_prompt(
         self,
@@ -232,10 +234,12 @@ class RealTranslator:
         locked_entities: Optional[Dict[str, str]] = None,
         glossary: Optional[Dict[str, str]] = None
     ) -> str:
-        """Construct optimized concise thinking system prompt for Qwen3:4B."""
+        """Construct optimized concise thinking system prompt."""
         style_data = TranslationStyleProfileLoader.get_profile(translation_style, custom_translation_style)
         style_block = f"TRANSLATION STYLE ({style_data['name'].upper()}):\n{style_data['prompt_instruction']}"
         char_block = CharacterEraMemory.format_character_era_prompt(character_metadata)
+
+        target_lang_name = self.LANGUAGE_NAMES.get(self.target_language.lower(), self.target_language.upper())
 
         entity_prompt_block = ""
         if locked_entities:
@@ -247,48 +251,41 @@ class RealTranslator:
             glossary_lines = [f"- {zh} = {vi}" for zh, vi in glossary.items()]
             glossary_block = "GLOSSARY TERMINOLOGY:\n" + "\n".join(glossary_lines) + "\n"
 
-        system_prompt = f"""You are a professional Chinese-to-Vietnamese subtitle translator.
+        system_prompt = f"""You are a Master Film & TV Subtitle Localization Translator specializing in Chinese-to-{target_lang_name} dubbing.
 
-Translate the subtitle naturally and accurately.
+CORE OBJECTIVE:
+Translate all Chinese subtitles into natural, cinematic, high-quality {target_lang_name}.
 
-Consider context, character relationships, pronouns, tone, genre and terminology.
+TRANSLATION RULES:
+1. ACCURACY & FLUENCY: Translate meaning smoothly and idiomatically into natural spoken dialogue. Avoid mechanical word-for-word translation.
+2. PRONOUN & CONTEXT FLUENCY: Choose accurate pronouns (xưng hô) based on character relationships, hierarchy, and genre.
+3. CONCISE DUBBING FIT: Keep translations concise and lip-sync friendly so spoken dubbing matches scene timing.
+4. STRICT TARGET LANGUAGE: Translate ONLY into {target_lang_name}. Do NOT output original Chinese or English explanations.
+5. STRICT FORMAT PRESERVATION: Output EVERY subtitle using its exact tag header [SUBTITLE_XXX] followed by the translation on a new line.
 
-Think briefly and efficiently.
-
-Do not over-analyze simple sentences.
-
-Use deeper reasoning only when necessary for:
-- ambiguous meaning
-- character relationships
-- historical terminology
-- idioms
-- cultural references
-- context-dependent pronouns
-- genre-specific language
-
-After reasoning, output ONLY the final Vietnamese translation.
-
-Do not output explanations.
-Do not output analysis.
-Do not output notes.
-Do not output markdown.
-Do not output "Translation:".
-
-IMPORTANT:
-Internal reasoning is allowed.
-The final answer must contain ONLY the Vietnamese translation.
-
-OUTPUT FORMAT:
+EXAMPLE:
+Input:
 [SUBTITLE_001]
-Vietnamese translation
+什么
+
+[SUBTITLE_002]
+是的，瞎人已经带兵攻破平章官了。
+
+Output:
+[SUBTITLE_001]
+Cái gì?
+
+[SUBTITLE_002]
+Đúng vậy, người mù đã dẫn quân đánh bại Bình Chương Quan rồi.
 
 {style_block}
 
-{char_block if char_block else 'CHARACTER MEMORY: Standard'}
+{char_block if char_block else 'CHARACTER MEMORY: Standard conversational relationships'}
 
 {entity_prompt_block if entity_prompt_block else 'LOCKED ENTITY MEMORY: None'}
 
-{glossary_block if glossary_block else 'GLOSSARY: None'}"""
+{glossary_block if glossary_block else 'GLOSSARY TERMINOLOGY: None'}"""
+
         return system_prompt
 
     def translate_batch(
@@ -308,29 +305,7 @@ Vietnamese translation
         """
         model = target_model or self.model_name
 
-        # 1. SPECIALIZED HACHIMI ENGINE DISPATCH (FAST GPU MODE)
-        if model in ("hachimi-60m", "fast", "hachimi") or "hachimi" in model.lower():
-            try:
-                t0 = time.time()
-                hachimi = HachimiTranslator.get_instance()
-                input_texts = [item.get("text", "") for item in batch_items]
-                raw_translations = hachimi.translate_batch(input_texts)
-                elapsed = time.time() - t0
-                
-                result_dict = {}
-                for item, trans in zip(batch_items, raw_translations):
-                    cleaned = clean_translation(trans)
-                    result_dict[item["id_str"]] = cleaned
-                
-                logger.info(
-                    f"[HACHIMI_GPU] Model=HachimiMT-60 | Batch={len(batch_items)} | "
-                    f"Total={elapsed*1000:.1f}ms ({len(batch_items)/max(elapsed, 0.001):.1f} subs/s)"
-                )
-                return result_dict
-            except Exception as he:
-                logger.warning(f"[HACHIMI_GPU] Fast mode translation failed ({he}). Falling back to Ollama engine...")
-
-        # 2. OLLAMA LLM DISPATCH (QWEN2.5 / DEEP MODE)
+        # LLAMA.CPP / QWEN2.5-3B DISPATCH
         expected_ids = [item["id_str"] for item in batch_items]
         difficulty = SubtitleDifficultyClassifier.classify_batch(batch_items)
 
@@ -355,7 +330,7 @@ Vietnamese translation
             subtitle_lines.append(f"[{item['id_str']}]\n{item['text']}")
         subtitles_input = "\n\n".join(subtitle_lines)
 
-        user_content = f"{overlap_block}YOU MUST TRANSLATE ALL {len(expected_ids)} SUBTITLES FROM {expected_ids[0]} TO {expected_ids[-1]}. DO NOT STOP UNTIL {expected_ids[-1]} IS TRANSLATED.\n\nSUBTITLES TO TRANSLATE:\n\n{subtitles_input}"
+        user_content = f"{overlap_block}Input:\n{subtitles_input}"
         system_prompt = self._build_system_prompt(
             translation_style=translation_style,
             custom_translation_style=custom_translation_style,
@@ -364,9 +339,7 @@ Vietnamese translation
             glossary=glossary
         )
 
-        full_prompt = f"{system_prompt}\n\n{user_content}"
-
-        # Attempt execution with Ollama (MAX_RETRIES = 1 -> 2 attempts total)
+        # Attempt execution with Ollama Chat API (MAX_RETRIES = 1 -> 2 attempts total)
         for attempt in range(1, self.max_retries + 2):
             try:
                 t0 = time.time()
@@ -374,8 +347,9 @@ Vietnamese translation
                     f"[OLLAMA_LLM] Model={model} | Difficulty={difficulty} | "
                     f"Batch={len(batch_items)} | num_predict={num_predict} (Attempt #{attempt})"
                 )
-                raw_response = self.client.generate(
-                    prompt=full_prompt,
+                raw_response = self.client.chat(
+                    messages=[{"role": "user", "content": user_content}],
+                    system=system_prompt,
                     model=model,
                     temperature=0.15,
                     timeout=self.timeout,
@@ -471,7 +445,8 @@ Vietnamese translation
         project: Project,
         is_cancelled: Optional[Callable[[], bool]] = None,
         fail_at_step: Optional[int] = None,
-        force: bool = False
+        force: bool = False,
+        **kwargs
     ) -> float:
         """Run translation stage on project with context-aware batching, checkpoints, and exclusive qwen3:4b execution."""
         stage_name = PipelineStage.TRANSLATE.value
@@ -498,6 +473,8 @@ Vietnamese translation
             or config_dict.get("translation_batch_size")
             or self.batch_size
         )
+        if "hachimi" not in model_name.lower():
+            batch_size = min(batch_size, 10)
 
         translation_style = (
             settings_dict.get("translation_style")
@@ -531,35 +508,22 @@ Vietnamese translation
             return 0.0
 
         # 2. Exclusive Model Lifecycle Verification
-        if model_name in ("hachimi-60m", "fast") or "hachimi" in model_name.lower():
-            logger.info(f"Loading specialized HachimiMT-60 model exclusively onto GPU (FP16)...")
-            hachimi = HachimiTranslator.get_instance()
-            try:
-                hachimi.load()
-                logger.info("HACHIMIMT-60 EXCLUSIVELY READY ON GPU (Single Model in VRAM)")
-            except Exception as le:
-                err_msg = f"Failed to load HachimiMT-60 model onto GPU: {le}"
-                project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg)
-                emit_event("stage_error", stage_name, error=err_msg)
-                raise AutoDubError(err_msg)
-        else:
-            logger.info(f"Checking exclusive Ollama model status for '{model_name}'...")
-            available, err_msg = self.client.check_availability(model_name)
-            if not available:
-                project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg)
-                emit_event("stage_error", stage_name, error=err_msg)
-                if "not running" in err_msg.lower():
-                    raise OllamaUnavailableError(err_msg)
-                elif "not installed" in err_msg.lower():
-                    raise OllamaModelNotFoundError(err_msg)
-                else:
-                    raise AutoDubError(err_msg)
+        logger.info(f"Checking llama.cpp model status for '{model_name}'...")
+        available, err_msg = self.client.check_availability(model_name)
+        if not available:
+            project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg)
+            emit_event("stage_error", stage_name, error=err_msg)
+            if "not running" in err_msg.lower():
+                raise LlamaCppUnavailableError(err_msg)
+            elif "not installed" in err_msg.lower() or "not loaded" in err_msg.lower():
+                raise LlamaCppModelNotFoundError(err_msg)
+            raise AutoDubError(err_msg)
 
-            loaded_ok, load_err = self.client.ensure_model_loaded()
-            if not loaded_ok:
-                logger.warning(f"[TRANSLATION] Exclusive model verification notice: {load_err}")
+        loaded_ok, load_err = self.client.ensure_model_loaded()
+        if not loaded_ok:
+            logger.warning(f"[TRANSLATION] Exclusive model verification notice: {load_err}")
 
-            logger.info(f"{model_name.upper()} EXCLUSIVELY READY (Single Model in VRAM)")
+        logger.info(f"{model_name.upper()} EXCLUSIVELY READY (Single Model in VRAM)")
 
         # 3. Load Source Segments
         segments = project.data.get("segments", [])
@@ -569,6 +533,13 @@ Vietnamese translation
                 segments = self._parse_srt(original_srt_path)
 
         total_segments = len(segments)
+        if fail_at_step:
+            err_msg = f"Simulated error in stage {stage_name} at step {fail_at_step}"
+            curr_val = fail_at_step - 1 if fail_at_step > 1 else 0
+            project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg, current=curr_val)
+            emit_event("stage_error", stage_name, error=err_msg)
+            raise RuntimeError(err_msg)
+
         if total_segments == 0:
             logger.warning("No segments found for translation.")
             with open(translated_srt_path, "w", encoding="utf-8") as f:
@@ -615,6 +586,12 @@ Vietnamese translation
         batches = [uncompleted_items[i:i + batch_size] for i in range(0, len(uncompleted_items), batch_size)]
         total_batches = len(batches)
 
+        if fail_at_step and not batches:
+            err_msg = f"Simulated error in stage {stage_name} at step {fail_at_step}"
+            project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg)
+            emit_event("stage_error", stage_name, error=err_msg)
+            raise RuntimeError(err_msg)
+
         project.update_stage(stage_name, StageStatus.RUNNING.value, current=len(completed_ids), total=total_segments)
         emit_event("stage_start", stage_name, current=len(completed_ids), total=total_segments)
 
@@ -626,6 +603,13 @@ Vietnamese translation
                 emit_event("stage_cancelled", stage_name, current=len(completed_ids), total=total_segments, error="Translation stage cancelled by user.")
                 self._save_partial_checkpoint(partial_json_path, list(completed_ids), translations_dict, model_name)
                 raise PipelineCancelledError("Translation stage cancelled by user.")
+
+            if fail_at_step and b_idx >= min(fail_at_step, total_batches):
+                self._save_partial_checkpoint(partial_json_path, list(completed_ids), translations_dict, model_name)
+                err_msg = f"Simulated error in stage {stage_name} at step {b_idx}"
+                project.update_stage(stage_name, StageStatus.FAILED.value, error=err_msg, current=len(completed_ids), total=total_segments)
+                emit_event("stage_error", stage_name, error=err_msg, current=len(completed_ids), total=total_segments)
+                raise RuntimeError(err_msg)
 
             sub_start = batch[0]["id_num"]
             sub_end = batch[-1]["id_num"]
@@ -735,12 +719,6 @@ Vietnamese translation
         with open(tmp_srt, "w", encoding="utf-8") as f:
             f.write(translated_srt_content)
         tmp_srt.replace(translated_srt_path)
-
-        project.save()
-
-        # Strict Single-Model Exclusivity: Release GPU VRAM immediately after translation stage finishes
-        if model_name in ("hachimi-60m", "fast") or "hachimi" in model_name.lower():
-            HachimiTranslator.get_instance().unload()
 
         elapsed = time.time() - start_time
         logger.info(f"Translation Stage COMPLETED in {elapsed:.2f}s. Model: {model_name} | Fallback: NONE")

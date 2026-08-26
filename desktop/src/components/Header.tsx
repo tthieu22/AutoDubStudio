@@ -5,7 +5,7 @@ import { PipelineStatus, StageName, StageProgressInfo, StageStatus } from '../ty
 interface HeaderProps {
   selectedProjectDir: string;
   pipelineStatus: PipelineStatus;
-  stageProgresses: Record<StageName, StageProgressInfo>;
+  stageProgresses: Partial<Record<StageName, StageProgressInfo>>;
   onStartPipeline: (force?: boolean) => void;
   onCancelPipeline: () => void;
   onOpenOutputFolder: () => void;
@@ -19,7 +19,7 @@ const STAGE_ORDER: StageName[] = [
   'TRANSLATE'
 ];
 
-const STAGE_SHORT_LABELS: Record<StageName, string> = {
+const STAGE_SHORT_LABELS: Partial<Record<StageName, string>> = {
   EXTRACT: 'EXTRACT',
   TRANSCRIBE: 'STT',
   TRANSLATE: 'TRANSLATE',

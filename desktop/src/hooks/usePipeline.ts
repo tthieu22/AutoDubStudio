@@ -16,7 +16,7 @@ const STAGE_ORDER: StageName[] = [
 export function usePipeline(selectedProjectDir: string | null, loadProjectJson: (path: string) => Promise<void>) {
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>('IDLE');
   const [overallProgress, setOverallProgress] = useState(0);
-  const [stageProgresses, setStageProgresses] = useState<Record<StageName, StageProgressInfo>>({
+  const [stageProgresses, setStageProgresses] = useState<Partial<Record<StageName, StageProgressInfo>>>({
     EXTRACT: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
     TRANSCRIBE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
     TRANSLATE: { status: 'PENDING', progress: 0, current: 0, total: 0, error: null },
@@ -89,7 +89,7 @@ export function usePipeline(selectedProjectDir: string | null, loadProjectJson: 
           ...prev,
           [st]: { ...prev[st], status: 'COMPLETED' as StageStatus, progress: 100 }
         };
-        const completedCount = STAGE_ORDER.filter(s => updated[s].status === 'COMPLETED' || updated[s].status === 'SKIPPED').length;
+        const completedCount = STAGE_ORDER.filter(s => updated[s]?.status === 'COMPLETED' || updated[s]?.status === 'SKIPPED').length;
         const newOverall = Math.round((completedCount / STAGE_ORDER.length) * 100);
         setOverallProgress(newOverall);
         if (completedCount === STAGE_ORDER.length || st === 'RENDER') {

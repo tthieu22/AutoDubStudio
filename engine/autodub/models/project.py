@@ -8,7 +8,7 @@ from autodub.pipeline.state import STAGE_ORDER, StageStatus
 from autodub.exceptions import ProjectValidationError
 
 class Project:
-    def __init__(self, project_dir: Path, name: Optional[str] = None, source_path: Optional[str] = None):
+    def __init__(self, project_dir: Path, name: Optional[str] = None, source_path: Optional[str] = None, mode: str = "MODE_DUBBING"):
         self.project_dir = Path(project_dir)
         self.project_file = self.project_dir / "project.json"
         self.tmp_file = self.project_dir / "project.json.tmp"
@@ -20,17 +20,19 @@ class Project:
         elif self.bak_file.exists():
             self.recover_from_backup()
         else:
-            self._init_defaults(name or self.project_dir.name, source_path)
+            self._init_defaults(name or self.project_dir.name, source_path, mode=mode)
             self.save()
 
-    def _init_defaults(self, name: str, source_path: Optional[str] = None):
+    def _init_defaults(self, name: str, source_path: Optional[str] = None, mode: str = "MODE_DUBBING"):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        rel_source = source_path if source_path else "source/input.mp4"
+        rel_source = source_path if source_path else ("source/input.mp4" if mode == "MODE_DUBBING" else "source/story_source.json")
         
+        version_num = 1 if mode == "MODE_DUBBING" else 2
         self.data = {
-            "version": 1,
+            "version": version_num,
             "project_id": str(uuid.uuid4()),
             "name": name,
+            "mode": mode,  # "MODE_DUBBING" or "MODE_STORY"
             "created_at": now,
             "updated_at": now,
             "source": {
@@ -43,10 +45,11 @@ class Project:
             "settings": {
                 "whisper_model": "small",
                 "whisper_compute_type": "int8",
-                "translation_model": "qwen3:4b",
+                "translation_model": "qwen2.5-3b-instruct",
                 "translation_batch_size": 3,
                 "tts_engine": "piper",
-                "chunk_duration": 600
+                "chunk_duration": 600,
+                "image_model": "sd1.5-lcm"
             },
             "pipeline": {
                 stage.value: {
@@ -58,6 +61,20 @@ class Project:
                 } for stage in STAGE_ORDER
             },
             "segments": [],
+            "story": {
+                "source_type": None,
+                "source_url": None,
+                "title": None,
+                "author": None,
+                "license": None,
+                "status": "PENDING"
+            },
+            "characters": [],
+            "scenes": [],
+            "timeline": {
+                "duration": 0.0,
+                "tracks": []
+            },
             "metadata": {}
         }
 
@@ -67,6 +84,9 @@ class Project:
                 self.data = json.load(f)
             # Ensure required default sections exist
             modified = False
+            if "mode" not in self.data:
+                self.data["mode"] = "MODE_DUBBING"
+                modified = True
             if "pipeline" not in self.data:
                 self.data["pipeline"] = {
                     stage.value: {
@@ -80,6 +100,18 @@ class Project:
                 modified = True
             if "segments" not in self.data:
                 self.data["segments"] = []
+                modified = True
+            if "story" not in self.data:
+                self.data["story"] = {"source_type": None, "title": None, "status": "PENDING"}
+                modified = True
+            if "characters" not in self.data:
+                self.data["characters"] = []
+                modified = True
+            if "scenes" not in self.data:
+                self.data["scenes"] = []
+                modified = True
+            if "timeline" not in self.data:
+                self.data["timeline"] = {"duration": 0.0, "tracks": []}
                 modified = True
             if "metadata" not in self.data:
                 self.data["metadata"] = {}

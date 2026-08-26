@@ -7,7 +7,7 @@ import { StageName, StageProgressInfo, PipelineStatus } from '../types/pipeline'
 interface VoiceStudioProps {
   projectDir: string;
   pipelineStatus: PipelineStatus;
-  stageProgresses: Record<StageName, StageProgressInfo>;
+  stageProgresses: Partial<Record<StageName, StageProgressInfo>>;
   onResumePipeline: (stopAt?: string) => Promise<void>;
 }
 

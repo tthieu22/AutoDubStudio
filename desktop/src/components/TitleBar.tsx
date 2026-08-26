@@ -5,12 +5,12 @@ import { StageName, StageProgressInfo, StageStatus } from '../types/pipeline';
 
 interface TitleBarProps {
   selectedProjectDir?: string | null;
-  stageProgresses?: Record<StageName, StageProgressInfo>;
+  stageProgresses?: Partial<Record<StageName, StageProgressInfo>>;
 }
 
 const STAGE_ORDER: StageName[] = ['EXTRACT', 'TRANSCRIBE', 'TRANSLATE', 'TTS', 'SYNC', 'RENDER'];
 
-const STAGE_SHORT_LABELS: Record<StageName, string> = {
+const STAGE_SHORT_LABELS: Partial<Record<StageName, string>> = {
   EXTRACT: 'EXTRACT',
   TRANSCRIBE: 'STT',
   TRANSLATE: 'TRANSLATE',

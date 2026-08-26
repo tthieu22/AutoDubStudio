@@ -4,10 +4,21 @@ from pathlib import Path
 def ensure_project_structure(project_dir: Path):
     dirs = [
         project_dir / "source",
+        project_dir / "story",
+        project_dir / "story" / "chapters",
+        project_dir / "story" / "summaries",
+        project_dir / "characters",
+        project_dir / "scenes",
+        project_dir / "assets",
+        project_dir / "assets" / "images",
+        project_dir / "assets" / "video",
+        project_dir / "assets" / "music",
         project_dir / "audio",
+        project_dir / "audio" / "tts",
+        project_dir / "audio" / "synced",
         project_dir / "transcript",
-        project_dir / "tts",
-        project_dir / "preview",
+        project_dir / "timeline",
+        project_dir / "subtitles",
         project_dir / "output",
         project_dir / "logs"
     ]

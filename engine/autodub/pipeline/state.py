@@ -37,13 +37,15 @@ VALID_TRANSITIONS = {
 }
 
 def validate_state_transition(current_status: StageStatus | str, new_status: StageStatus | str, force: bool = False) -> None:
+    raw_curr = current_status.value if hasattr(current_status, "value") else str(current_status)
+    raw_new = new_status.value if hasattr(new_status, "value") else str(new_status)
     try:
-        curr_enum = StageStatus(str(current_status).lower())
+        curr_enum = StageStatus(raw_curr.lower())
     except ValueError:
         curr_enum = StageStatus.PENDING
 
     try:
-        new_enum = StageStatus(str(new_status).lower())
+        new_enum = StageStatus(raw_new.lower())
     except ValueError:
         new_enum = StageStatus.RUNNING
 

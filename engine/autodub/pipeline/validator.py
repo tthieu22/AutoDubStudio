@@ -12,7 +12,7 @@ class ProjectValidator:
             raise ProjectValidationError("Project data is empty.")
 
         # 1. Version & Metadata
-        if data.get("version") != 1:
+        if data.get("version") not in (1, 2):
             raise ProjectValidationError(f"Invalid or unsupported project version: {data.get('version')}")
         if not data.get("project_id"):
             raise ProjectValidationError("Missing project_id.")

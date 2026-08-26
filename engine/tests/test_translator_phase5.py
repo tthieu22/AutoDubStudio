@@ -53,7 +53,16 @@ class MockOllamaClient(OllamaClient):
             return False, "Ollama is not running at http://mock-ollama:11434"
         return True, ""
 
-    def generate(self, prompt: str, system=None, model="qwen3:4b", timeout=120, **kwargs):
+    def chat(self, messages, system=None, model=None, timeout=120, **kwargs):
+        user_prompt = ""
+        for m in messages:
+            if m.get("role") == "user":
+                user_prompt += m.get("content", "") + "\n"
+        if not user_prompt and messages:
+            user_prompt = messages[-1].get("content", "")
+        return self.generate(prompt=user_prompt, system=system, model=model or "qwen2.5-3b-instruct", timeout=timeout, **kwargs)
+
+    def generate(self, prompt: str, system=None, model="qwen2.5-3b-instruct", timeout=120, **kwargs):
         self.calls_made += 1
         if self.timeout_trigger:
             raise OllamaTimeoutError("Ollama generate request timed out after 120 seconds.")

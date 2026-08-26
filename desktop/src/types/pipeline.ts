@@ -1,7 +1,11 @@
+export type PipelineMode = 'DUBBING' | 'STORY';
+
 export type PipelineStatus =
   | 'IDLE'
   | 'STARTING'
   | 'RUNNING'
+  | 'PAUSED'
+  | 'REVIEW_REQUIRED'
   | 'CANCELLING'
   | 'CANCELLED'
   | 'COMPLETED'
@@ -9,16 +13,28 @@ export type PipelineStatus =
   | 'RESUMING';
 
 export type StageName =
+  | 'COLLECT'
+  | 'CLEAN'
+  | 'ANALYZE'
+  | 'MEMORY'
+  | 'SCENE'
+  | 'IMAGE'
   | 'EXTRACT'
   | 'TRANSCRIBE'
   | 'TRANSLATE'
   | 'TTS'
+  | 'SUBTITLE'
+  | 'TIMELINE'
   | 'SYNC'
-  | 'RENDER';
+  | 'RENDER'
+  | 'QA'
+  | 'PUBLISH';
 
 export type StageStatus =
   | 'PENDING'
   | 'RUNNING'
+  | 'REVIEW_REQUIRED'
+  | 'APPROVED'
   | 'COMPLETED'
   | 'SKIPPED'
   | 'FAILED'
@@ -30,6 +46,19 @@ export interface StageProgressInfo {
   current: number;
   total: number;
   error: string | null;
+}
+
+export interface HardwareTelemetry {
+  gpu_util_percent: number;
+  vram_used_gb: number;
+  vram_total_gb: number;
+  vram_percent: number;
+  ram_used_gb: number;
+  ram_total_gb: number;
+  ram_percent: number;
+  cpu_percent: number;
+  temp_c: number;
+  gpu_name: string;
 }
 
 export interface PipelineProgressEvent {
@@ -45,3 +74,4 @@ export interface PipelineProgressEvent {
   segment_id?: number;
   elapsed?: number;
 }
+

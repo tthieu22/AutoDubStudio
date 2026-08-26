@@ -1,0 +1,39 @@
+{
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce GTX 1650 Ti",
+    "vram_used_mb": 225.0,
+    "vram_total_mb": 4096.0,
+    "vram_percent": 5.5,
+    "gpu_util_percent": 6.0,
+    "temp_c": 48,
+    "ram_used_gb": 10.95,
+    "ram_total_gb": 15.84
+  },
+  "mode_dubbing": {
+    "total_seconds": 16.13,
+    "phase_breakdown": {
+      "extract": 0.35,
+      "transcribe": 0.03,
+      "translate": 0.06,
+      "tts": 0.4,
+      "render": 15.03
+    }
+  },
+  "mode_story": {
+    "total_seconds": 12.52,
+    "phase_breakdown": {
+      "cleaner_and_analyzer": 4.83,
+      "scene_planner_image": 7.42,
+      "tts_and_mixer": 0.17
+    }
+  },
+  "nvenc_vs_cpu": {
+    "nvenc_seconds": 2.6,
+    "cpu_seconds": 5.52,
+    "speedup_factor": 2.12,
+    "nvenc_success": true
+  },
+  "vram_peak_mb": 233.0,
+  "ram_peak_gb": 11.05,
+  "status": "SUCCESS"
+}

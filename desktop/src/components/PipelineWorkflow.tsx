@@ -8,7 +8,7 @@ import { StageName, StageProgressInfo, PipelineStatus } from '../types/pipeline'
 interface PipelineWorkflowProps {
   overallProgress: number;
   elapsedTime: number;
-  stageProgresses: Record<StageName, StageProgressInfo>;
+  stageProgresses: Partial<Record<StageName, StageProgressInfo>>;
   errorDetails: string | null;
   onRetryStage: (stage: StageName) => void;
   onOpenTimeline?: () => void;
@@ -19,8 +19,10 @@ interface PipelineWorkflowProps {
   onResumePipeline: (stopAt?: string) => void;
   translationStyle?: string;
   translationModel?: string;
+  targetLanguage?: string;
   onChangeTranslationModel?: (model: string) => void;
   onChangeTranslationStyle?: (style: string) => void;
+  onChangeTargetLanguage?: (lang: string) => void;
 }
 
 const STYLE_NAME_MAP: Record<string, string> = {
@@ -43,7 +45,7 @@ const STAGE_ORDER: StageName[] = [
   'RENDER'
 ];
 
-const STAGE_LABELS: Record<StageName, string> = {
+const STAGE_LABELS: Partial<Record<StageName, string>> = {
   EXTRACT: 'Audio Extraction',
   TRANSCRIBE: 'Transcription (STT)',
   TRANSLATE: 'Translation',
@@ -52,7 +54,7 @@ const STAGE_LABELS: Record<StageName, string> = {
   RENDER: 'Video Composite Render'
 };
 
-const STAGE_ICONS: Record<StageName, React.ReactNode> = {
+const STAGE_ICONS: Partial<Record<StageName, React.ReactNode>> = {
   EXTRACT: <Layers size={20} style={{ color: '#06b6d4' }} />,
   TRANSCRIBE: <FileText size={20} style={{ color: '#6366f1' }} />,
   TRANSLATE: <Globe size={20} style={{ color: '#10b981' }} />,
@@ -75,8 +77,10 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
   onResumePipeline,
   translationStyle = 'general',
   translationModel = 'hachimi-60m',
+  targetLanguage = 'vi',
   onChangeTranslationModel,
-  onChangeTranslationStyle
+  onChangeTranslationStyle,
+  onChangeTargetLanguage
 }) => {
   const [activeInspectorStage, setActiveInspectorStage] = useState<StageName>('EXTRACT');
   const styleDisplayName = STYLE_NAME_MAP[translationStyle] || translationStyle;
@@ -152,8 +156,34 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
         {/* Translation Meta Badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '6px 14px', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', fontSize: '12px' }}>
           <div>
-            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700 }}>Translation</span>
-            <span style={{ color: '#f8fafc', fontWeight: 600 }}>🇨🇳 ZH → 🇻🇳 VI</span>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, marginBottom: '2px' }}>Target Lang</span>
+            {onChangeTargetLanguage ? (
+              <select
+                value={targetLanguage}
+                onChange={e => onChangeTargetLanguage(e.target.value)}
+                disabled={pipelineStatus === 'RUNNING'}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '6px',
+                  color: '#34d399',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  outline: 'none',
+                  cursor: pipelineStatus === 'RUNNING' ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <option value="vi" style={{ background: '#0f172a', color: '#fff' }}>🇻🇳 Tiếng Việt (VI)</option>
+                <option value="en" style={{ background: '#0f172a', color: '#fff' }}>🇺🇸 Tiếng Anh (EN)</option>
+                <option value="ja" style={{ background: '#0f172a', color: '#fff' }}>🇯🇵 Tiếng Nhật (JA)</option>
+                <option value="ko" style={{ background: '#0f172a', color: '#fff' }}>🇰🇷 Tiếng Hàn (KO)</option>
+                <option value="zh" style={{ background: '#0f172a', color: '#fff' }}>🇨🇳 Tiếng Trung (ZH)</option>
+                <option value="th" style={{ background: '#0f172a', color: '#fff' }}>🇹🇭 Tiếng Thái (TH)</option>
+              </select>
+            ) : (
+              <span style={{ color: '#f8fafc', fontWeight: 600 }}>🇨🇳 ZH → 🇻🇳 VI</span>
+            )}
           </div>
           <div style={{ height: '24px', width: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
           <div>
@@ -239,14 +269,17 @@ export const PipelineWorkflow: React.FC<PipelineWorkflowProps> = ({
             <button 
               className="btn-primary" 
               onClick={() => {
-                const isPartiallyDone = stageProgresses['EXTRACT']?.status === 'COMPLETED';
-                onStartPipeline(!isPartiallyDone);
+                // Never force wipe if stage has partial checkpoint progress
+                const hasPartialProgress = (stageProgresses['TRANSLATE']?.progress || 0) > 0 && stageProgresses['TRANSLATE']?.status !== 'COMPLETED';
+                onStartPipeline(hasPartialProgress ? false : false);
               }}
               style={{ padding: '6px 16px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              {stageProgresses['TRANSCRIBE']?.status === 'COMPLETED' && stageProgresses['TRANSLATE']?.status !== 'COMPLETED'
-                ? 'TIẾP TỤC DỊCH (TRANSLATE) ➔'
-                : 'START PIPELINE ➔'}
+              {stageProgresses['TRANSLATE']?.status === 'RUNNING' || (stageProgresses['TRANSLATE']?.progress || 0) > 0
+                ? 'TIẾP TỤC DỊCH TỪ ĐIỂM DỪNG (CHECKPOINT) ➔'
+                : stageProgresses['TRANSCRIBE']?.status === 'COMPLETED'
+                  ? 'TIẾP TỤC DỊCH (TRANSLATE) ➔'
+                  : 'START PIPELINE ➔'}
             </button>
           )}
         </div>

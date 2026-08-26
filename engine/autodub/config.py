@@ -20,30 +20,24 @@ DEFAULT_BEST_OF = 1
 DEFAULT_VAD_FILTER = True
 DEFAULT_CHUNK_DURATION_SEC = 600  # 10 minutes
 
-# Translation Configuration (HachimiMT-60 Fast GPU Mode Default)
-TRANSLATION_MODEL = "hachimi-60m"
-DEFAULT_TRANSLATION_MODEL = "hachimi-60m"
+# Translation Configuration (Qwen2.5-3B-Instruct Q4_K_M via llama.cpp CUDA)
+TRANSLATION_MODEL = "qwen2.5-3b-instruct"
+DEFAULT_TRANSLATION_MODEL = "qwen2.5-3b-instruct"
 DEFAULT_TRANSLATION_LANGUAGE = "zh-vi"
 DEFAULT_TRANSLATION_BATCH_SIZE = 20
 MAX_TRANSLATION_BATCH_SIZE = 50
 MIN_TRANSLATION_BATCH_SIZE = 1
 MAX_CONCURRENT_BATCHES = 1
 
-# Supported Production Translation Models (Exclusive GPU Execution)
+# Supported Production Translation Models (llama.cpp CUDA)
 TRANSLATION_MODELS = {
-    "hachimi-60m": {
-        "id": "ngocdang83/HachimiMT-60-zh-vi",
-        "name": "HachimiMT-60 (Siêu Tốc - GPU FP16)",
-        "type": "specialized_mt_gpu",
+    "qwen2.5-3b-instruct": {
+        "id": "Qwen/Qwen2.5-3B-Instruct-GGUF",
+        "name": "Qwen2.5-3B-Instruct (Q4_K_M - llama.cpp CUDA)",
+        "type": "llama_cpp",
+        "gguf_filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
         "device": "cuda",
-        "vram_mb": 260
-    },
-    "qwen2.5:3b": {
-        "id": "qwen2.5:3b",
-        "name": "Qwen2.5:3B (Chuyên Sâu - GPU)",
-        "type": "ollama_llm",
-        "device": "cuda",
-        "vram_mb": 2100
+        "vram_mb": 2200
     }
 }
 
@@ -58,7 +52,8 @@ HARDWARE_PROFILE = {
     "beam_size": DEFAULT_BEAM_SIZE,
     "best_of": DEFAULT_BEST_OF,
     "vad_filter": DEFAULT_VAD_FILTER,
-    "ollama_concurrency": 1,
+    "llamacpp_concurrency": 1,
+    "llamacpp_server_url": "http://localhost:8080",
     "gpu_inference_concurrency": 1,
     "max_vram_mb": 4096,
     "min_free_vram_mb": 1200

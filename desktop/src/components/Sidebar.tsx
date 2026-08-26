@@ -34,8 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   const topNavItems = [
-    { id: 'pipeline', label: 'Pipeline Process', icon: Activity, color: '#06b6d4' },
-    { id: 'subtitles', label: 'Subtitle Editor', icon: FileText, color: '#6366f1' },
+    { id: 'dashboard', label: 'Dashboard Control Center', icon: Activity, color: '#06b6d4' },
+    { id: 'pipeline', label: 'Pipeline Workflow', icon: Layers, color: '#6366f1' },
+    { id: 'subtitles', label: 'Subtitle Editor', icon: FileText, color: '#818cf8' },
     { id: 'voices', label: 'Voice Studio', icon: Mic, color: '#a855f7' },
     { id: 'qc', label: 'Quality Control', icon: ShieldCheck, color: '#f59e0b' },
     { id: 'timeline', label: 'Timeline & Layers', icon: Layers, color: '#10b981' },
