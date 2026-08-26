@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Play, Pause, RefreshCw, Square, CheckCircle2, Eye, 
-  Activity, Cpu, HardDrive, Thermometer, Terminal, Sparkles
+  Activity, Cpu, HardDrive, Thermometer, Terminal, Sparkles, Lock, CheckCircle, XCircle
 } from 'lucide-react';
 import { PipelineStatus, StageName, StageProgressInfo, HardwareTelemetry, PipelineMode } from '../types/pipeline';
 
@@ -19,6 +19,8 @@ interface DashboardProps {
   onRetry: () => void;
   onCancel: () => void;
   onReview: () => void;
+  onApproveGate?: () => void;
+  onRejectGate?: () => void;
 }
 
 const STORY_STAGES: { key: StageName; label: string }[] = [
@@ -61,6 +63,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onRetry,
   onCancel,
   onReview,
+  onApproveGate,
+  onRejectGate,
 }) => {
   const currentStages = mode === 'STORY' ? STORY_STAGES : DUBBING_STAGES;
 
@@ -286,7 +290,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 6. CONTROL ACTIONS BAR */}
+      {/* 6. REVIEW GATE MANDATORY CONTROL BANNER (Phase 33) */}
+      {status === 'REVIEW_REQUIRED' && (
+        <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Lock size={18} style={{ color: '#f59e0b' }} />
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#fcd34d' }}>🔒 REVIEW GATE MANDATORY: DỰ ÁN ĐANG CHỜ PHÊ DUYỆT (REVIEW REQUIRED)</span>
+              <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
+                Pipeline đã dừng an toàn tại Review Gate. Tiến trình Render bị <strong>KHÓA (LOCKED)</strong> cho tới khi bạn bấm <strong>[APPROVE]</strong>.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={onRejectGate}
+              style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#f87171', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <XCircle size={13} /> [REJECT]
+            </button>
+            <button 
+              onClick={onApproveGate}
+              style={{ background: '#10b981', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <CheckCircle size={13} /> [APPROVE GATE ➔]
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 7. CONTROL ACTIONS BAR */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '8px' }}>
         <button 
           onClick={onReview}

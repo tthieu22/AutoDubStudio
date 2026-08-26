@@ -435,6 +435,13 @@ export default function App() {
                   onRetry={() => handleRetryStage('RENDER')}
                   onCancel={handleCancelPipeline}
                   onReview={() => setActiveTab('subtitles')}
+                  onApproveGate={async () => {
+                    setPipelineStatus('APPROVED');
+                    await handleResumePipeline();
+                  }}
+                  onRejectGate={() => {
+                    setPipelineStatus('IDLE');
+                  }}
                 />
               </div>
 

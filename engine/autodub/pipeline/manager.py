@@ -173,9 +173,14 @@ class PipelineManager:
         prev_stage = get_previous_stage(stage_enum)
         if prev_stage:
             prev_info = self.project.get_stage_info(prev_stage.value)
-            if prev_info["status"] != StageStatus.COMPLETED.value:
+            prev_status = prev_info["status"]
+            if prev_status not in [StageStatus.COMPLETED.value, StageStatus.APPROVED.value, StageStatus.SKIPPED.value]:
+                if prev_status == StageStatus.REVIEW_REQUIRED.value:
+                    raise StageDependencyError(
+                        f"Review Gate Required! Stage '{prev_stage.value}' is awaiting review (REVIEW_REQUIRED). Please inspect and approve artifacts before proceeding."
+                    )
                 raise StageDependencyError(
-                    f"Cannot run stage '{stage_name}'. Required previous stage '{prev_stage.value}' is {prev_info['status']}."
+                    f"Cannot run stage '{stage_name}'. Required previous stage '{prev_stage.value}' is {prev_status}."
                 )
 
         self.logger.info(f"Starting stage {stage_name.upper()}")
@@ -193,10 +198,18 @@ class PipelineManager:
             metadata = self.project.data.setdefault("metadata", {})
             timing = metadata.setdefault("timing", {})
             timing[stage_name] = round(duration, 3)
-            self.project.save()
 
-            self.logger.info(f"Completed stage {stage_name.upper()} (duration={duration:.2f}s)")
-            emit_event("stage_complete", stage=stage_name, elapsed=duration)
+            # Review Gate Checkpoint Logic (Phase 33)
+            if stage_enum in [PipelineStage.TRANSLATE, PipelineStage.TTS]:
+                self.project.update_stage(stage_name, status=StageStatus.REVIEW_REQUIRED.value, progress=100)
+                self.project.save()
+                self.logger.info(f"Stage {stage_name.upper()} artifacts generated. REVIEW_REQUIRED status set.")
+                emit_event("review_required", stage=stage_name, message=f"Stage {stage_name.upper()} generated. User Review Required before downstream execution.")
+            else:
+                self.project.update_stage(stage_name, status=StageStatus.COMPLETED.value, progress=100)
+                self.project.save()
+                self.logger.info(f"Completed stage {stage_name.upper()} (duration={duration:.2f}s)")
+                emit_event("stage_complete", stage=stage_name, elapsed=duration)
 
             # Perform stage post-validation
             if stage_enum == PipelineStage.RENDER:
@@ -212,6 +225,20 @@ class PipelineManager:
             self.logger.error(f"Failed stage {stage_name.upper()}: {e}")
             emit_event("stage_error", stage=stage_name, error=str(e))
             raise
+
+    def approve_stage(self, stage_name: str):
+        """Approve a stage currently in REVIEW_REQUIRED status to unlock downstream execution."""
+        self.project.update_stage(stage_name, status=StageStatus.APPROVED.value, progress=100)
+        self.project.save()
+        self.logger.info(f"Stage {stage_name.upper()} APPROVED by user.")
+        emit_event("stage_approved", stage=stage_name, message=f"Stage {stage_name.upper()} has been APPROVED by user.")
+
+    def reject_stage(self, stage_name: str, feedback: str = ""):
+        """Reject a stage in REVIEW_REQUIRED status, resetting it to PENDING."""
+        self.project.update_stage(stage_name, status=StageStatus.PENDING.value, progress=0, error=feedback)
+        self.project.save()
+        self.logger.warning(f"Stage {stage_name.upper()} REJECTED by user: {feedback}")
+        emit_event("stage_rejected", stage=stage_name, message=f"Stage {stage_name.upper()} REJECTED: {feedback}")
 
     def reset_all_stages(self):
         """Reset all pipeline stages to PENDING status."""

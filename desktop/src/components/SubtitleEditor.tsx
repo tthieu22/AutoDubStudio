@@ -206,6 +206,71 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({ projectDir, acti
     }
   };
 
+  const handleSplitSubtitle = (id: number) => {
+    const idx = subtitles.findIndex(s => s.id === id);
+    if (idx === -1) return;
+
+    const target = subtitles[idx];
+    const midTime = Number(((target.start + target.end) / 2).toFixed(2));
+    const text = target.translated_text || target.text || '';
+    const words = text.split(' ');
+    const half = Math.ceil(words.length / 2);
+    const text1 = words.slice(0, half).join(' ');
+    const text2 = words.slice(half).join(' ');
+
+    const newSeg1 = {
+      ...target,
+      end: midTime,
+      text: text1,
+      translated_text: text1
+    };
+
+    const newSeg2 = {
+      ...target,
+      id: Math.max(...subtitles.map(s => s.id), 0) + 1,
+      start: midTime,
+      text: text2,
+      translated_text: text2
+    };
+
+    const updated = [
+      ...subtitles.slice(0, idx),
+      newSeg1,
+      newSeg2,
+      ...subtitles.slice(idx + 1)
+    ];
+
+    setSubtitles(updated);
+    pushHistoryState(updated);
+    setHasChanges(true);
+  };
+
+  const handleMergeSubtitles = (id: number) => {
+    const idx = subtitles.findIndex(s => s.id === id);
+    if (idx === -1 || idx >= subtitles.length - 1) return;
+
+    const seg1 = subtitles[idx];
+    const seg2 = subtitles[idx + 1];
+    const mergedText = `${seg1.translated_text || seg1.text || ''} ${seg2.translated_text || seg2.text || ''}`.trim();
+
+    const mergedSeg = {
+      ...seg1,
+      end: seg2.end,
+      text: mergedText,
+      translated_text: mergedText
+    };
+
+    const updated = [
+      ...subtitles.slice(0, idx),
+      mergedSeg,
+      ...subtitles.slice(idx + 2)
+    ];
+
+    setSubtitles(updated);
+    pushHistoryState(updated);
+    setHasChanges(true);
+  };
+
   const translateEnglishToVietnameseAi = async (origText: string, prevContext: string = '', nextContext: string = ''): Promise<string> => {
     if (!origText || !origText.trim()) return '';
 
@@ -743,6 +808,42 @@ VIETNAMESE TRANSLATION:`;
           >
             <Sparkles size={13} color="#c084fc" /> Từ Điển Phát Âm (AI)
           </button>
+        </div>
+      </div>
+
+      {/* MULTI-TRACK TIMELINE PREVIEW BAR (Phase 32) */}
+      <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', fontWeight: 800, color: '#94a3b8' }}>
+          <span>🎬 MULTI-TRACK SUBTITLE & SCENE TIMELINE PREVIEW</span>
+          <span>00:00 ───────────────────────────────────────── 01:00</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px', fontFamily: 'monospace' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '85px', color: '#38bdf8', fontWeight: 700 }}>Speaker A</span>
+            <div style={{ flexGrow: 1, background: '#020617', height: '14px', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: '0%', width: '35%', background: '#0284c7', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '9px' }}>███████████</div>
+              <div style={{ position: 'absolute', left: '55%', width: '30%', background: '#0284c7', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '9px' }}>███████████</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '85px', color: '#c084fc', fontWeight: 700 }}>Speaker B</span>
+            <div style={{ flexGrow: 1, background: '#020617', height: '14px', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: '36%', width: '18%', background: '#9333ea', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '9px' }}>███████████</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '85px', color: '#34d399', fontWeight: 700 }}>Music</span>
+            <div style={{ flexGrow: 1, background: '#020617', height: '14px', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: '0%', width: '100%', background: 'rgba(16, 185, 129, 0.4)', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399', fontSize: '9px' }}>████████████████████████████████████████████</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '85px', color: '#fbbf24', fontWeight: 700 }}>Image</span>
+            <div style={{ flexGrow: 1, background: '#020617', height: '14px', borderRadius: '3px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: '0%', width: '45%', background: '#d97706', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '9px' }}>████████████████</div>
+              <div style={{ position: 'absolute', left: '46%', width: '54%', background: '#d97706', height: '100%', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '9px' }}>█████████████</div>
+            </div>
+          </div>
         </div>
       </div>
 

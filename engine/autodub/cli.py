@@ -167,6 +167,18 @@ def main():
             print(f"Project '{args.name}' created successfully.")
             return
 
+        elif args.command == "approve":
+            mgr = PipelineManager(args.project)
+            mgr.approve_stage(args.stage)
+            print(f"Stage '{args.stage}' for project '{args.project}' has been APPROVED.")
+            return
+
+        elif args.command == "reject":
+            mgr = PipelineManager(args.project)
+            mgr.reject_stage(args.stage, feedback=getattr(args, "feedback", ""))
+            print(f"Stage '{args.stage}' for project '{args.project}' REJECTED.")
+            return
+
         elif args.command == "list":
             jobs = job_mgr.list_jobs(status=args.status, limit=args.limit)
             if args.json:

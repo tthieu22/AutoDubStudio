@@ -5,6 +5,8 @@ from autodub.exceptions import StateTransitionError, StageDependencyError
 class StageStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
+    REVIEW_REQUIRED = "review_required"
+    APPROVED = "approved"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -29,7 +31,9 @@ STAGE_ORDER: List[PipelineStage] = [
 
 VALID_TRANSITIONS = {
     StageStatus.PENDING: {StageStatus.RUNNING},
-    StageStatus.RUNNING: {StageStatus.COMPLETED, StageStatus.FAILED, StageStatus.CANCELLED},
+    StageStatus.RUNNING: {StageStatus.COMPLETED, StageStatus.REVIEW_REQUIRED, StageStatus.FAILED, StageStatus.CANCELLED},
+    StageStatus.REVIEW_REQUIRED: {StageStatus.APPROVED, StageStatus.RUNNING, StageStatus.FAILED, StageStatus.CANCELLED},
+    StageStatus.APPROVED: {StageStatus.RUNNING, StageStatus.COMPLETED},
     StageStatus.FAILED: {StageStatus.RUNNING},
     StageStatus.CANCELLED: {StageStatus.RUNNING},
     StageStatus.SKIPPED: {StageStatus.RUNNING},

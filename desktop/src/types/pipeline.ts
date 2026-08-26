@@ -6,6 +6,7 @@ export type PipelineStatus =
   | 'RUNNING'
   | 'PAUSED'
   | 'REVIEW_REQUIRED'
+  | 'APPROVED'
   | 'CANCELLING'
   | 'CANCELLED'
   | 'COMPLETED'
