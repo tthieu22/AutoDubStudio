@@ -1,279 +1,276 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
-  Folder, Activity, FileText, Layers, Mic, ShieldCheck, 
-  Terminal, Video, Share2, Settings, PlusCircle, RefreshCw, 
-  ChevronLeft, ChevronRight, Search, FileVideo, Trash2
+  FolderKanban, 
+  FileText, 
+  Languages, 
+  BookOpen, 
+  Users, 
+  Globe, 
+  Brain, 
+  Clapperboard, 
+  Image as ImageIcon, 
+  Mic, 
+  Subtitles, 
+  SlidersHorizontal, 
+  CheckCircle2, 
+  Terminal, 
+  Settings, 
+  ChevronLeft, 
+  ChevronRight,
+  Plus,
+  Trash2
 } from 'lucide-react';
+import { PipelineMode } from '../types/pipeline';
+
+export type SidebarTab =
+  | 'overview'
+  | 'source'
+  | 'transcript'
+  | 'translation'
+  | 'story'
+  | 'characters'
+  | 'world'
+  | 'memory'
+  | 'chapters'
+  | 'scenes'
+  | 'images'
+  | 'voice'
+  | 'subtitles'
+  | 'timeline'
+  | 'preview'
+  | 'review'
+  | 'render'
+  | 'export'
+  | 'logs'
+  | 'settings';
 
 interface SidebarProps {
-  projectsList: string[];
-  selectedProjectDir: string | null;
-  activeTab: string;
-  setActiveTab: (tab: any) => void;
-  onSelectProject: (name: string) => void;
-  onCreateNewProjectClick: () => void;
-  onRefreshList: () => void;
-  onDeleteProject: (name: string) => void;
+  activeTab: SidebarTab;
+  setActiveTab: (tab: SidebarTab) => void;
+  pipelineMode: PipelineMode;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  width: number;
+  projectsList?: string[];
+  selectedProjectDir?: string | null;
+  onSelectProject?: (proj: string) => void;
+  onCreateNewProject?: () => void;
+  onDeleteProject?: (name: string) => void;
+  badges?: {
+    scenesCount?: string;
+    imagesCount?: string;
+    reviewCount?: number;
+    jobsCount?: number;
+    errorsCount?: number;
+  };
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  projectsList,
-  selectedProjectDir,
   activeTab,
   setActiveTab,
+  pipelineMode,
+  isCollapsed,
+  onToggleCollapse,
+  width,
+  projectsList = [],
+  selectedProjectDir,
   onSelectProject,
-  onCreateNewProjectClick,
-  onRefreshList,
-  onDeleteProject
+  onCreateNewProject,
+  onDeleteProject,
+  badges = {
+    scenesCount: '8/10',
+    imagesCount: '7/10',
+    reviewCount: 3,
+    jobsCount: 2,
+    errorsCount: 0
+  }
 }) => {
-  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const currentProjName = selectedProjectDir
+    ? selectedProjectDir.split('/').pop()?.split('\\').pop() || selectedProjectDir
+    : '';
 
-  const filteredProjects = projectsList.filter(name => 
-    name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const topNavItems = [
-    { id: 'dashboard', label: 'Dashboard Control Center', icon: Activity, color: '#06b6d4' },
-    { id: 'pipeline', label: 'Pipeline Workflow', icon: Layers, color: '#6366f1' },
-    { id: 'subtitles', label: 'Subtitle Editor', icon: FileText, color: '#818cf8' },
-    { id: 'voices', label: 'Voice Studio', icon: Mic, color: '#a855f7' },
-    { id: 'qc', label: 'Quality Control', icon: ShieldCheck, color: '#f59e0b' },
-    { id: 'timeline', label: 'Timeline & Layers', icon: Layers, color: '#10b981' },
-    { id: 'preview', label: 'Video Preview', icon: Video, color: '#3b82f6' }
-  ];
-
-  const bottomNavItems = [
-    { id: 'export', label: 'Export Presets', icon: Share2, color: '#ec4899' },
-    { id: 'logs', label: 'Console Logs', icon: Terminal, color: '#94a3b8' },
-    { id: 'settings', label: 'Settings', icon: Settings, color: '#64748b' }
-  ];
-
-  const renderNavItem = (item: typeof topNavItems[0]) => {
-    const Icon = item.icon;
-    const isActive = activeTab === item.id;
+  const renderNavGroup = (title: string, items: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }>) => {
     return (
-      <button
-        key={item.id}
-        onClick={() => setActiveTab(item.id)}
-        style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '8px',
-          background: isActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-          color: isActive ? item.color : '#94a3b8',
-          border: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-          position: 'relative'
-        }}
-        title={item.label}
-      >
-        <Icon size={20} />
-        {isActive && (
-          <div 
-            style={{ 
-              position: 'absolute', 
-              left: 0, 
-              top: '10px', 
-              width: '3px', 
-              height: '20px', 
-              background: item.color, 
-              borderRadius: '0 2px 2px 0' 
-            }} 
-          />
+      <div className="mb-4">
+        {!isCollapsed && (
+          <div className="px-3 mb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-['Outfit']">
+            {title}
+          </div>
         )}
-      </button>
+        <div className="space-y-0.5">
+          {items.map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
+                  isActive
+                    ? 'bg-indigo-600/15 text-indigo-300 border-l-2 border-indigo-500 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border-l-2 border-transparent'
+                }`}
+                title={isCollapsed ? item.label : undefined}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`${isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                    {item.icon}
+                  </span>
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                </div>
+
+                {!isCollapsed && item.badge !== undefined && item.badge !== null && item.badge !== 0 && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      item.badgeColor || 'bg-white/10 text-slate-300'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     );
   };
 
+  // Distinct non-duplicative navigation items per mode
+  const dubbingPipelineItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
+    { id: 'overview', label: 'Overview', icon: <FolderKanban size={15} /> },
+    { id: 'transcript', label: 'Transcript STT', icon: <FileText size={15} /> },
+    { id: 'translation', label: 'Translation', icon: <Languages size={15} /> },
+    { id: 'voice', label: 'Voice Studio', icon: <Mic size={15} /> },
+    { id: 'subtitles', label: 'Subtitles', icon: <Subtitles size={15} /> }
+  ];
+
+  const storyItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
+    { id: 'overview', label: 'Overview', icon: <FolderKanban size={15} /> },
+    { id: 'story', label: 'Story & Chapters', icon: <BookOpen size={15} /> },
+    { id: 'characters', label: 'Character Bible', icon: <Users size={15} /> },
+    { id: 'world', label: 'World & Lore', icon: <Globe size={15} /> },
+    { id: 'memory', label: 'Story Memory', icon: <Brain size={15} /> },
+    { id: 'scenes', label: 'Scene Board', icon: <Clapperboard size={15} />, badge: badges.scenesCount, badgeColor: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' }
+  ];
+
+  const storyProductionItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
+    { id: 'images', label: 'AI Image Gen', icon: <ImageIcon size={15} />, badge: badges.imagesCount, badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30' },
+    { id: 'voice', label: 'Voice Studio', icon: <Mic size={15} /> },
+    { id: 'timeline', label: 'Timeline Editor', icon: <SlidersHorizontal size={15} /> }
+  ];
+
+  const dubbingProductionItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
+    { id: 'timeline', label: 'Timeline Editor', icon: <SlidersHorizontal size={15} /> }
+  ];
+
+  const outputAndSystemItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
+    { 
+      id: 'review', 
+      label: 'Review & QC', 
+      icon: <CheckCircle2 size={15} />, 
+      badge: badges.reviewCount, 
+      badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+    },
+    { id: 'render', label: 'Render & Export', icon: <Clapperboard size={15} /> },
+    { 
+      id: 'logs', 
+      label: 'Logs & Jobs', 
+      icon: <Terminal size={15} />, 
+      badge: badges.errorsCount && badges.errorsCount > 0 ? `${badges.errorsCount} ERR` : undefined, 
+      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+    },
+    { id: 'settings', label: 'Settings', icon: <Settings size={15} /> }
+  ];
+
   return (
-    <div style={{ display: 'flex', height: '100%', zIndex: 10 }}>
-      {/* 1. NARROW ACTIVITY BAR NAVIGATION (64px) */}
-      <div 
-        style={{ 
-          width: '64px', 
-          background: '#0B0D10', 
-          borderRight: '1px solid rgba(255, 255, 255, 0.05)', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          padding: '16px 0', 
-          gap: '8px',
-          height: '100%'
-        }}
+    <aside
+      className="bg-[#0e1015] border-r border-white/5 flex flex-col justify-between select-none relative flex-shrink-0 transition-all duration-200 z-20"
+      style={{ width: isCollapsed ? 56 : width }}
+    >
+      {/* COLLAPSE TOGGLE BUTTON */}
+      <button
+        onClick={onToggleCollapse}
+        className="absolute -right-3 top-3 w-6 h-6 rounded-full bg-[#181c24] border border-white/10 text-slate-400 hover:text-white flex items-center justify-center shadow-md z-30 transition-all hover:scale-105"
+        title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
       >
-        {/* Toggle Projects panel button */}
-        <button
-          onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            background: isProjectsExpanded ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-            color: isProjectsExpanded ? '#6366f1' : '#94a3b8',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            marginBottom: '16px'
-          }}
-          title={isProjectsExpanded ? 'Hide Projects Explorer' : 'Show Projects Explorer'}
-        >
-          <Folder size={20} />
-        </button>
+        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
 
-        {/* Top Navigation Tabs */}
-        {selectedProjectDir && topNavItems.map(renderNavItem)}
-
-        {/* Spacer to push next group to the bottom */}
-        {selectedProjectDir && <div style={{ flexGrow: 1 }} />}
-
-        {/* Bottom Navigation Tabs */}
-        {selectedProjectDir && bottomNavItems.map(renderNavItem)}
-      </div>
-
-      {/* 2. EXPANDABLE PROJECT EXPLORER PANEL */}
-      {isProjectsExpanded && (
-        <div 
-          style={{ 
-            width: '240px', 
-            background: '#111318', 
-            borderRight: '1px solid rgba(255, 255, 255, 0.05)', 
-            display: 'flex', 
-            flexDirection: 'column' 
-          }}
-        >
-          {/* Header */}
-          <div style={{ padding: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Project Explorer
-              </span>
-              <button 
-                onClick={onRefreshList} 
-                style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex', padding: '4px' }}
-                title="Refresh projects"
-              >
-                <RefreshCw size={13} />
-              </button>
-            </div>
-
-            {/* Create Project Button */}
-            <button 
-              className="btn-primary" 
-              onClick={onCreateNewProjectClick} 
-              style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '12px', gap: '6px' }}
+      {/* PROJECT SWITCHER HEADER */}
+      {!isCollapsed && (
+        <div className="p-3 border-b border-white/5 bg-black/40 space-y-2">
+          <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-['Outfit']">
+            <span>Active Project</span>
+            <button
+              onClick={onCreateNewProject}
+              className="px-1.5 py-0.5 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1 transition-all"
+              title="Create New Project"
             >
-              <PlusCircle size={14} /> NEW PROJECT
+              <Plus size={10} /> New
             </button>
           </div>
 
-          {/* Search Box */}
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.03)', position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '26px', top: '22px', color: '#64748b' }} />
-            <input 
-              type="text" 
-              placeholder="Search projects..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                background: '#0B0D10',
-                border: '1px solid rgba(255, 255, 255, 0.05)',
-                borderRadius: '6px',
-                padding: '6px 12px 6px 30px',
-                color: '#fff',
-                fontSize: '12px',
-                outline: 'none'
+          <div className="flex items-center gap-1.5">
+            <select
+              value={currentProjName}
+              onChange={e => {
+                if (e.target.value === '__NEW__') {
+                  onCreateNewProject?.();
+                } else if (onSelectProject) {
+                  onSelectProject(e.target.value);
+                }
               }}
-            />
-          </div>
+              className="flex-1 bg-[#111318] border border-white/10 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              {projectsList.length === 0 && <option value="">No projects yet</option>}
+              {projectsList.map(p => (
+                <option key={p} value={p}>
+                  📁 {p}
+                </option>
+              ))}
+              <option value="__NEW__">+ Create New Project...</option>
+            </select>
 
-          {/* Project List */}
-          <div style={{ flexGrow: 1, overflowY: 'auto', padding: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {filteredProjects.length === 0 ? (
-                <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', padding: '8px' }}>
-                  No projects found
-                </span>
-              ) : (
-                filteredProjects.map(name => {
-                  const isSelected = selectedProjectDir?.endsWith(name);
-                  return (
-                    <div
-                      key={name}
-                      onClick={() => onSelectProject(name)}
-                      style={{
-                        padding: '10px 12px',
-                        cursor: 'pointer',
-                        borderRadius: '6px',
-                        background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                        border: '1px solid',
-                        borderColor: isSelected ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <FileVideo size={15} style={{ color: isSelected ? '#06b6d4' : '#64748b' }} />
-                      <span 
-                        style={{ 
-                          fontSize: '12px', 
-                          fontWeight: isSelected ? 600 : 400, 
-                          color: isSelected ? '#fff' : '#cbd5e1', 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis', 
-                          whiteSpace: 'nowrap',
-                          flexGrow: 1
-                        }}
-                      >
-                        {name}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteProject(name);
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '4px',
-                          borderRadius: '4px',
-                          opacity: 0.6,
-                          transition: 'all 0.2s ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.opacity = '1';
-                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.opacity = '0.6';
-                          e.currentTarget.style.background = 'transparent';
-                        }}
-                        title="Delete project"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {currentProjName && onDeleteProject && (
+              <button
+                onClick={() => onDeleteProject(currentProjName)}
+                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all flex-shrink-0"
+                title="Delete Current Project"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         </div>
       )}
-    </div>
+
+      {/* NAVIGATION CONTENT CONTAINER */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 custom-scrollbar">
+        {pipelineMode === 'STORY' ? (
+          <>
+            {renderNavGroup('Story Narrative', storyItems)}
+            {renderNavGroup('Production', storyProductionItems)}
+          </>
+        ) : (
+          <>
+            {renderNavGroup('Dubbing Pipeline', dubbingPipelineItems)}
+            {renderNavGroup('Production', dubbingProductionItems)}
+          </>
+        )}
+        
+        {renderNavGroup('Output & System', outputAndSystemItems)}
+      </div>
+
+      {/* FOOTER BADGE STATUS */}
+      {!isCollapsed && (
+        <div className="p-3 border-t border-white/5 bg-black/20 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Studio Engine Ready</span>
+          </div>
+          <span className="text-[10px] font-mono text-slate-600">v0.2.0</span>
+        </div>
+      )}
+    </aside>
   );
 };

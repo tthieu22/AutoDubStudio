@@ -1,9 +1,29 @@
 import React from 'react';
 import { 
-  Play, Pause, RefreshCw, Square, CheckCircle2, Eye, 
-  Activity, Cpu, HardDrive, Thermometer, Terminal, Sparkles, Lock, CheckCircle, XCircle
+  Play, 
+  Pause, 
+  RefreshCw, 
+  Square, 
+  CheckCircle2, 
+  Eye, 
+  Activity, 
+  Cpu, 
+  HardDrive, 
+  Thermometer, 
+  Terminal, 
+  Lock, 
+  CheckCircle, 
+  XCircle,
+  FileVideo,
+  Clock,
+  Layers,
+  ArrowRight,
+  AlertTriangle,
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { PipelineStatus, StageName, StageProgressInfo, HardwareTelemetry, PipelineMode } from '../types/pipeline';
+import { SidebarTab } from './Sidebar';
 
 interface DashboardProps {
   projectName: string;
@@ -21,32 +41,35 @@ interface DashboardProps {
   onReview: () => void;
   onApproveGate?: () => void;
   onRejectGate?: () => void;
+  onNavigateTab?: (tab: SidebarTab) => void;
 }
 
-const STORY_STAGES: { key: StageName; label: string }[] = [
-  { key: 'COLLECT', label: 'Collect' },
-  { key: 'CLEAN', label: 'Clean' },
-  { key: 'ANALYZE', label: 'Analyze' },
-  { key: 'MEMORY', label: 'Memory' },
-  { key: 'SCENE', label: 'Scene' },
-  { key: 'IMAGE', label: 'Image' },
-  { key: 'TTS', label: 'TTS' },
-  { key: 'SUBTITLE', label: 'Subtitle' },
-  { key: 'TIMELINE', label: 'Timeline' },
-  { key: 'RENDER', label: 'Render' },
-  { key: 'QA', label: 'QA' },
-  { key: 'PUBLISH', label: 'Publish' },
+interface StepNode {
+  key: StageName;
+  label: string;
+  tab: SidebarTab;
+}
+
+const DUBBING_STEPPER: StepNode[] = [
+  { key: 'EXTRACT', label: 'Source', tab: 'source' },
+  { key: 'TRANSCRIBE', label: 'Transcript', tab: 'transcript' },
+  { key: 'TRANSLATE', label: 'Translation', tab: 'translation' },
+  { key: 'TTS', label: 'Audio / Voice', tab: 'voice' },
+  { key: 'SUBTITLE', label: 'Subtitle', tab: 'subtitles' },
+  { key: 'TIMELINE', label: 'Timeline', tab: 'timeline' },
+  { key: 'RENDER', label: 'Render', tab: 'render' }
 ];
 
-const DUBBING_STAGES: { key: StageName; label: string }[] = [
-  { key: 'EXTRACT', label: 'Extract' },
-  { key: 'TRANSCRIBE', label: 'STT' },
-  { key: 'TRANSLATE', label: 'Translate' },
-  { key: 'TTS', label: 'TTS' },
-  { key: 'SYNC', label: 'Sync' },
-  { key: 'RENDER', label: 'Render' },
-  { key: 'QA', label: 'QA' },
-  { key: 'PUBLISH', label: 'Publish' },
+const STORY_STEPPER: StepNode[] = [
+  { key: 'COLLECT', label: 'Source', tab: 'source' },
+  { key: 'CLEAN', label: 'Clean', tab: 'story' },
+  { key: 'ANALYZE', label: 'Analyze', tab: 'story' },
+  { key: 'MEMORY', label: 'Memory', tab: 'memory' },
+  { key: 'SCENE', label: 'Scenes', tab: 'scenes' },
+  { key: 'IMAGE', label: 'Images', tab: 'images' },
+  { key: 'TTS', label: 'TTS Voice', tab: 'voice' },
+  { key: 'TIMELINE', label: 'Timeline', tab: 'timeline' },
+  { key: 'RENDER', label: 'Render', tab: 'render' }
 ];
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -65,364 +88,331 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onReview,
   onApproveGate,
   onRejectGate,
+  onNavigateTab
 }) => {
-  const currentStages = mode === 'STORY' ? STORY_STAGES : DUBBING_STAGES;
+  const steps = mode === 'STORY' ? STORY_STEPPER : DUBBING_STEPPER;
 
-  const getStageIcon = (stKey: StageName) => {
+  const getStepBadge = (stKey: StageName) => {
     const info = stageProgresses[stKey];
     const stStatus = info?.status || 'PENDING';
 
-    if (stStatus === 'COMPLETED' || stStatus === 'APPROVED') {
-      return <span style={{ color: '#10b981', fontWeight: 800 }}>✓</span>;
+    switch (stStatus) {
+      case 'COMPLETED':
+      case 'APPROVED':
+        return {
+          icon: '✓',
+          color: 'text-emerald-400',
+          bg: 'bg-emerald-500/10 border-emerald-500/30',
+          text: 'COMPLETED'
+        };
+      case 'RUNNING':
+        return {
+          icon: '●',
+          color: 'text-cyan-400 animate-pulse',
+          bg: 'bg-cyan-500/15 border-cyan-500/40 shadow-sm shadow-cyan-500/20',
+          text: `${info?.progress || 0}%`
+        };
+      case 'REVIEW_REQUIRED':
+        return {
+          icon: '!',
+          color: 'text-amber-400',
+          bg: 'bg-amber-500/15 border-amber-500/40',
+          text: 'REVIEW'
+        };
+      case 'FAILED':
+        return {
+          icon: '×',
+          color: 'text-rose-400',
+          bg: 'bg-rose-500/15 border-rose-500/40',
+          text: 'FAILED'
+        };
+      case 'PENDING':
+      default:
+        return {
+          icon: '○',
+          color: 'text-slate-500',
+          bg: 'bg-white/5 border-white/5',
+          text: 'PENDING'
+        };
     }
-    if (stStatus === 'RUNNING') {
-      return <span style={{ color: '#06b6d4', fontWeight: 800 }}>▶</span>;
-    }
-    if (stStatus === 'REVIEW_REQUIRED') {
-      return <span style={{ color: '#f59e0b', fontWeight: 800 }}>👁</span>;
-    }
-    if (stStatus === 'FAILED') {
-      return <span style={{ color: '#ef4444', fontWeight: 800 }}>!</span>;
-    }
-    return <span style={{ color: '#475569' }}>○</span>;
   };
 
   const getStatusBadge = () => {
-    let bg = 'rgba(71, 85, 105, 0.2)';
-    let color = '#94a3b8';
-    let text: string = status;
-
-    if (status === 'RUNNING') {
-      bg = 'rgba(6, 182, 212, 0.15)'; color = '#38bdf8'; text = 'RUNNING';
-    } else if (status === 'PAUSED') {
-      bg = 'rgba(245, 158, 11, 0.15)'; color = '#fbbf24'; text = 'PAUSED';
-    } else if (status === 'REVIEW_REQUIRED') {
-      bg = 'rgba(236, 72, 153, 0.2)'; color = '#f472b6'; text = 'REVIEW REQUIRED';
-    } else if (status === 'COMPLETED') {
-      bg = 'rgba(16, 185, 129, 0.15)'; color = '#34d399'; text = 'COMPLETED';
-    } else if (status === 'FAILED') {
-      bg = 'rgba(239, 68, 68, 0.15)'; color = '#f87171'; text = 'FAILED';
+    switch (status) {
+      case 'RUNNING':
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-extrabold tracking-wider flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            RUNNING ({overallProgress}%)
+          </span>
+        );
+      case 'PAUSED':
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-extrabold tracking-wider">
+            PAUSED
+          </span>
+        );
+      case 'REVIEW_REQUIRED':
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-pink-500/20 border border-pink-500/40 text-pink-300 text-xs font-extrabold tracking-wider flex items-center gap-1.5">
+            <Lock size={12} />
+            REVIEW REQUIRED
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-extrabold tracking-wider flex items-center gap-1.5">
+            <CheckCircle size={12} />
+            COMPLETED
+          </span>
+        );
+      case 'FAILED':
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-extrabold tracking-wider flex items-center gap-1.5">
+            <XCircle size={12} />
+            FAILED
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-400 text-xs font-extrabold tracking-wider">
+            IDLE
+          </span>
+        );
     }
-
-    return (
-      <span 
-        style={{ 
-          padding: '4px 10px', 
-          borderRadius: '6px', 
-          background: bg, 
-          color, 
-          fontSize: '11px', 
-          fontWeight: 800, 
-          letterSpacing: '0.5px' 
-        }}
-      >
-        {text}
-      </span>
-    );
   };
 
   return (
-    <div 
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '16px', 
-        padding: '20px', 
-        background: '#0B0D10', 
-        color: '#f8fafc',
-        borderRadius: '16px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        fontFamily: 'Inter, system-ui, sans-serif'
-      }}
-    >
-      {/* 1. HEADER CONTROL BAR */}
-      <div 
-        style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          paddingBottom: '14px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
-        }}
-      >
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
+      {/* 1. TOP HEADER & MODE TITLE */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#111318] p-5 rounded-xl border border-white/5 shadow-md">
         <div>
-          <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>AutoDubStudio Control Center</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {projectName || 'MyStory'}
-            <div style={{ display: 'flex', gap: '6px', marginLeft: '6px' }}>
-              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '6px', background: mode === 'STORY' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.05)', color: mode === 'STORY' ? '#c084fc' : '#64748b', border: mode === 'STORY' ? '1px solid #a855f7' : '1px solid transparent', fontWeight: 800 }}>
-                📖 MODE STORY (TẠO TRUYỆN AI)
-              </span>
-              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '6px', background: mode === 'DUBBING' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(255, 255, 255, 0.05)', color: mode === 'DUBBING' ? '#38bdf8' : '#64748b', border: mode === 'DUBBING' ? '1px solid #06b6d4' : '1px solid transparent', fontWeight: 800 }}>
-                🎬 MODE DUBBING (LỒNG TIẾNG VIDEO)
-              </span>
-            </div>
-          </h2>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-extrabold uppercase tracking-wider font-['Outfit']">
+            <span>Project Workspace</span>
+            <ChevronRight size={12} />
+            <span className="text-indigo-400">{mode} PIPELINE</span>
+          </div>
+          <h1 className="text-xl font-bold text-white tracking-tight mt-1 flex items-center gap-3 font-['Outfit']">
+            {projectName}
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
+              mode === 'STORY' 
+                ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' 
+                : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+            }`}>
+              {mode === 'STORY' ? '📖 MODE_STORY' : '🎬 MODE_DUBBING'}
+            </span>
+          </h1>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>Status:</span>
-          {getStatusBadge()}
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <div className="text-[11px] text-slate-400 uppercase font-semibold">Current State</div>
+            {getStatusBadge()}
+          </div>
         </div>
       </div>
 
-      {/* 2. PIPELINE STAGE TRACKER GRID */}
-      <div 
-        style={{ 
-          background: '#111318', 
-          border: '1px solid rgba(255, 255, 255, 0.05)', 
-          borderRadius: '12px', 
-          padding: '16px 20px' 
-        }}
-      >
-        <span style={{ fontSize: '11px', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '12px' }}>
-          Pipeline Execution Trackers
-        </span>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-          {currentStages.map((st) => {
-            const info = stageProgresses[st.key];
-            const isRunning = info?.status === 'RUNNING';
-            const isReview = info?.status === 'REVIEW_REQUIRED';
+      {/* 2. SOURCE METADATA & PIPELINE OVERVIEW CARD */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* SOURCE VIDEO METADATA CARD */}
+        <div className="bg-[#111318] p-5 rounded-xl border border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider font-['Outfit'] flex items-center gap-1.5">
+              <FileVideo size={14} className="text-indigo-400" />
+              Source Video
+            </span>
+            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+              READY
+            </span>
+          </div>
 
+          <div className="space-y-2 pt-1 text-xs">
+            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+              <span className="text-slate-500">File Name</span>
+              <span className="font-semibold truncate max-w-[170px]" title="source/input.mp4">input.mp4</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+              <span className="text-slate-500">Duration</span>
+              <span className="font-mono font-medium">18:32.40</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+              <span className="text-slate-500">Resolution</span>
+              <span className="font-mono font-medium">1920 x 1080 (1080p)</span>
+            </div>
+            <div className="flex justify-between py-1 text-slate-300">
+              <span className="text-slate-500">Target Language</span>
+              <span className="font-semibold text-cyan-400 uppercase">Vietnamese (vi)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* PIPELINE PROGRESS SUMMARY */}
+        <div className="lg:col-span-2 bg-[#111318] p-5 rounded-xl border border-white/5 flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider font-['Outfit']">
+                Pipeline Execution Progress
+              </span>
+              <h3 className="text-lg font-bold text-white mt-0.5 font-['Outfit']">
+                Overall Completion: <span className="text-cyan-400">{overallProgress}%</span>
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {status === 'RUNNING' ? (
+                <button
+                  onClick={onCancel}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                >
+                  <Square size={13} /> Cancel
+                </button>
+              ) : (
+                <button
+                  onClick={onStart}
+                  className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-500/20 transition-all"
+                >
+                  <Play size={13} /> Start Pipeline
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* PROGRESS BAR */}
+          <div className="space-y-1.5">
+            <div className="w-full bg-black/50 h-3 rounded-full overflow-hidden p-0.5 border border-white/5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 transition-all duration-500 shadow-sm shadow-cyan-500/30"
+                style={{ width: `${overallProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-slate-500">
+              <span>Pipeline Stage 1 / {steps.length}</span>
+              <span>{overallProgress === 100 ? 'Ready for Export' : 'In Progress'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. PIPELINE HORIZONTAL STEPPER WITH CLICKABLE NODES */}
+      <div className="bg-[#111318] p-5 rounded-xl border border-white/5 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider font-['Outfit'] flex items-center gap-2">
+            <Layers size={14} className="text-cyan-400" />
+            Interactive Stepper (Click node to open module workspace)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+          {steps.map((st, idx) => {
+            const badge = getStepBadge(st.key);
             return (
-              <div 
+              <button
                 key={st.key}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px', 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  background: isRunning ? 'rgba(6, 182, 212, 0.1)' : isReview ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255, 255, 255, 0.02)',
-                  border: isRunning ? '1px solid rgba(6, 182, 212, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}
+                onClick={() => onNavigateTab?.(st.tab)}
+                className={`p-3 rounded-lg border flex flex-col items-start justify-between text-left transition-all hover:scale-[1.02] ${badge.bg}`}
+                title={`Open ${st.label} Workspace`}
               >
-                {getStageIcon(st.key)}
-                <span style={{ flexGrow: 1, color: isRunning ? '#38bdf8' : '#e2e8f0' }}>{st.label}</span>
-                {info && info.progress > 0 && (
-                  <span style={{ fontSize: '10px', color: '#64748b' }}>{info.progress}%</span>
-                )}
-              </div>
+                <div className="flex items-center justify-between w-full mb-2">
+                  <span className="text-[10px] font-bold text-slate-500">0{idx + 1}</span>
+                  <span className={`text-xs font-extrabold ${badge.color}`}>{badge.icon}</span>
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-200 font-['Outfit'] truncate w-full">{st.label}</div>
+                  <div className="text-[10px] font-semibold text-slate-400 mt-0.5">{badge.text}</div>
+                </div>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* 3. PROGRESS BAR PANEL */}
-      <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-          <span style={{ fontWeight: 700, color: '#e2e8f0' }}>Total Progress</span>
-          <span style={{ fontWeight: 800, color: '#38bdf8' }}>{overallProgress}%</span>
-        </div>
-        <div style={{ background: '#020617', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
-          <div 
-            style={{ 
-              width: `${overallProgress}%`, 
-              height: '100%', 
-              background: 'linear-gradient(90deg, #6366f1, #06b6d4, #10b981)',
-              transition: 'width 0.4s ease',
-              borderRadius: '6px'
-            }} 
-          />
-        </div>
-      </div>
-
-      {/* 4. HARDWARE TELEMETRY GAUGES (GTX 1650 Ti 4GB Target) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
-        {/* GPU Utilization */}
-        <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}><Activity size={12} style={{ color: '#06b6d4' }} /> GPU</span>
-            <span style={{ color: '#fff', fontWeight: 800 }}>{telemetry.gpu_util_percent}%</span>
-          </div>
-          <div style={{ background: '#020617', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: `${telemetry.gpu_util_percent}%`, height: '100%', background: '#06b6d4' }} />
-          </div>
-        </div>
-
-        {/* VRAM Usage */}
-        <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}><HardDrive size={12} style={{ color: '#a855f7' }} /> VRAM</span>
-            <span style={{ color: '#fff', fontWeight: 800 }}>{telemetry.vram_used_gb} / {telemetry.vram_total_gb} GB</span>
-          </div>
-          <div style={{ background: '#020617', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: `${telemetry.vram_percent}%`, height: '100%', background: '#a855f7' }} />
-          </div>
-        </div>
-
-        {/* RAM Usage */}
-        <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}><Cpu size={12} style={{ color: '#10b981' }} /> RAM</span>
-            <span style={{ color: '#fff', fontWeight: 800 }}>{telemetry.ram_used_gb} GB ({telemetry.ram_percent}%)</span>
-          </div>
-          <div style={{ background: '#020617', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: `${telemetry.ram_percent}%`, height: '100%', background: '#10b981' }} />
-          </div>
-        </div>
-
-        {/* CPU & Temp */}
-        <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '6px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}><Thermometer size={12} style={{ color: '#f59e0b' }} /> CPU / Temp</span>
-            <span style={{ color: '#fff', fontWeight: 800 }}>{telemetry.cpu_percent}% | {telemetry.temp_c}°C</span>
-          </div>
-          <div style={{ background: '#020617', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: `${telemetry.cpu_percent}%`, height: '100%', background: '#f59e0b' }} />
-          </div>
-        </div>
-      </div>
-
-      {/* 5. LOG STREAM FEED */}
-      <div style={{ background: '#111318', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '14px 16px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 800, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <Terminal size={13} /> Live Log Stream
-        </span>
-        <div style={{ background: '#020617', borderRadius: '8px', padding: '12px', height: '110px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {logs.length === 0 ? (
-            <span style={{ color: '#475569' }}>Logs will stream here in real-time...</span>
-          ) : (
-            logs.slice(-8).map((l, i) => (
-              <div key={i} style={{ color: l.includes('ERROR') ? '#f87171' : l.includes('VRAM') ? '#c084fc' : '#cbd5e1' }}>
-                {l}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* 6. REVIEW GATE MANDATORY CONTROL BANNER (Phase 33) */}
+      {/* 4. MANDATORY REVIEW GATE BANNER */}
       {status === 'REVIEW_REQUIRED' && (
-        <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Lock size={18} style={{ color: '#f59e0b' }} />
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0">
+              <Lock size={18} />
+            </div>
             <div>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#fcd34d' }}>🔒 REVIEW GATE MANDATORY: DỰ ÁN ĐANG CHỜ PHÊ DUYỆT (REVIEW REQUIRED)</span>
-              <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
-                Pipeline đã dừng an toàn tại Review Gate. Tiến trình Render bị <strong>KHÓA (LOCKED)</strong> cho tới khi bạn bấm <strong>[APPROVE]</strong>.
-              </div>
+              <h4 className="text-xs font-extrabold text-amber-300 uppercase tracking-wider font-['Outfit']">
+                🔒 REVIEW GATE MANDATORY: Human Review Required
+              </h4>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Downstream pipeline stages are locked until human approval. Please inspect generated subtitles & audio before approving.
+              </p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
+
+          <div className="flex items-center gap-2">
+            <button
               onClick={onRejectGate}
-              style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#f87171', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center gap-1 transition-all"
             >
-              <XCircle size={13} /> [REJECT]
+              <XCircle size={14} /> Reject
             </button>
-            <button 
+            <button
               onClick={onApproveGate}
-              style={{ background: '#10b981', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-600/20 transition-all"
             >
-              <CheckCircle size={13} /> [APPROVE GATE ➔]
+              <CheckCircle size={14} /> Approve Gate
             </button>
           </div>
         </div>
       )}
 
-      {/* 7. CONTROL ACTIONS BAR */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '8px' }}>
-        <button 
-          onClick={onReview}
-          style={{ 
-            background: 'rgba(236, 72, 153, 0.15)', 
-            border: '1px solid rgba(236, 72, 153, 0.4)', 
-            color: '#f472b6', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            fontSize: '12px', 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            cursor: 'pointer' 
-          }}
-        >
-          <Eye size={14} /> [Review]
-        </button>
+      {/* 5. HARDWARE TELEMETRY GAUGES */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* GPU UTILIZATION */}
+        <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Activity size={13} className="text-cyan-400" /> GPU
+            </span>
+            <span className="font-bold text-white font-mono">{telemetry.gpu_util_percent}%</span>
+          </div>
+          <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-cyan-400 h-full rounded-full" style={{ width: `${telemetry.gpu_util_percent}%` }} />
+          </div>
+        </div>
 
-        <button 
-          onClick={onPause}
-          disabled={status !== 'RUNNING'}
-          style={{ 
-            background: 'rgba(245, 158, 11, 0.15)', 
-            border: '1px solid rgba(245, 158, 11, 0.4)', 
-            color: '#fbbf24', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            fontSize: '12px', 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            cursor: status === 'RUNNING' ? 'pointer' : 'not-allowed',
-            opacity: status === 'RUNNING' ? 1 : 0.5 
-          }}
-        >
-          <Pause size={14} /> [Pause]
-        </button>
+        {/* VRAM USAGE */}
+        <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+              <HardDrive size={13} className="text-purple-400" /> VRAM
+            </span>
+            <span className="font-bold text-white font-mono">{telemetry.vram_used_gb} / {telemetry.vram_total_gb} GB</span>
+          </div>
+          <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-purple-400 h-full rounded-full" style={{ width: `${telemetry.vram_percent}%` }} />
+          </div>
+        </div>
 
-        <button 
-          onClick={onResume}
-          disabled={status !== 'PAUSED' && status !== 'CANCELLED' && status !== 'FAILED'}
-          style={{ 
-            background: 'rgba(16, 185, 129, 0.15)', 
-            border: '1px solid rgba(16, 185, 129, 0.4)', 
-            color: '#34d399', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            fontSize: '12px', 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            cursor: 'pointer' 
-          }}
-        >
-          <Play size={14} /> [Resume]
-        </button>
+        {/* RAM USAGE */}
+        <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Cpu size={13} className="text-emerald-400" /> RAM
+            </span>
+            <span className="font-bold text-white font-mono">{telemetry.ram_used_gb} GB ({telemetry.ram_percent}%)</span>
+          </div>
+          <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${telemetry.ram_percent}%` }} />
+          </div>
+        </div>
 
-        <button 
-          onClick={onRetry}
-          style={{ 
-            background: 'rgba(99, 102, 241, 0.15)', 
-            border: '1px solid rgba(99, 102, 241, 0.4)', 
-            color: '#818cf8', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            fontSize: '12px', 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            cursor: 'pointer' 
-          }}
-        >
-          <RefreshCw size={14} /> [Retry]
-        </button>
-
-        <button 
-          onClick={onCancel}
-          style={{ 
-            background: 'rgba(239, 68, 68, 0.15)', 
-            border: '1px solid rgba(239, 68, 68, 0.4)', 
-            color: '#f87171', 
-            padding: '8px 16px', 
-            borderRadius: '8px', 
-            fontSize: '12px', 
-            fontWeight: 700, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            cursor: 'pointer' 
-          }}
-        >
-          <Square size={14} /> [Cancel]
-        </button>
+        {/* CPU & TEMP */}
+        <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Thermometer size={13} className="text-amber-400" /> CPU / Temp
+            </span>
+            <span className="font-bold text-white font-mono">{telemetry.cpu_percent}% | {telemetry.temp_c}°C</span>
+          </div>
+          <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-amber-400 h-full rounded-full" style={{ width: `${telemetry.cpu_percent}%` }} />
+          </div>
+        </div>
       </div>
     </div>
   );

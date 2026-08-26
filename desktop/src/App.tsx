@@ -21,6 +21,21 @@ import { CompositionBuilder } from './editor/state/compositionBuilder';
 import { editorStore } from './editor/state/editorStore';
 import { TitleBar } from './components/TitleBar';
 
+import { SidebarTab } from './components/Sidebar';
+import { AppShell } from './components/AppShell';
+import { TranscriptEditor } from './components/dubbing/TranscriptEditor';
+import { TranslationEditor } from './components/dubbing/TranslationEditor';
+
+import { StoryWorkspace } from './components/story/StoryWorkspace';
+import { CharacterBible } from './components/story/CharacterBible';
+import { WorldBible } from './components/story/WorldBible';
+import { StoryMemory } from './components/story/StoryMemory';
+import { SceneBoard } from './components/story/SceneBoard';
+
+import { ImageGenerationStudio } from './components/production/ImageGenerationStudio';
+import { ResourceMonitorModal } from './components/production/ResourceMonitorModal';
+import { ReviewDashboard } from './components/review/ReviewDashboard';
+
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
   'TRANSCRIBE',
@@ -33,9 +48,11 @@ const STAGE_ORDER: StageName[] = [
 export default function App() {
   // Screen & Navigation
   const [currentScreen, setCurrentScreen] = useState<'home' | 'project'>('home');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pipeline' | 'subtitles' | 'timeline' | 'voices' | 'qc' | 'logs' | 'preview' | 'export' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<SidebarTab>('overview');
+  const [activeBottomTab, setActiveBottomTab] = useState<'timeline' | 'logs' | 'jobs'>('timeline');
   const [pipelineMode, setPipelineMode] = useState<'STORY' | 'DUBBING'>('STORY');
   const [isConsoleDrawerOpen, setIsConsoleDrawerOpen] = useState(false);
+
   
   // Projects state
   const [projectsList, setProjectsList] = useState<string[]>([]);
@@ -170,6 +187,9 @@ export default function App() {
     try {
       const list = await PythonEngineService.listProjects();
       setProjectsList(list);
+      if (list.length > 0 && !selectedProjectDir) {
+        handleSelectProject(list[0]);
+      }
     } catch (err) {
       console.error('Failed to list projects:', err);
     }
@@ -187,7 +207,7 @@ export default function App() {
     setElapsedTime(0);
     setErrorDetails(null);
     setOverallProgress(0);
-    setActiveTab('pipeline');
+    setActiveTab('overview');
     
     loadProjectJson(fullPath);
   };
@@ -394,195 +414,254 @@ export default function App() {
     }
   };
 
+  const handleTabChange = (tab: SidebarTab) => {
+    setActiveTab(tab);
+    if (selectedProjectDir) {
+      setCurrentScreen('project');
+    }
+  };
+
+  const renderMainContent = () => {
+    if (!selectedProjectDir || currentScreen === 'home') {
+      return (
+        <NewProjectModal
+          isCreating={isCreatingProject}
+          onCreateProject={handleCreateProject}
+        />
+      );
+    }
+
+    switch (activeTab) {
+      case 'overview':
+        return (
+          <Dashboard
+            projectName={selectedProjectDir.split('/').pop()?.split('\\').pop() || 'MyStory'}
+            mode={pipelineMode}
+            status={pipelineStatus}
+            overallProgress={overallProgress}
+            stageProgresses={stageProgresses}
+            telemetry={{
+              gpu_util_percent: 87,
+              vram_used_gb: parseFloat(realVram.split(' ')[0]) || 2.1,
+              vram_total_gb: 4.0,
+              vram_percent: Math.round(((parseFloat(realVram.split(' ')[0]) || 2.1) / 4.0) * 100),
+              ram_used_gb: parseFloat(realRam.split(' ')[0]) || 11.0,
+              ram_total_gb: parseFloat(realRam.split('/')[1]?.split('GB')[0]) || 16.0,
+              ram_percent: Math.round(((parseFloat(realRam.split(' ')[0]) || 11.0) / 16.0) * 100),
+              cpu_percent: 64,
+              temp_c: 48,
+              gpu_name: 'NVIDIA GeForce GTX 1650 Ti'
+            }}
+            logs={logs}
+            onStart={() => startPhase1Pipeline(false)}
+            onPause={() => setPipelineStatus('PAUSED')}
+            onResume={() => handleResumePipeline()}
+            onRetry={() => handleRetryStage('RENDER')}
+            onCancel={handleCancelPipeline}
+            onReview={() => setActiveTab('subtitles')}
+            onApproveGate={async () => {
+              setPipelineStatus('APPROVED');
+              await handleResumePipeline();
+            }}
+            onRejectGate={() => {
+              setPipelineStatus('IDLE');
+            }}
+          />
+        );
+
+      case 'source':
+        return (
+          <PipelineWorkflow
+            overallProgress={overallProgress}
+            elapsedTime={elapsedTime}
+            stageProgresses={stageProgresses}
+            errorDetails={errorDetails}
+            onRetryStage={handleRetryStage}
+            onOpenTimeline={() => setActiveTab('timeline')}
+            formatTime={formatTime}
+            pipelineStatus={pipelineStatus}
+            onStartPipeline={startPhase1Pipeline}
+            onCancelPipeline={handleCancelPipeline}
+            onResumePipeline={handleResumePipeline}
+            translationStyle={activeProjectStyle}
+            translationModel={settings.translationModel}
+            targetLanguage={targetLanguage}
+            onChangeTranslationModel={handleChangeTranslationModel}
+            onChangeTranslationStyle={handleChangeTranslationStyle}
+            onChangeTargetLanguage={handleChangeTargetLanguage}
+          />
+        );
+
+      case 'transcript':
+        return (
+          <TranscriptEditor
+            projectDir={selectedProjectDir}
+            onProceedToTranslation={() => setActiveTab('translation')}
+          />
+        );
+
+      case 'story':
+      case 'chapters':
+        return <StoryWorkspace />;
+
+      case 'characters':
+        return <CharacterBible />;
+
+      case 'world':
+        return <WorldBible />;
+
+      case 'memory':
+        return <StoryMemory />;
+
+      case 'scenes':
+        return <SceneBoard />;
+
+      case 'images':
+        return <ImageGenerationStudio />;
+
+      case 'translation':
+        return (
+          <TranslationEditor
+            projectDir={selectedProjectDir}
+            onProceedToVoice={() => setActiveTab('voice')}
+          />
+        );
+
+      case 'subtitles':
+        return (
+          <SubtitleEditor
+            projectDir={selectedProjectDir}
+            activeTab={activeTab}
+            onProceedToVoices={() => setActiveTab('voice')}
+          />
+        );
+
+      case 'voice':
+        return (
+          <VoiceStudio
+            projectDir={selectedProjectDir}
+            pipelineStatus={pipelineStatus}
+            stageProgresses={stageProgresses}
+            onResumePipeline={handleResumePipeline}
+          />
+        );
+
+      case 'review':
+        return (
+          <ReviewDashboard
+            onNavigateTab={handleTabChange}
+            onApproveAll={() => setPipelineStatus('APPROVED')}
+          />
+        );
+
+      case 'timeline':
+        return (
+          <div className="w-full h-full relative">
+            <EditorLayout
+              onBackToApp={() => setActiveTab('overview')}
+              onRender={handleTimelineRender}
+              isRendering={pipelineStatus === 'RUNNING'}
+            />
+          </div>
+        );
+
+      case 'preview':
+        return (
+          <OutputPreview
+            selectedProjectDir={selectedProjectDir}
+            onOpenOutputFolder={handleOpenOutputFolder}
+          />
+        );
+
+      case 'export':
+      case 'render':
+        return <ExportPresets projectDir={selectedProjectDir} />;
+
+      case 'logs':
+        return <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />;
+
+      case 'settings':
+        return <SystemSettings settings={settings} onSettingsChange={setSettings} />;
+
+      default:
+        return (
+          <div className="p-8 text-center text-slate-400">
+            <h3 className="text-lg font-bold text-slate-200 uppercase font-['Outfit'] mb-2">{activeTab} Workspace</h3>
+            <p className="text-sm text-slate-500">Module view ready for feature configuration.</p>
+          </div>
+        );
+    }
+  };
+
+  const renderBottomPanelContent = () => {
+    if (activeBottomTab === 'logs') {
+      return <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />;
+    }
+    if (activeBottomTab === 'jobs') {
+      return (
+        <div className="p-4 bg-[#111318] h-full overflow-y-auto text-xs space-y-2 font-sans">
+          <h4 className="font-bold text-slate-300 uppercase font-['Outfit'] tracking-wider">Background AI Processing Tasks</h4>
+          <div className="p-3 rounded-lg bg-black/40 border border-white/5 flex justify-between items-center text-slate-300">
+            <span>Task #102: Whisper STT Extraction</span>
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">RUNNING</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: 'var(--bg-dark)', overflow: 'hidden' }}>
-      <TitleBar selectedProjectDir={selectedProjectDir} stageProgresses={stageProgresses} />
-      <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden', width: '100%', minHeight: 0 }}>
-        {/* SIDEBAR activity bar */}
-        <Sidebar
-        projectsList={projectsList}
+    <>
+      <AppShell
+        projectName={selectedProjectDir ? selectedProjectDir.split('/').pop()?.split('\\').pop() : 'New Studio Project'}
         selectedProjectDir={selectedProjectDir}
-        activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (selectedProjectDir) {
-            setActiveTab(tab);
-            if (tab === 'subtitles' || tab === 'timeline' || tab === 'voices' || tab === 'qc') {
-              setIsConsoleDrawerOpen(false);
-            }
-          }
-        }}
+        projectsList={projectsList}
         onSelectProject={handleSelectProject}
-        onCreateNewProjectClick={() => setCurrentScreen('home')}
-        onRefreshList={loadProjects}
+        onCreateNewProject={() => {
+          setSelectedProjectDir(null);
+          setCurrentScreen('home');
+        }}
         onDeleteProject={handleDeleteProject}
+        activeTab={activeTab}
+        setActiveTab={handleTabChange}
+        pipelineStatus={pipelineStatus}
+        stageProgresses={stageProgresses}
+        onStartPipeline={startPhase1Pipeline}
+        onCancelPipeline={handleCancelPipeline}
+        onOpenOutputFolder={handleOpenOutputFolder}
+        ramMetrics={realRam}
+        vramMetrics={realVram}
+        mainContent={renderMainContent()}
+        bottomPanelContent={selectedProjectDir && activeTab !== 'timeline' && (activeBottomTab === 'logs' || activeBottomTab === 'jobs') ? renderBottomPanelContent() : undefined}
+        activeBottomTab={activeBottomTab}
+        setActiveBottomTab={setActiveBottomTab}
+        onOpenCommandPalette={() => console.log('Open Cmd Palette')}
+        onOpenNotifications={() => console.log('Open Notifications')}
+        onOpenSettings={() => setActiveTab('settings')}
+        onOpenResourceMonitor={() => setIsResourceModalOpen(true)}
+        saveStatus="Saved"
       />
 
-      {/* MAIN CONTAINER */}
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative', minHeight: 0 }}>
-        {currentScreen === 'home' && (
-          <NewProjectModal isCreating={isCreatingProject} onCreateProject={handleCreateProject} />
-        )}
-
-        {currentScreen === 'project' && selectedProjectDir && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flexGrow: 1, overflow: 'hidden', minHeight: 0 }}>
-            {/* TAB CONTENTS CONTAINER */}
-            <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
-              <div style={{ display: activeTab === 'dashboard' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflowY: 'auto' }}>
-                <Dashboard
-                  projectName={selectedProjectDir.split('/').pop()?.split('\\').pop() || 'MyStory'}
-                  mode={pipelineMode}
-                  status={pipelineStatus}
-                  overallProgress={overallProgress}
-                  stageProgresses={stageProgresses}
-                  telemetry={{
-                    gpu_util_percent: 87,
-                    vram_used_gb: parseFloat(realVram.split(' ')[0]) || 2.1,
-                    vram_total_gb: 4.0,
-                    vram_percent: Math.round(((parseFloat(realVram.split(' ')[0]) || 2.1) / 4.0) * 100),
-                    ram_used_gb: parseFloat(realRam.split(' ')[0]) || 11.0,
-                    ram_total_gb: parseFloat(realRam.split('/')[1]?.split('GB')[0]) || 16.0,
-                    ram_percent: Math.round(((parseFloat(realRam.split(' ')[0]) || 11.0) / 16.0) * 100),
-                    cpu_percent: 64,
-                    temp_c: 48,
-                    gpu_name: 'NVIDIA GeForce GTX 1650 Ti'
-                  }}
-                  logs={logs}
-                  onStart={() => startPhase1Pipeline(false)}
-                  onPause={() => setPipelineStatus('PAUSED')}
-                  onResume={() => handleResumePipeline()}
-                  onRetry={() => handleRetryStage('RENDER')}
-                  onCancel={handleCancelPipeline}
-                  onReview={() => setActiveTab('subtitles')}
-                  onApproveGate={async () => {
-                    setPipelineStatus('APPROVED');
-                    await handleResumePipeline();
-                  }}
-                  onRejectGate={() => {
-                    setPipelineStatus('IDLE');
-                  }}
-                />
-              </div>
-
-              <div style={{ display: activeTab === 'pipeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <PipelineWorkflow
-                  overallProgress={overallProgress}
-                  elapsedTime={elapsedTime}
-                  stageProgresses={stageProgresses}
-                  errorDetails={errorDetails}
-                  onRetryStage={handleRetryStage}
-                  onOpenTimeline={() => setActiveTab('timeline')}
-                  formatTime={formatTime}
-                  pipelineStatus={pipelineStatus}
-                  onStartPipeline={startPhase1Pipeline}
-                  onCancelPipeline={handleCancelPipeline}
-                  onResumePipeline={handleResumePipeline}
-                  translationStyle={activeProjectStyle}
-                  translationModel={settings.translationModel}
-                  targetLanguage={targetLanguage}
-                  onChangeTranslationModel={handleChangeTranslationModel}
-                  onChangeTranslationStyle={handleChangeTranslationStyle}
-                  onChangeTargetLanguage={handleChangeTargetLanguage}
-                />
-              </div>
-
-              <div style={{ display: activeTab === 'subtitles' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <SubtitleEditor projectDir={selectedProjectDir} activeTab={activeTab} onProceedToVoices={() => setActiveTab('voices')} />
-              </div>
-
-              <div style={{ display: activeTab === 'timeline' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                  <EditorLayout 
-                    onBackToApp={() => setActiveTab('pipeline')} 
-                    onRender={handleTimelineRender}
-                    isRendering={pipelineStatus === 'RUNNING'}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: activeTab === 'voices' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <VoiceStudio 
-                  projectDir={selectedProjectDir} 
-                  pipelineStatus={pipelineStatus}
-                  stageProgresses={stageProgresses}
-                  onResumePipeline={handleResumePipeline}
-                />
-              </div>
-
-              <div style={{ display: activeTab === 'qc' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <QualityControl projectDir={selectedProjectDir} />
-              </div>
-
-              <div style={{ display: activeTab === 'logs' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
-              </div>
-
-              {activeTab === 'preview' && (
-                <div style={{ display: 'flex', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                  <OutputPreview selectedProjectDir={selectedProjectDir} onOpenOutputFolder={handleOpenOutputFolder} />
-                </div>
-              )}
-
-              <div style={{ display: activeTab === 'export' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <ExportPresets projectDir={selectedProjectDir} />
-              </div>
-
-              <div style={{ display: activeTab === 'settings' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, padding: '24px', boxSizing: 'border-box', flexDirection: 'column', overflow: 'hidden' }}>
-                <SystemSettings settings={settings} onSettingsChange={setSettings} />
-              </div>
-            </div>
-
-            {/* BOTTOM COLLAPSIBLE CONSOLE DRAWER */}
-            {isConsoleDrawerOpen && (
-              <div 
-                style={{ 
-                  height: '200px', 
-                  borderTop: '1px solid rgba(255, 255, 255, 0.08)', 
-                  background: '#0B0D10', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  overflow: 'hidden' 
-                }}
-              >
-                <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      </div>
-
-      {/* GLOBAL STATUS BAR */}
-      <div 
-        style={{ 
-          height: '30px', 
-          background: '#0B0D10', 
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', 
-          padding: '0 16px', 
-          fontSize: '11px', 
-          color: '#64748b', 
-          flexShrink: 0 
+      <ResourceMonitorModal
+        isOpen={isResourceModalOpen}
+        onClose={() => setIsResourceModalOpen(false)}
+        telemetry={{
+          gpu_util_percent: 87,
+          vram_used_gb: parseFloat(realVram.split(' ')[0]) || 3.4,
+          vram_total_gb: 4.0,
+          vram_percent: Math.round(((parseFloat(realVram.split(' ')[0]) || 3.4) / 4.0) * 100),
+          ram_used_gb: parseFloat(realRam.split(' ')[0]) || 10.1,
+          ram_total_gb: parseFloat(realRam.split('/')[1]?.split('GB')[0]) || 16.0,
+          ram_percent: Math.round(((parseFloat(realRam.split(' ')[0]) || 10.1) / 16.0) * 100),
+          cpu_percent: 64,
+          temp_c: 48,
+          gpu_name: 'NVIDIA GeForce GTX 1650 Ti'
         }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: pipelineStatus === 'RUNNING' ? '#06b6d4' : '#10b981' }} />
-            {pipelineStatus === 'RUNNING' ? 'AI Sync Active' : 'System Ready'}
-          </span>
-        </div>
-
-        {/* Hardware Telemetry stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Cpu size={12} /> RAM: <strong style={{ color: '#cbd5e1' }}>{realRam.split(' ')[0] || '10.1'} GB</strong>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Video size={12} /> VRAM: <strong style={{ color: '#06b6d4' }}>{realVram.split(' ')[0] || '0.28'} GB</strong>
-          </span>
-        </div>
-      </div>
-    </div>
+      />
+    </>
   );
 }
+
