@@ -12,8 +12,6 @@ import { PipelineWorkflow } from './components/PipelineWorkflow';
 import { ConsoleLogs } from './components/ConsoleLogs';
 import { OutputPreview } from './components/OutputPreview';
 import { SystemSettings } from './components/SystemSettings';
-import { SubtitleEditor } from './components/SubtitleEditor';
-import { VoiceStudio } from './components/VoiceStudio';
 import { QualityControl } from './components/QualityControl';
 import { ExportPresets } from './components/ExportPresets';
 import { EditorLayout } from './components/editor/EditorLayout';
@@ -32,9 +30,14 @@ import { WorldBible } from './components/story/WorldBible';
 import { StoryMemory } from './components/story/StoryMemory';
 import { SceneBoard } from './components/story/SceneBoard';
 
+import { SourceMediaManager } from './components/dubbing/SourceMediaManager';
+import { VoiceStudio } from './components/dubbing/VoiceStudio';
+import { SubtitleEditor } from './components/dubbing/SubtitleEditor';
+import { RenderManager } from './components/dubbing/RenderManager';
 import { ImageGenerationStudio } from './components/production/ImageGenerationStudio';
 import { ResourceMonitorModal } from './components/production/ResourceMonitorModal';
 import { ReviewDashboard } from './components/review/ReviewDashboard';
+import { TikTokTrendManager } from './components/story/TikTokTrendManager';
 
 const STAGE_ORDER: StageName[] = [
   'EXTRACT',
@@ -195,7 +198,7 @@ export default function App() {
     }
   };
 
-  const handleSelectProject = async (projNameOrPath: string) => {
+  const handleSelectProject = async (projNameOrPath: string, targetTab?: SidebarTab) => {
     let fullPath = projNameOrPath;
     if (!projNameOrPath.includes('/') && !projNameOrPath.includes('\\')) {
       fullPath = `d:/FullStack/AutoDubStudio/projects/${projNameOrPath}`;
@@ -207,9 +210,8 @@ export default function App() {
     setElapsedTime(0);
     setErrorDetails(null);
     setOverallProgress(0);
-    setActiveTab('overview');
     
-    loadProjectJson(fullPath);
+    await loadProjectJson(fullPath, targetTab);
   };
 
   const isPipelineRunningRef = useRef(false);
@@ -220,13 +222,16 @@ export default function App() {
   const [activeProjectStyle, setActiveProjectStyle] = useState<string>('general');
   const [targetLanguage, setTargetLanguage] = useState<string>('vi');
 
-  const loadProjectJson = async (path: string) => {
+  const loadProjectJson = async (path: string, targetTab?: SidebarTab) => {
     try {
       const json = await PythonEngineService.readProjectJson(path);
+      let detectedMode: 'STORY' | 'DUBBING' = 'DUBBING';
       if (json) {
         if (json.mode === 'MODE_STORY' || json.mode === 'STORY') {
+          detectedMode = 'STORY';
           setPipelineMode('STORY');
         } else {
+          detectedMode = 'DUBBING';
           setPipelineMode('DUBBING');
         }
         if (json.settings) {
@@ -242,6 +247,12 @@ export default function App() {
         if (json.target && json.target.language) {
           setTargetLanguage(json.target.language);
         }
+      }
+
+      if (targetTab) {
+        setActiveTab(targetTab);
+      } else {
+        setActiveTab(detectedMode === 'STORY' ? 'story' : 'source');
       }
       
       // Auto Sync to Timeline Editor Store
@@ -333,7 +344,7 @@ export default function App() {
       }
 
       await loadProjects();
-      handleSelectProject(path);
+      handleSelectProject(path, selMode === 'STORY' ? 'story' : 'source');
     } catch (err: any) {
       alert(`Tạo dự án thất bại: ${err}`);
     } finally {
@@ -471,24 +482,9 @@ export default function App() {
 
       case 'source':
         return (
-          <PipelineWorkflow
-            overallProgress={overallProgress}
-            elapsedTime={elapsedTime}
-            stageProgresses={stageProgresses}
-            errorDetails={errorDetails}
-            onRetryStage={handleRetryStage}
-            onOpenTimeline={() => setActiveTab('timeline')}
-            formatTime={formatTime}
-            pipelineStatus={pipelineStatus}
-            onStartPipeline={startPhase1Pipeline}
-            onCancelPipeline={handleCancelPipeline}
-            onResumePipeline={handleResumePipeline}
-            translationStyle={activeProjectStyle}
-            translationModel={settings.translationModel}
-            targetLanguage={targetLanguage}
-            onChangeTranslationModel={handleChangeTranslationModel}
-            onChangeTranslationStyle={handleChangeTranslationStyle}
-            onChangeTargetLanguage={handleChangeTargetLanguage}
+          <SourceMediaManager
+            projectDir={selectedProjectDir}
+            onProceedToTranscript={() => setActiveTab('transcript')}
           />
         );
 
@@ -502,22 +498,25 @@ export default function App() {
 
       case 'story':
       case 'chapters':
-        return <StoryWorkspace />;
+        return <StoryWorkspace projectDir={selectedProjectDir} />;
+
+      case 'trends':
+        return <TikTokTrendManager projectDir={selectedProjectDir} />;
 
       case 'characters':
-        return <CharacterBible />;
+        return <CharacterBible projectDir={selectedProjectDir} />;
 
       case 'world':
-        return <WorldBible />;
+        return <WorldBible projectDir={selectedProjectDir} />;
 
       case 'memory':
-        return <StoryMemory />;
+        return <StoryMemory projectDir={selectedProjectDir} />;
 
       case 'scenes':
-        return <SceneBoard />;
+        return <SceneBoard projectDir={selectedProjectDir} />;
 
       case 'images':
-        return <ImageGenerationStudio />;
+        return <ImageGenerationStudio projectDir={selectedProjectDir} />;
 
       case 'translation':
         return (
@@ -575,7 +574,7 @@ export default function App() {
 
       case 'export':
       case 'render':
-        return <ExportPresets projectDir={selectedProjectDir} />;
+        return <RenderManager projectDir={selectedProjectDir} />;
 
       case 'logs':
         return <ConsoleLogs logs={logs} onClearLogs={() => setLogs([])} />;

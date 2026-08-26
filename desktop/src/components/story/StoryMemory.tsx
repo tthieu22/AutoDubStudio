@@ -10,7 +10,11 @@ export interface MemoryItem {
   locked: boolean;
 }
 
-export const StoryMemory: React.FC = () => {
+interface StoryMemoryProps {
+  projectDir?: string | null;
+}
+
+export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
   const [memories, setMemories] = useState<MemoryItem[]>([
     {
       id: 'mem-1',

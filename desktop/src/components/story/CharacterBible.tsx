@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Plus, 
@@ -12,6 +12,8 @@ import {
   Sliders,
   Trash2
 } from 'lucide-react';
+
+import { PythonEngineService } from '../../services/pythonEngine';
 
 export interface Character {
   id: string;
@@ -29,10 +31,11 @@ export interface Character {
 }
 
 interface CharacterBibleProps {
+  projectDir?: string | null;
   onSelectCharacter?: (char: Character) => void;
 }
 
-export const CharacterBible: React.FC<CharacterBibleProps> = ({ onSelectCharacter }) => {
+export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSelectCharacter }) => {
   const [characters, setCharacters] = useState<Character[]>([
     {
       id: 'char-1',
@@ -61,6 +64,29 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ onSelectCharacte
       locked: false
     }
   ]);
+
+  useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data && data.characters && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
+
+  const saveCharacters = async (newChars: Character[]) => {
+    setCharacters(newChars);
+    if (projectDir) {
+      try {
+        const projectData = await PythonEngineService.readProjectJson(projectDir);
+        projectData.characters = newChars;
+        await PythonEngineService.writeProjectJson(projectDir, projectData);
+      } catch (err) {
+        console.error('Failed to save characters:', err);
+      }
+    }
+  };
 
   const [selectedCharId, setSelectedCharId] = useState<string>('char-1');
 

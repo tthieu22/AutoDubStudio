@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Globe, Plus, Lock, Unlock, Shield, MapPin, Building, BookMarked, Search } from 'lucide-react';
+import { PythonEngineService } from '../../services/pythonEngine';
 
 export interface WorldEntity {
   id: string;
@@ -9,7 +10,11 @@ export interface WorldEntity {
   locked: boolean;
 }
 
-export const WorldBible: React.FC = () => {
+interface WorldBibleProps {
+  projectDir?: string | null;
+}
+
+export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
   const [entities, setEntities] = useState<WorldEntity[]>([
     {
       id: 'w-1',
@@ -33,6 +38,16 @@ export const WorldBible: React.FC = () => {
       locked: true
     }
   ]);
+
+  React.useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data && data.world_lore && Array.isArray(data.world_lore)) {
+          setEntities(data.world_lore);
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');

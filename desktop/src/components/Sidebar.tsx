@@ -18,12 +18,14 @@ import {
   ChevronLeft, 
   ChevronRight,
   Plus,
-  Trash2
+  Trash2,
+  Flame
 } from 'lucide-react';
 import { PipelineMode } from '../types/pipeline';
 
 export type SidebarTab =
   | 'overview'
+  | 'trends'
   | 'source'
   | 'transcript'
   | 'translation'
@@ -147,6 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const storyItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
     { id: 'overview', label: 'Overview', icon: <FolderKanban size={15} /> },
     { id: 'story', label: 'Story & Chapters', icon: <BookOpen size={15} /> },
+    { id: 'trends', label: 'TikTok Slang Trends', icon: <Flame size={15} className="text-amber-400" /> },
     { id: 'characters', label: 'Character Bible', icon: <Users size={15} /> },
     { id: 'world', label: 'World & Lore', icon: <Globe size={15} /> },
     { id: 'memory', label: 'Story Memory', icon: <Brain size={15} /> },

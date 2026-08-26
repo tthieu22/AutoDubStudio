@@ -17,6 +17,8 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 
+import { PythonEngineService } from '../../services/pythonEngine';
+
 export interface SceneItem {
   id: string;
   sceneNumber: number;
@@ -31,10 +33,11 @@ export interface SceneItem {
 }
 
 interface SceneBoardProps {
+  projectDir?: string | null;
   onSelectScene?: (scene: SceneItem) => void;
 }
 
-export const SceneBoard: React.FC<SceneBoardProps> = ({ onSelectScene }) => {
+export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScene }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'storyboard'>('storyboard');
   const [scenes, setScenes] = useState<SceneItem[]>([
     {
@@ -71,6 +74,16 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ onSelectScene }) => {
       status: 'GENERATED'
     }
   ]);
+
+  React.useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data && data.scenes && Array.isArray(data.scenes)) {
+          setScenes(data.scenes);
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
 
   const [selectedSceneId, setSelectedSceneId] = useState<string>('scene-1');
 

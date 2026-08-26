@@ -125,32 +125,19 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div className="h-4 w-px bg-white/10 mx-1" />
 
-        {/* MODE SWITCHER */}
-        <div className="flex items-center bg-black/40 p-0.5 rounded-lg border border-white/5">
-          <button
-            onClick={() => onModeChange('DUBBING')}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-              pipelineMode === 'DUBBING'
-                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-            title="Switch to Video Dubbing Mode"
-          >
-            <Film size={13} />
-            <span>MODE_DUBBING</span>
-          </button>
-          <button
-            onClick={() => onModeChange('STORY')}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${
-              pipelineMode === 'STORY'
-                ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-            title="Switch to AI Story & Animation Mode"
-          >
-            <BookOpen size={13} />
-            <span>MODE_STORY</span>
-          </button>
+        {/* FIXED PROJECT MODE BADGE */}
+        <div className="flex items-center">
+          {pipelineMode === 'DUBBING' ? (
+            <span className="px-2.5 py-1 rounded-lg bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Project Type: Video Dubbing Mode">
+              <Film size={13} className="text-indigo-400" />
+              <span>MODE_DUBBING (Lồng Tiếng Video)</span>
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Project Type: AI Story Creation Mode">
+              <BookOpen size={13} className="text-cyan-400" />
+              <span>MODE_STORY (Video Truyện AI)</span>
+            </span>
+          )}
         </div>
       </div>
 

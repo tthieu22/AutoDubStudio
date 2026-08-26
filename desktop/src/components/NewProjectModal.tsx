@@ -8,7 +8,7 @@ export interface TranslationStyleOption {
   description: string;
 }
 
-export const TRANSLATION_STYLES: TranslationStyleOption[] = [
+const TRANSLATION_STYLES: TranslationStyleOption[] = [
   { id: 'general', name: 'General / Tự động', description: 'Dịch tiếng Việt tự nhiên, phù hợp hội thoại thông thường.' },
   { id: 'modern', name: 'Hiện đại', description: 'Tiếng Việt hiện đại, tự nhiên, phù hợp phim đô thị và đời thường.' },
   { id: 'ancient', name: 'Cổ trang', description: 'Phong cách tiếng Việt phù hợp phim cổ trang Trung Quốc, chú trọng địa vị và cách xưng hô.' },
@@ -61,25 +61,26 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
       });
       if (selected && typeof selected === 'string') {
         setVideoPath(selected);
+        return;
       }
     } catch (err) {
-      console.error('Select file error:', err);
+      console.warn('Tauri dialog unavailable, falling back to manual input:', err);
+    }
+
+    const manualPath = prompt('Nhập đường dẫn file video (hoặc để mặc định):', videoPath || 'C:/Videos/sample_demo_video.mp4');
+    if (manualPath) {
+      setVideoPath(manualPath);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectName.trim()) {
-      alert('Vui lòng nhập tên dự án!');
-      return;
-    }
-    if (projectMode === 'DUBBING' && !videoPath) {
-      alert('Vui lòng chọn file video đầu vào cho chế độ Lồng tiếng!');
-      return;
-    }
+    const finalProjectName = projectName.trim() || generateTimestampName();
+    const finalVideoPath = videoPath.trim() || (projectMode === 'DUBBING' ? 'C:/Videos/sample_demo_video.mp4' : 'source/story.txt');
+
     await onCreateProject(
-      projectName.trim(),
-      videoPath || 'source/input.mp4',
+      finalProjectName,
+      finalVideoPath,
       translationStyle,
       translationStyle === 'custom' ? customStyleText : undefined,
       projectMode,
@@ -181,90 +182,167 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>File Video Đầu Vào (MP4 / MKV / AVI)</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input
-                type="text"
-                readOnly
-                value={videoPath}
-                placeholder="Chọn tệp video từ máy tính..."
-                style={{
-                  flexGrow: 1,
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  border: '1px solid var(--border-glass)',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '13px'
-                }}
-              />
-              <button type="button" className="btn-secondary" onClick={handleSelectVideoFile}>
-                <FolderOpen size={16} /> Chọn File
-              </button>
-            </div>
-          </div>
+          {/* DUBBING MODE FIELDS */}
+          {projectMode === 'DUBBING' && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>File Video Đầu Vào (MP4 / MKV / AVI)</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={videoPath}
+                    placeholder="Chọn tệp video từ máy tính..."
+                    style={{
+                      flexGrow: 1,
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      color: '#fff',
+                      fontSize: '13px'
+                    }}
+                  />
+                  <button type="button" className="btn-secondary" onClick={handleSelectVideoFile}>
+                    <FolderOpen size={16} /> Chọn File
+                  </button>
+                </div>
+              </div>
 
-          {/* TRANSLATION STYLE SELECTION */}
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>
-              <Languages size={15} style={{ color: '#38bdf8' }} /> TRANSLATION STYLE (PHONG CÁCH DỊCH THUẬT)
-            </label>
-            <select
-              value={translationStyle}
-              onChange={e => setTranslationStyle(e.target.value)}
-              style={{
-                width: '100%',
-                background: 'rgba(15, 23, 42, 0.9)',
-                border: '1px solid var(--border-glass)',
-                borderRadius: '10px',
-                padding: '12px 16px',
-                color: '#38bdf8',
-                fontWeight: 600,
-                fontSize: '14px',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              {TRANSLATION_STYLES.map(style => (
-                <option key={style.id} value={style.id} style={{ background: '#0f172a', color: '#fff' }}>
-                  {style.name}
-                </option>
-              ))}
-            </select>
+              {/* TRANSLATION STYLE SELECTION */}
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>
+                  <Languages size={15} style={{ color: '#38bdf8' }} /> TRANSLATION STYLE (PHONG CÁCH DỊCH THUẬT)
+                </label>
+                <select
+                  value={translationStyle}
+                  onChange={e => setTranslationStyle(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    border: '1px solid var(--border-glass)',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    color: '#38bdf8',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {TRANSLATION_STYLES.map(style => (
+                    <option key={style.id} value={style.id} style={{ background: '#0f172a', color: '#fff' }}>
+                      {style.name}
+                    </option>
+                  ))}
+                </select>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '8px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-              <Info size={16} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '2px' }} />
-              <span style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.4' }}>
-                {selectedStyleObj.description}
-              </span>
-            </div>
-          </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '8px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                  <Info size={16} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.4' }}>
+                    {selectedStyleObj.description}
+                  </span>
+                </div>
+              </div>
 
-          {/* CUSTOM TRANSLATION INSTRUCTIONS */}
-          {translationStyle === 'custom' && (
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#f59e0b' }}>
-                CUSTOM TRANSLATION INSTRUCTIONS
-              </label>
-              <textarea
-                value={customStyleText}
-                onChange={e => setCustomStyleText(e.target.value)}
-                placeholder="Nhập yêu cầu riêng (ví dụ: 'dịch tự nhiên như phim Việt Nam', 'ưu tiên văn phong hài hước', 'giữ xưng hô cổ trang')..."
-                rows={3}
-                style={{
-                  width: '100%',
-                  background: 'rgba(15, 23, 42, 0.9)',
-                  border: '1px solid rgba(245, 158, 11, 0.4)',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '13px',
-                  outline: 'none',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
+              {/* CUSTOM TRANSLATION INSTRUCTIONS */}
+              {translationStyle === 'custom' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#f59e0b' }}>
+                    CUSTOM TRANSLATION INSTRUCTIONS
+                  </label>
+                  <textarea
+                    value={customStyleText}
+                    onChange={e => setCustomStyleText(e.target.value)}
+                    placeholder="Nhập yêu cầu riêng (ví dụ: 'dịch tự nhiên như phim Việt Nam', 'ưu tiên văn phong hài hước', 'giữ xưng hô cổ trang')..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      borderRadius: '10px',
+                      padding: '12px 16px',
+                      color: '#fff',
+                      fontSize: '13px',
+                      outline: 'none',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* STORY MODE FIELDS */}
+          {projectMode === 'STORY' && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#c084fc' }}>
+                  📖 Nội Dung / Kịch Bản Truyện
+                </label>
+                <textarea
+                  value={storyText}
+                  onChange={e => setStoryText(e.target.value)}
+                  rows={4}
+                  placeholder="Dán nội dung chương truyện hoặc kịch bản vào đây (Hoặc dùng Import Truyện từ Web / File sau khi tạo dự án)..."
+                  style={{
+                    width: '100%',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid var(--border-glass)',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    color: '#fff',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                    🎨 Mô Hình AI Tạo Ảnh
+                  </label>
+                  <select
+                    style={{
+                      width: '100%',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      color: '#fff',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <option value="SD 1.5 - Realistic Vision">SD 1.5 - Realistic Vision v5.1</option>
+                    <option value="Anime Anything V5">Anime Anything V5</option>
+                    <option value="SDXL Turbo">SDXL Turbo (4-Step Fast)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
+                    🔊 Giọng Đọc TTS
+                  </label>
+                  <select
+                    style={{
+                      width: '100%',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      color: '#fff',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <option value="vi_VN-vais1000-medium">vi_VN-vais1000-medium (Giọng Nam Chuẩn)</option>
+                    <option value="vi_female_soft">vi_female_soft (Giọng Nữ Nhẹ Nhàng)</option>
+                    <option value="vi_male_hero">vi_male_hero (Giọng Truyện Hero)</option>
+                  </select>
+                </div>
+              </div>
+            </>
           )}
 
           <button 

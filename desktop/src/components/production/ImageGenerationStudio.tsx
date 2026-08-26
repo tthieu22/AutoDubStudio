@@ -13,7 +13,11 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-export const ImageGenerationStudio: React.FC = () => {
+interface ImageGenerationStudioProps {
+  projectDir?: string | null;
+}
+
+export const ImageGenerationStudio: React.FC<ImageGenerationStudioProps> = ({ projectDir }) => {
   const [prompt, setPrompt] = useState('A dramatic cinematic shot of a young swordsman standing on a mist-covered pine mountain peak at sunrise, highly detailed, 8k, Unreal Engine 5 render');
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted face, extra limbs, bad anatomy, text, watermark');
   const [model, setModel] = useState('SD 1.5 - Realistic Vision v5.1');

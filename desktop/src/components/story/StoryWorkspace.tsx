@@ -10,7 +10,15 @@ export interface Chapter {
   scenesCount: number;
 }
 
-export const StoryWorkspace: React.FC = () => {
+import { StoryImportModal } from './StoryImportModal';
+import { Download } from 'lucide-react';
+
+interface StoryWorkspaceProps {
+  projectDir?: string | null;
+}
+
+export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) => {
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([
     {
       id: 'chap-1',
@@ -50,23 +58,42 @@ export const StoryWorkspace: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            const newChap: Chapter = {
-              id: `chap-${Date.now()}`,
-              chapterNumber: chapters.length + 1,
-              title: `Chapter ${chapters.length + 1}`,
-              summary: 'Chapter summary text...',
-              characters: ['A Lãng'],
-              scenesCount: 3
-            };
-            setChapters(prev => [...prev, newChap]);
-          }}
-          className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
-        >
-          <Plus size={14} /> Add Chapter
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all"
+          >
+            <Download size={14} /> Import Truyện (Web / File)
+          </button>
+
+          <button
+            onClick={() => {
+              const newChap: Chapter = {
+                id: `chap-${Date.now()}`,
+                chapterNumber: chapters.length + 1,
+                title: `Chapter ${chapters.length + 1}`,
+                summary: 'Chapter summary text...',
+                characters: ['A Lãng'],
+                scenesCount: 3
+              };
+              setChapters(prev => [...prev, newChap]);
+            }}
+            className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+          >
+            <Plus size={14} /> Add Chapter
+          </button>
+        </div>
       </div>
+
+      <StoryImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        projectDir={projectDir}
+        onImportComplete={(count) => {
+          setIsImportModalOpen(false);
+          alert(`Đã import thành công ${count} chương truyện vào dự án!`);
+        }}
+      />
 
       {/* CHAPTERS LIST */}
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
