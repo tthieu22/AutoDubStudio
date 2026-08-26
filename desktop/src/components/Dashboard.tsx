@@ -147,11 +147,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       >
         <div>
           <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>AutoDubStudio Control Center</span>
-          <h2 style={{ margin: '2px 0 0 0', fontSize: '20px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h2 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '12px' }}>
             {projectName || 'MyStory'}
-            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', fontWeight: 700 }}>
-              MODE: {mode}
-            </span>
+            <div style={{ display: 'flex', gap: '6px', marginLeft: '6px' }}>
+              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '6px', background: mode === 'STORY' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(255, 255, 255, 0.05)', color: mode === 'STORY' ? '#c084fc' : '#64748b', border: mode === 'STORY' ? '1px solid #a855f7' : '1px solid transparent', fontWeight: 800 }}>
+                📖 MODE STORY (TẠO TRUYỆN AI)
+              </span>
+              <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '6px', background: mode === 'DUBBING' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(255, 255, 255, 0.05)', color: mode === 'DUBBING' ? '#38bdf8' : '#64748b', border: mode === 'DUBBING' ? '1px solid #06b6d4' : '1px solid transparent', fontWeight: 800 }}>
+                🎬 MODE DUBBING (LỒNG TIẾNG VIDEO)
+              </span>
+            </div>
           </h2>
         </div>
 

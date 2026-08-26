@@ -204,6 +204,11 @@ export default function App() {
     try {
       const json = await PythonEngineService.readProjectJson(path);
       if (json) {
+        if (json.mode === 'MODE_STORY' || json.mode === 'STORY') {
+          setPipelineMode('STORY');
+        } else {
+          setPipelineMode('DUBBING');
+        }
         if (json.settings) {
           if (json.settings.translation_style) {
             setActiveProjectStyle(json.settings.translation_style);
@@ -289,11 +294,24 @@ export default function App() {
     }
   };
 
-  const handleCreateProject = async (name: string, videoPath: string, style?: string, customStyle?: string) => {
+  const handleCreateProject = async (name: string, videoPath: string, style?: string, customStyle?: string, mode?: 'STORY' | 'DUBBING', storyText?: string) => {
     setIsCreatingProject(true);
     try {
       const path = await PythonEngineService.createProject(name, videoPath, style, customStyle);
+      const selMode = mode || 'DUBBING';
+      setPipelineMode(selMode);
       setActiveProjectStyle(style || 'general');
+
+      try {
+        const json = await PythonEngineService.readProjectJson(path);
+        if (json) {
+          json.mode = selMode === 'STORY' ? 'MODE_STORY' : 'MODE_DUBBING';
+          await PythonEngineService.writeProjectJson(path, json);
+        }
+      } catch (e) {
+        console.error('Failed to set mode in project.json:', e);
+      }
+
       await loadProjects();
       handleSelectProject(path);
     } catch (err: any) {

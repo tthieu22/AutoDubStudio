@@ -21,7 +21,7 @@ export const TRANSLATION_STYLES: TranslationStyleOption[] = [
 
 interface NewProjectModalProps {
   isCreating: boolean;
-  onCreateProject: (name: string, videoPath: string, style?: string, customStyle?: string) => Promise<void>;
+  onCreateProject: (name: string, videoPath: string, style?: string, customStyle?: string, mode?: 'STORY' | 'DUBBING', storyText?: string) => Promise<void>;
 }
 
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -39,8 +39,10 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
     return `Project_${YYYY}-${MM}-${DD}_${hh}-${mm}-${ss}`;
   };
 
+  const [projectMode, setProjectMode] = useState<'DUBBING' | 'STORY'>('DUBBING');
   const [projectName, setProjectName] = useState(generateTimestampName);
   const [videoPath, setVideoPath] = useState('');
+  const [storyText, setStoryText] = useState('');
   const [translationStyle, setTranslationStyle] = useState('general');
   const [customStyleText, setCustomStyleText] = useState('');
 
@@ -67,25 +69,84 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectName.trim() || !videoPath) {
-      alert('Vui lòng nhập tên dự án và chọn file video đầu vào!');
+    if (!projectName.trim()) {
+      alert('Vui lòng nhập tên dự án!');
+      return;
+    }
+    if (projectMode === 'DUBBING' && !videoPath) {
+      alert('Vui lòng chọn file video đầu vào cho chế độ Lồng tiếng!');
       return;
     }
     await onCreateProject(
       projectName.trim(),
-      videoPath,
+      videoPath || 'source/input.mp4',
       translationStyle,
-      translationStyle === 'custom' ? customStyleText : undefined
+      translationStyle === 'custom' ? customStyleText : undefined,
+      projectMode,
+      storyText
     );
   };
 
   return (
     <div style={{ padding: '40px', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '680px', borderRadius: '20px', padding: '36px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+      <div className="glass-panel" style={{ width: '100%', maxWidth: '720px', borderRadius: '20px', padding: '36px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
         
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <h2 className="gradient-text" style={{ fontSize: '28px', margin: '0 0 10px 0' }}>Tạo Dự Án Lồng Tiếng Mới</h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '14px' }}>Tự động tách âm thanh, dịch bằng Ollama AI và lồng tiếng với Piper TTS chuẩn xác.</p>
+        {/* MODE SELECTOR TABS */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+          <button
+            type="button"
+            onClick={() => setProjectMode('DUBBING')}
+            style={{
+              padding: '14px',
+              borderRadius: '12px',
+              border: '2px solid',
+              borderColor: projectMode === 'DUBBING' ? '#06b6d4' : 'rgba(255, 255, 255, 0.08)',
+              background: projectMode === 'DUBBING' ? 'rgba(6, 182, 212, 0.12)' : '#0B0D10',
+              color: projectMode === 'DUBBING' ? '#38bdf8' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span style={{ fontSize: '15px', fontWeight: 800 }}>🎬 DỊCH & LỒNG TIẾNG VIDEO</span>
+            <span style={{ fontSize: '11px', opacity: 0.8 }}>Tách audio ➔ STT Whisper ➔ Dịch Qwen AI ➔ Piper TTS ➔ Render</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProjectMode('STORY')}
+            style={{
+              padding: '14px',
+              borderRadius: '12px',
+              border: '2px solid',
+              borderColor: projectMode === 'STORY' ? '#a855f7' : 'rgba(255, 255, 255, 0.08)',
+              background: projectMode === 'STORY' ? 'rgba(168, 85, 247, 0.12)' : '#0B0D10',
+              color: projectMode === 'STORY' ? '#c084fc' : '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span style={{ fontSize: '15px', fontWeight: 800 }}>📖 TẠO VIDEO TRUYỆN (STORY)</span>
+            <span style={{ fontSize: '11px', opacity: 0.8 }}>Làm sạch văn bản ➔ Phân cảnh ➔ Tạo ảnh SD 1.5 ➔ Piper TTS ➔ Render</span>
+          </button>
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <h2 className="gradient-text" style={{ fontSize: '24px', margin: '0 0 6px 0' }}>
+            {projectMode === 'DUBBING' ? 'Tạo Dự Án Lồng Tiếng Video Mới' : 'Tạo Dự Án Phim Truyện AI Mới'}
+          </h2>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
+            {projectMode === 'DUBBING' 
+              ? 'Tự động tách âm thanh, dịch tiếng Việt AI và lồng tiếng Piper TTS chuẩn xác.'
+              : 'Tự động phân tích kịch bản truyện, tạo ảnh Stable Diffusion và tổng hợp giọng đọc AI.'}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
