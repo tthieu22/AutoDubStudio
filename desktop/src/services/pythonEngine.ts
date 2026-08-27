@@ -19,6 +19,7 @@ const mockProjects: Record<string, any> = {
     "version": 1,
     "project_id": "mock-uuid-001",
     "name": "vietnam-tourism-dubbed",
+    "mode": "MODE_DUBBING",
     "created_at": new Date().toISOString(),
     "updated_at": new Date().toISOString(),
     "source": { "path": "source/input.mp4", "language": "en" },
@@ -39,6 +40,37 @@ const mockProjects: Record<string, any> = {
       "sync": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null },
       "render": { "status": "PENDING", "progress": 0, "current": 0, "total": 0, "error": null }
     }
+  },
+  "story-webnovel-mang-theo-sieu-thi": {
+    "version": 1,
+    "project_id": "mock-uuid-story-002",
+    "name": "story-webnovel-mang-theo-sieu-thi",
+    "mode": "MODE_STORY",
+    "created_at": new Date().toISOString(),
+    "updated_at": new Date().toISOString(),
+    "source": { "path": "source/chapters/001.txt", "language": "vi" },
+    "target": { "language": "vi" },
+    "settings": {
+      "translation_model": "qwen2.5:7b-instruct",
+      "translation_style": "meme",
+      "tts_engine": "piper"
+    },
+    "pipeline": {}
+  },
+  "podcast-radio-ai-dubbing": {
+    "version": 1,
+    "project_id": "mock-uuid-audio-003",
+    "name": "podcast-radio-ai-dubbing",
+    "mode": "MODE_AUDIO",
+    "created_at": new Date().toISOString(),
+    "updated_at": new Date().toISOString(),
+    "source": { "path": "source/podcast.mp3", "language": "en" },
+    "target": { "language": "vi" },
+    "settings": {
+      "translation_style": "general",
+      "tts_engine": "piper"
+    },
+    "pipeline": {}
   }
 };
 
@@ -314,6 +346,73 @@ export class PythonEngineService {
       return;
     }
     return invoke<void>('retry_pipeline', { projectDir, stage, force });
+  }
+
+  static async discoverStoryUrl(url: string, projectDir?: string): Promise<any> {
+    if (!isTauri()) {
+      // Mock simulation mode for web browser sandbox
+      return {
+        storyUrl: url,
+        pattern: `${url}/chuong-{number}`,
+        patternStatus: 'VALIDATED',
+        confidence: 'HIGH',
+        highestChapter: 1294,
+        lowestChapter: 1,
+        totalCandidates: 1294,
+        validatedCount: 1292,
+        invalidCount: 0,
+        pendingCount: 0,
+        missingChapters: [4, 27],
+        discoveryMethods: ['HTML_LINK', 'LOAD_MORE', 'URL_PATTERN'],
+        chapters: Array.from({ length: 50 }, (_, i) => ({
+          number: i + 1,
+          title: `Chương ${i + 1}`,
+          url: `${url}/chuong-${i + 1}`,
+          discoveredBy: ['HTML_LINK', 'PATTERN'],
+          status: (i + 1 === 4 || i + 1 === 27) ? 'MISSING' : 'VALID'
+        }))
+      };
+    }
+    return invoke<any>('discover_story_url', { url, projectDir: projectDir || null });
+  }
+
+  static async startStoryImport(projectDir: string, chapters: any[]): Promise<any> {
+    if (!isTauri()) {
+      return { status: "SUCCESS", importedCount: chapters.length };
+    }
+    return invoke<any>('start_story_import', { projectDir, chaptersJson: JSON.stringify(chapters) });
+  }
+
+  static subscribeDiscoveryProgress(callback: (event: any) => void) {
+    if (!isTauri()) {
+      return () => {};
+    }
+    return listen<any>('discovery://progress', (event: Event<any>) => {
+      callback(event.payload);
+    });
+  }
+
+  static async getOllamaModels(): Promise<string[]> {
+    if (isTauri()) {
+      try {
+        const models = await invoke<string[]>('list_local_llm_models');
+        if (models && Array.isArray(models) && models.length > 0) {
+          return models;
+        }
+      } catch (e) {
+        console.error('Failed to scan models/llm directory via Tauri IPC:', e);
+      }
+    }
+    return ['qwen2.5-3b-instruct-q4_k_m.gguf'];
+  }
+
+  static subscribeChapterImportProgress(callback: (event: any) => void) {
+    if (!isTauri()) {
+      return () => {};
+    }
+    return listen<any>('chapter://import_progress', (event: Event<any>) => {
+      callback(event.payload);
+    });
   }
 
   // Event listener helpers

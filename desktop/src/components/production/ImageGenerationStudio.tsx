@@ -18,19 +18,16 @@ interface ImageGenerationStudioProps {
 }
 
 export const ImageGenerationStudio: React.FC<ImageGenerationStudioProps> = ({ projectDir }) => {
-  const [prompt, setPrompt] = useState('A dramatic cinematic shot of a young swordsman standing on a mist-covered pine mountain peak at sunrise, highly detailed, 8k, Unreal Engine 5 render');
+  const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted face, extra limbs, bad anatomy, text, watermark');
   const [model, setModel] = useState('SD 1.5 - Realistic Vision v5.1');
   const [steps, setSteps] = useState(20);
   const [cfg, setCfg] = useState(7.0);
-  const [seed, setSeed] = useState(123456);
+  const [seed, setSeed] = useState(-1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const [history, setHistory] = useState([
-    { id: 1, prompt: 'Pine forest trail in early morning fog', seed: 98765, model: 'SD 1.5' },
-    { id: 2, prompt: 'Ancient wooden cottage at mountain valley dusk', seed: 45678, model: 'SD 1.5' }
-  ]);
+  const [history, setHistory] = useState<any[]>([]);
 
   const handleGenerate = () => {
     setIsGenerating(true);

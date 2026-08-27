@@ -12,13 +12,10 @@ import {
   Download, 
   CheckSquare, 
   Square,
-  Sparkles,
-  Smile,
-  Zap,
-  Flame,
-  Heart,
-  Film
+  Sparkles
 } from 'lucide-react';
+import { PythonEngineService } from '../../services/pythonEngine';
+import { DiscoveryReviewModal, DiscoveryRegistryData, DiscoveredChapter } from './DiscoveryReviewModal';
 
 interface StoryImportModalProps {
   isOpen: boolean;
@@ -56,37 +53,102 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
   const [narrationStyle, setNarrationStyle] = useState<string>('meme');
   const [useQwenReteller, setUseQwenReteller] = useState<boolean>(true);
   const [qwenModel, setQwenModel] = useState<string>('qwen2.5:7b-instruct');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
+
+  const fetchLocalModels = async () => {
+    setIsLoadingModels(true);
+    try {
+      const models = await PythonEngineService.getOllamaModels();
+      setAvailableModels(models);
+      if (models.length > 0 && !models.includes(qwenModel)) {
+        setQwenModel(models[0]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchLocalModels();
+    }
+  }, [isOpen]);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [storyInfo, setStoryInfo] = useState<{ title: string; author: string; totalChapters: number } | null>(null);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
-  
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  const [discoveryRegistry, setDiscoveryRegistry] = useState<DiscoveryRegistryData | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [discoveryStage, setDiscoveryStage] = useState('');
+  const [discoveryPercent, setDiscoveryPercent] = useState(0);
+  const [discoveryLogs, setDiscoveryLogs] = useState<string[]>([]);
 
   if (!isOpen) return null;
 
   const handleAnalyzeUrl = async () => {
     if (!urlInput.trim()) return;
     setIsAnalyzing(true);
-    
-    setTimeout(() => {
-      const mockList: ChapterItem[] = Array.from({ length: 30 }, (_, i) => ({
-        number: i + 1,
-        title: `Chương ${i + 1}: Hành Trình Mới (Phần ${i + 1})`,
-        url: `${urlInput}/chuong-${i + 1}`,
-        selected: true,
-        status: 'PENDING'
-      }));
+    setDiscoveryPercent(5);
+    setDiscoveryStage('Đang kết nối website và phân tích HTML...');
+    setDiscoveryLogs([`[${new Date().toLocaleTimeString()}] Bắt đầu phân tích URL: ${urlInput.trim()}`]);
 
-      setStoryInfo({
-        title: 'Mang Theo Siêu Thị Trở Về Thập Niên 80',
-        author: 'Tác giả Webnovel',
-        totalChapters: mockList.length
-      });
-      setChapters(mockList);
+    const unlistenPromise = PythonEngineService.subscribeDiscoveryProgress((evt) => {
+      if (evt) {
+        if (evt.percent) setDiscoveryPercent(evt.percent);
+        if (evt.message) {
+          setDiscoveryStage(evt.message);
+          setDiscoveryLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${evt.message}`]);
+        }
+      }
+    });
+
+    try {
+      const res = await PythonEngineService.discoverStoryUrl(urlInput.trim(), projectDir || undefined);
+      const unlisten = await unlistenPromise;
+      if (typeof unlisten === 'function') unlisten();
       setIsAnalyzing(false);
-    }, 1000);
+
+      if (res && res.chapters) {
+        setDiscoveryLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Phân tích thành công! Phát hiện ${res.chapters.length} chương.`]);
+        setDiscoveryRegistry(res);
+        setIsReviewOpen(true);
+      } else {
+        setDiscoveryLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Lỗi: Kết quả không có dữ liệu chương.`]);
+        alert(`Không phát hiện được chương từ URL này. Vui lòng kiểm tra lại đường dẫn.`);
+      }
+    } catch (e: any) {
+      const unlisten = await unlistenPromise;
+      if (typeof unlisten === 'function') unlisten();
+      setIsAnalyzing(false);
+      const errMsg = e?.message || String(e);
+      setDiscoveryLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ Lỗi: ${errMsg}`]);
+      alert(`Phân tích URL thất bại: ${errMsg}`);
+    }
+  };
+
+  const handleApproveDiscovery = (selectedChapters: DiscoveredChapter[]) => {
+    setIsReviewOpen(false);
+    const converted: ChapterItem[] = selectedChapters.map(c => ({
+      number: c.number,
+      title: c.title,
+      url: c.url,
+      selected: true,
+      status: 'PENDING'
+    }));
+
+    setStoryInfo({
+      title: urlInput.split('/').pop()?.replace(/-/g, ' ').toUpperCase() || 'TRUYỆN DISCOVERED',
+      author: 'Web AutoDetect',
+      totalChapters: converted.length
+    });
+
+    setChapters(converted);
   };
 
   const toggleSelectAll = (select: boolean) => {
@@ -97,9 +159,9 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
     setChapters(prev => prev.map(c => c.number === num ? { ...c, selected: !c.selected } : c));
   };
 
-  const handleStartImport = () => {
-    const selectedCount = chapters.filter(c => c.selected).length;
-    if (selectedCount === 0) {
+  const handleStartImport = async () => {
+    const selectedList = chapters.filter(c => c.selected);
+    if (selectedList.length === 0) {
       alert('Vui lòng chọn ít nhất một chương để tải!');
       return;
     }
@@ -107,27 +169,35 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
     setIsDownloading(true);
     setProgress(0);
 
-    let completed = 0;
-    const interval = setInterval(() => {
-      completed += 1;
-      const pct = Math.round((completed / selectedCount) * 100);
-      setProgress(pct);
-
-      setChapters(prev => {
-        const next = [...prev];
-        const targetIdx = next.findIndex(c => c.selected && c.status === 'PENDING');
-        if (targetIdx !== -1) {
-          next[targetIdx].status = 'SUCCESS';
-        }
-        return next;
-      });
-
-      if (completed >= selectedCount) {
-        clearInterval(interval);
-        setIsDownloading(false);
-        onImportComplete?.(selectedCount, narrationStyle);
+    const unlistenPromise = PythonEngineService.subscribeChapterImportProgress((evt) => {
+      if (evt && typeof evt.percent === 'number') {
+        setProgress(evt.percent);
       }
-    }, 150);
+      if (evt && evt.stage === 'CHAPTER_COMPLETED' && evt.record) {
+        setChapters(prev => prev.map(c => c.number === evt.record.number ? { ...c, status: evt.record.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED' } : c));
+      }
+    });
+
+    try {
+      if (projectDir) {
+        await PythonEngineService.startStoryImport(projectDir, selectedList);
+      } else {
+        // Fallback simulation mode
+        for (let i = 0; i < selectedList.length; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          setProgress(Math.round(((i + 1) / selectedList.length) * 100));
+        }
+      }
+      const unlisten = await unlistenPromise;
+      if (typeof unlisten === 'function') unlisten();
+      setIsDownloading(false);
+      onImportComplete?.(selectedList.length, narrationStyle);
+    } catch (err: any) {
+      const unlisten = await unlistenPromise;
+      if (typeof unlisten === 'function') unlisten();
+      setIsDownloading(false);
+      alert(`Tải chương truyện thất bại: ${err?.message || err}`);
+    }
   };
 
   const selectedCount = chapters.filter(c => c.selected).length;
@@ -196,6 +266,35 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
               </button>
             </div>
 
+            {/* REAL-TIME PROGRESS & LIVE LOG BOX */}
+            {(isAnalyzing || discoveryLogs.length > 0) && (
+              <div className="p-3 rounded-xl bg-[#111318] border border-purple-500/30 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-300 flex items-center gap-1.5 font-['Outfit']">
+                    {isAnalyzing ? <RefreshCw size={12} className="animate-spin text-purple-400" /> : <Check size={12} className="text-emerald-400" />}
+                    <span>{discoveryStage || 'Tiến trình phân tích URL'}</span>
+                  </span>
+                  <span className="font-mono font-bold text-cyan-400">{discoveryPercent}%</span>
+                </div>
+
+                <div className="w-full bg-black/50 h-2 rounded-full overflow-hidden p-0.5 border border-white/5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-300 shadow-sm shadow-purple-500/30"
+                    style={{ width: `${discoveryPercent}%` }}
+                  />
+                </div>
+
+                {/* LOG TERMINAL BOX */}
+                <div className="max-h-28 overflow-y-auto bg-black/60 rounded-lg border border-white/5 p-2 font-mono text-[11px] space-y-1 text-slate-300 custom-scrollbar">
+                  {discoveryLogs.map((log, idx) => (
+                    <div key={idx} className={log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('thành công') ? 'text-emerald-300 font-bold' : 'text-slate-300'}>
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* QWEN 2.5 NARRATION STYLE SELECTOR */}
             <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-2">
               <div className="flex items-center justify-between">
@@ -214,9 +313,11 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
               </div>
 
               {useQwenReteller && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 items-start">
                   <div>
-                    <label className="text-[11px] text-slate-400 font-medium block mb-1">Phong cách diễn đạt</label>
+                    <div className="flex items-center mb-1 h-5">
+                      <label className="text-[11px] text-slate-400 font-medium">Phong cách diễn đạt</label>
+                    </div>
                     <select
                       value={narrationStyle}
                       onChange={e => setNarrationStyle(e.target.value)}
@@ -231,15 +332,34 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-slate-400 font-medium block mb-1">Mô hình AI LLM</label>
+                    <div className="flex items-center justify-between mb-1 h-5">
+                      <label className="text-[11px] text-slate-400 font-medium truncate" title="Mô hình AI LLM (models/llm)">
+                        Mô hình AI <span className="text-[10px] text-slate-500 font-normal">(models/llm)</span>
+                      </label>
+                      <button
+                        onClick={fetchLocalModels}
+                        disabled={isLoadingModels}
+                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold whitespace-nowrap bg-purple-500/10 hover:bg-purple-500/20 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all cursor-pointer"
+                        title="Quét lại thư mục models/llm"
+                      >
+                        <RefreshCw size={10} className={isLoadingModels ? 'animate-spin' : ''} />
+                        <span>Quét lại</span>
+                      </button>
+                    </div>
                     <select
                       value={qwenModel}
                       onChange={e => setQwenModel(e.target.value)}
-                      className="w-full bg-[#111318] border border-white/10 rounded-lg p-1.5 text-xs text-slate-200 focus:outline-none"
+                      className="w-full bg-[#111318] border border-white/10 rounded-lg p-1.5 text-xs text-slate-200 focus:outline-none font-mono"
                     >
-                      <option value="qwen2.5:7b-instruct">Qwen 2.5 7B Instruct (Khuyên dùng)</option>
-                      <option value="qwen2.5:3b-instruct">Qwen 2.5 3B Instruct (Nhanh / Nhẹ)</option>
-                      <option value="qwen2.5:14b-instruct">Qwen 2.5 14B Instruct (Chất lượng cao)</option>
+                      {availableModels.length === 0 ? (
+                        <option value="qwen2.5-3b-instruct-q4_k_m.gguf">qwen2.5-3b-instruct-q4_k_m.gguf</option>
+                      ) : (
+                        availableModels.map(m => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
                 </div>
@@ -340,6 +460,15 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
             </button>
           )}
         </div>
+
+        {/* DISCOVERY REVIEW MODAL */}
+        <DiscoveryReviewModal
+          isOpen={isReviewOpen}
+          onClose={() => setIsReviewOpen(false)}
+          registry={discoveryRegistry}
+          onApprove={handleApproveDiscovery}
+          onReScan={handleAnalyzeUrl}
+        />
       </div>
     </div>
   );

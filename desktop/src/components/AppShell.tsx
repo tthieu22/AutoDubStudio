@@ -16,6 +16,7 @@ interface AppShellProps {
   onDeleteProject?: (name: string) => void;
   activeTab: SidebarTab;
   setActiveTab: (tab: SidebarTab) => void;
+  pipelineMode?: PipelineMode;
   pipelineStatus: PipelineStatus;
   stageProgresses: Partial<Record<StageName, StageProgressInfo>>;
   onStartPipeline: (force?: boolean) => void;
@@ -45,6 +46,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onDeleteProject,
   activeTab,
   setActiveTab,
+  pipelineMode,
   pipelineStatus,
   stageProgresses,
   onStartPipeline,
@@ -65,6 +67,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   saveStatus = 'Saved'
 }) => {
   const workspace = useWorkspaceState();
+  const effectivePipelineMode = pipelineMode || workspace.pipelineMode;
 
   // Resizing state handling
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -135,14 +138,14 @@ export const AppShell: React.FC<AppShellProps> = ({
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-[#0b0d10] text-slate-100 overflow-hidden font-sans antialiased">
-      {/* DESKTOP NATIVE TITLE BAR */}
+    <div className="h-screen w-screen flex flex-col bg-[#0b0d10] text-slate-100 overflow-hidden font-sans select-none">
+      {/* WINDOW TITLE BAR */}
       <TitleBar selectedProjectDir={selectedProjectDir} stageProgresses={stageProgresses} />
 
       {/* APPLICATION TOP BAR */}
       <TopBar
         projectName={projectName}
-        pipelineMode={workspace.pipelineMode}
+        pipelineMode={effectivePipelineMode}
         onModeChange={workspace.setPipelineMode}
         saveStatus={saveStatus}
         ramMetrics={ramMetrics}
@@ -153,6 +156,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         onOpenResourceMonitor={onOpenResourceMonitor}
         onOpenPreview={() => setActiveTab('preview')}
         onOpenRender={() => setActiveTab('render')}
+        onOpenStoryWorkspace={() => setActiveTab('story')}
       />
 
       {/* MAIN LAYOUT CONTENT BODY */}
@@ -161,7 +165,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          pipelineMode={workspace.pipelineMode}
+          pipelineMode={effectivePipelineMode}
           isCollapsed={workspace.isSidebarCollapsed}
           onToggleCollapse={workspace.toggleSidebar}
           width={workspace.sidebarWidth}

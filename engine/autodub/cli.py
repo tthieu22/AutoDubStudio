@@ -21,6 +21,11 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent
 if str(ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(ENGINE_DIR))
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from autodub.pipeline.state import PipelineStage
 
 
@@ -101,12 +106,17 @@ def main():
     autofit_sp = subparsers.add_parser("autofit", help="Automatically adjust timing and fix subtitle overlaps")
     autofit_sp.add_argument("project", help="Project name or path")
 
-    # preview-tts --text <text> [--voice <voice>] [--gender <gender>] [--output <path>]
-    prev_sp = subparsers.add_parser("preview-tts", help="Generate single sentence preview audio clip")
-    prev_sp.add_argument("--text", required=True, help="Text sentence to synthesize")
-    prev_sp.add_argument("--voice", default="vi_VN-vais1000-medium", help="Voice model or engine name")
-    prev_sp.add_argument("--gender", default="female", help="Voice gender (female or male)")
-    prev_sp.add_argument("--output", default="preview.mp3", help="Output file path")
+    # discover-story --url <url> [--project-dir <dir>]
+    disc_sp = subparsers.add_parser("discover-story", help="Discover chapters automatically from story URL")
+    disc_sp.add_argument("--url", required=True, help="Story URL to analyze")
+    disc_sp.add_argument("--project-dir", default=None, help="Optional project directory to save registry")
+
+    # import-story-chapters --project-dir <dir> --chapters-json <json_str>
+    imp_sp = subparsers.add_parser("import-story-chapters", help="Download and import selected story chapters")
+    imp_sp.add_argument("--project-dir", required=True, help="Project directory path")
+    imp_sp.add_argument("--chapters-json", required=True, help="JSON string of selected chapters array")
+
+
 
 
 
@@ -369,16 +379,35 @@ def main():
                 asyncio.run(_gen())
                 b64 = _encode_b64(output_file)
                 print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "edge-tts", "voice": tts_voice}))
-            except Exception:
-                # Fallback to gTTS
-                try:
-                    import gtts
-                    g_tts = gtts.gTTS(text, lang="vi")
-                    g_tts.save(str(output_file))
-                    b64 = _encode_b64(output_file)
-                    print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "gtts", "voice": "vi"}))
-                except Exception as e2:
-                    print(json.dumps({"success": False, "error": str(e2)}))
+            except Exception as e:
+                print(json.dumps({"success": False, "error": str(e)}))
+
+        elif args.command == "discover-story":
+            from autodub.discovery.engine import AdaptiveDiscoveryEngine
+            registry_file = Path(args.project_dir) / "story" / "chapter_registry.json" if args.project_dir else None
+            
+            def _cb(evt):
+                print(json.dumps(evt, ensure_ascii=False), flush=True)
+
+            engine = AdaptiveDiscoveryEngine(
+                story_url=args.url,
+                registry_file=registry_file,
+                progress_callback=_cb
+            )
+            res = engine.run()
+            print(json.dumps({"event": "discovery_complete", "result": res}, ensure_ascii=False), flush=True)
+            return
+        elif args.command == "import-story-chapters":
+            from autodub.story_importer import StoryImporter
+            importer = StoryImporter(args.project_dir)
+            chapters_list = json.loads(args.chapters_json)
+
+            def _import_cb(evt):
+                print(json.dumps(evt, ensure_ascii=False), flush=True)
+
+            imported = importer.download_and_import_chapters(chapters_list, progress_callback=_import_cb)
+            print(json.dumps({"success": True, "importedCount": len(imported), "chapters": imported}, indent=2, ensure_ascii=False))
+            return
 
 
 

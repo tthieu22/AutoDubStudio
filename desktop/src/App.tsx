@@ -626,6 +626,7 @@ export default function App() {
         onDeleteProject={handleDeleteProject}
         activeTab={activeTab}
         setActiveTab={handleTabChange}
+        pipelineMode={pipelineMode}
         pipelineStatus={pipelineStatus}
         stageProgresses={stageProgresses}
         onStartPipeline={startPhase1Pipeline}

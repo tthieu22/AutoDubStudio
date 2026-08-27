@@ -67,7 +67,18 @@ class Project:
                 "title": None,
                 "author": None,
                 "license": None,
-                "status": "PENDING"
+                "status": "PENDING",
+                "discovery": {
+                    "pattern": None,
+                    "patternStatus": "PENDING",
+                    "confidence": "LOW",
+                    "highestChapter": 0,
+                    "lowestChapter": 0,
+                    "totalCandidates": 0,
+                    "validatedCount": 0,
+                    "missingChapters": []
+                },
+                "chapter_registry": []
             },
             "characters": [],
             "scenes": [],

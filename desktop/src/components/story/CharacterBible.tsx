@@ -36,59 +36,8 @@ interface CharacterBibleProps {
 }
 
 export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSelectCharacter }) => {
-  const [characters, setCharacters] = useState<Character[]>([
-    {
-      id: 'char-1',
-      name: 'A Lãng (阿浪)',
-      alias: 'Swordsman',
-      gender: 'Male',
-      age: '24',
-      personality: 'Brave, calm under pressure, fiercely loyal to companions.',
-      appearance: 'Tall, dark hair tied in a high ponytail, sharp eyes.',
-      clothing: 'Blue warrior robes with leather shoulder guards.',
-      voice: 'vi_male_hero',
-      speakingStyle: 'Decisive, slightly deep tone.',
-      locked: true
-    },
-    {
-      id: 'char-2',
-      name: 'Lâm Mộc (林木)',
-      alias: 'Mystic Scholar',
-      gender: 'Female',
-      age: '22',
-      personality: 'Witty, scholarly, cautious, ancient lore master.',
-      appearance: 'Fair skin, long black braided hair, jade pendant.',
-      clothing: 'White scholar silk robes with silver embroidery.',
-      voice: 'vi_female_soft',
-      speakingStyle: 'Gentle, articulate, clear diction.',
-      locked: false
-    }
-  ]);
-
-  useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.characters && Array.isArray(data.characters)) {
-          setCharacters(data.characters);
-        }
-      }).catch(console.error);
-    }
-  }, [projectDir]);
-
-  const saveCharacters = async (newChars: Character[]) => {
-    setCharacters(newChars);
-    if (projectDir) {
-      try {
-        const projectData = await PythonEngineService.readProjectJson(projectDir);
-        projectData.characters = newChars;
-        await PythonEngineService.writeProjectJson(projectDir, projectData);
-      } catch (err) {
-        console.error('Failed to save characters:', err);
-      }
-    }
-  };
-
-  const [selectedCharId, setSelectedCharId] = useState<string>('char-1');
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [selectedCharId, setSelectedCharId] = useState<string>('');
 
   const toggleLock = (id: string) => {
     setCharacters(prev => prev.map(c => c.id === id ? { ...c, locked: !c.locked } : c));
@@ -139,58 +88,92 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
       </div>
 
       {/* CHARACTER GRID VIEW */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {characters.map(char => {
-          const isSelected = selectedCharId === char.id;
-          return (
-            <div
-              key={char.id}
-              onClick={() => {
-                setSelectedCharId(char.id);
-                onSelectCharacter?.(char);
-              }}
-              className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-cyan-500/10 border-cyan-500/50 shadow-md shadow-cyan-500/10'
-                  : 'bg-[#111318] hover:bg-[#161a22] border-white/5'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-white/10 flex items-center justify-center font-bold text-cyan-300 font-['Outfit'] text-lg">
-                    {char.name.charAt(0)}
+      {characters.length === 0 ? (
+        <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 mb-4 shadow-lg shadow-cyan-500/10">
+            <Users size={28} />
+          </div>
+          <h3 className="text-base font-bold text-white mb-1 font-['Outfit']">Dự Án Chưa Có Nhân Vật Nào</h3>
+          <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+            Hồ sơ nhân vật sẽ được tự động nhận diện khi Qwen 2.5 AI viết lại kịch bản truyện, hoặc bạn có thể tự thêm nhân vật thủ công.
+          </p>
+          <button
+            onClick={() => {
+              const newChar: Character = {
+                id: `char-${Date.now()}`,
+                name: 'Nhân Vật Mới',
+                alias: 'Hero',
+                gender: 'Nam',
+                age: '24',
+                personality: 'Dũng cảm, thông minh...',
+                appearance: 'Cao ráo, mắt sáng...',
+                clothing: 'Trang phục cổ trang',
+                voice: 'vi_male_hero',
+                speakingStyle: 'Mạnh mẽ',
+                locked: false
+              };
+              setCharacters([newChar]);
+              setSelectedCharId(newChar.id);
+            }}
+            className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-2 shadow-xl shadow-cyan-500/20 transition-all cursor-pointer"
+          >
+            <Plus size={16} /> Thêm Nhân Vật Mới
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {characters.map(char => {
+            const isSelected = selectedCharId === char.id;
+            return (
+              <div
+                key={char.id}
+                onClick={() => {
+                  setSelectedCharId(char.id);
+                  onSelectCharacter?.(char);
+                }}
+                className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-cyan-500/10 border-cyan-500/50 shadow-md shadow-cyan-500/10'
+                    : 'bg-[#111318] hover:bg-[#161a22] border-white/5'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-white/10 flex items-center justify-center font-bold text-cyan-300 font-['Outfit'] text-lg">
+                      {char.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white font-['Outfit']">{char.name}</h3>
+                      <span className="text-[11px] text-slate-400 font-medium">{char.gender} • Age {char.age}</span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white font-['Outfit']">{char.name}</h3>
-                    <span className="text-[11px] text-slate-400 font-medium">{char.gender} • Age {char.age}</span>
-                  </div>
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleLock(char.id); }}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      char.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
+                    }`}
+                    title={char.locked ? 'Locked Character Data' : 'Unlocked'}
+                  >
+                    {char.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                  </button>
                 </div>
 
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleLock(char.id); }}
-                  className={`p-1.5 rounded-lg transition-all ${
-                    char.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
-                  }`}
-                  title={char.locked ? 'Locked Character Data' : 'Unlocked'}
-                >
-                  {char.locked ? <Lock size={14} /> : <Unlock size={14} />}
-                </button>
-              </div>
-
-              <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-white/5">
-                <p className="line-clamp-2"><strong className="text-slate-500">Personality:</strong> {char.personality}</p>
-                <p className="line-clamp-2"><strong className="text-slate-500">Appearance:</strong> {char.appearance}</p>
-                <div className="pt-2 flex items-center justify-between text-[11px]">
-                  <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
-                    <Mic size={10} /> {char.voice}
-                  </span>
-                  <span className="text-slate-500 font-mono">ID: {char.id}</span>
+                <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-white/5">
+                  <p className="line-clamp-2"><strong className="text-slate-500">Personality:</strong> {char.personality}</p>
+                  <p className="line-clamp-2"><strong className="text-slate-500">Appearance:</strong> {char.appearance}</p>
+                  <div className="pt-2 flex items-center justify-between text-[11px]">
+                    <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
+                      <Mic size={10} /> {char.voice}
+                    </span>
+                    <span className="text-slate-500 font-mono">ID: {char.id}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

@@ -214,36 +214,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* 2. SOURCE METADATA & PIPELINE OVERVIEW CARD */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* SOURCE VIDEO METADATA CARD */}
+        {/* SOURCE METADATA CARD */}
         <div className="bg-[#111318] p-5 rounded-xl border border-white/5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider font-['Outfit'] flex items-center gap-1.5">
-              <FileVideo size={14} className="text-indigo-400" />
-              Source Video
+              {mode === 'STORY' ? <Sparkles size={14} className="text-cyan-400" /> : <FileVideo size={14} className="text-indigo-400" />}
+              {mode === 'STORY' ? 'Cấu Hình Phim Truyện AI' : 'Source Video'}
             </span>
             <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
               READY
             </span>
           </div>
 
-          <div className="space-y-2 pt-1 text-xs">
-            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
-              <span className="text-slate-500">File Name</span>
-              <span className="font-semibold truncate max-w-[170px]" title="source/input.mp4">input.mp4</span>
+          {mode === 'STORY' ? (
+            <div className="space-y-2 pt-1 text-xs">
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">AI Model Script Writer</span>
+                <span className="font-semibold text-cyan-400">Qwen 2.5 7B Instruct</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">AI Image Generator</span>
+                <span className="font-semibold text-purple-400">SD 1.5 (Realistic Vision)</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">TTS Voice Engine</span>
+                <span className="font-semibold text-emerald-400">vi_VN-vais1000-medium</span>
+              </div>
+              <div className="flex justify-between py-1 text-slate-300">
+                <span className="text-slate-500">Nguồn Kịch Bản</span>
+                <span className="font-semibold text-slate-200">Web Importer / File TXT</span>
+              </div>
             </div>
-            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
-              <span className="text-slate-500">Duration</span>
-              <span className="font-mono font-medium">18:32.40</span>
+          ) : (
+            <div className="space-y-2 pt-1 text-xs">
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">File Name</span>
+                <span className="font-semibold truncate max-w-[170px]" title="source/input.mp4">input.mp4</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">Duration</span>
+                <span className="font-mono font-medium">18:32.40</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
+                <span className="text-slate-500">Resolution</span>
+                <span className="font-mono font-medium">1920 x 1080 (1080p)</span>
+              </div>
+              <div className="flex justify-between py-1 text-slate-300">
+                <span className="text-slate-500">Target Language</span>
+                <span className="font-semibold text-cyan-400 uppercase">Vietnamese (vi)</span>
+              </div>
             </div>
-            <div className="flex justify-between py-1 border-b border-white/5 text-slate-300">
-              <span className="text-slate-500">Resolution</span>
-              <span className="font-mono font-medium">1920 x 1080 (1080p)</span>
-            </div>
-            <div className="flex justify-between py-1 text-slate-300">
-              <span className="text-slate-500">Target Language</span>
-              <span className="font-semibold text-cyan-400 uppercase">Vietnamese (vi)</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* PIPELINE PROGRESS SUMMARY */}

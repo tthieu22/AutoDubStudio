@@ -39,41 +39,7 @@ interface SceneBoardProps {
 
 export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScene }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'storyboard'>('storyboard');
-  const [scenes, setScenes] = useState<SceneItem[]>([
-    {
-      id: 'scene-1',
-      sceneNumber: 1,
-      location: 'Pine Forest Trail',
-      timeOfDay: 'Morning Fog',
-      emotion: 'Serene / Mystical',
-      duration: 8.2,
-      narration: 'Sương sớm phủ kín lối đi qua rừng thông Đà Lạt...',
-      dialogue: 'A Lãng: "Hôm nay thời tiết thật là đẹp, chúng ta mau xuất phát thôi!"',
-      status: 'APPROVED'
-    },
-    {
-      id: 'scene-2',
-      sceneNumber: 2,
-      location: 'Mountain Vista Peak',
-      timeOfDay: 'Sunrise',
-      emotion: 'Awe / Hope',
-      duration: 6.5,
-      narration: 'Ánh mặt trời đầu tiên chiếu qua những vạt mây rực rỡ.',
-      dialogue: 'Lâm Mộc: "Nhìn kìa, đằng kia chính là đỉnh núi Langbiang."',
-      status: 'REVIEW_REQUIRED'
-    },
-    {
-      id: 'scene-3',
-      sceneNumber: 3,
-      location: 'Ancient Wood Cottage',
-      timeOfDay: 'Dusk',
-      emotion: 'Warm / Cozy',
-      duration: 10.0,
-      narration: 'Căn nhà gỗ cổ kính nép mình bên thung lũng rực rỡ sắc hoa.',
-      dialogue: 'A Lãng: "Chúng ta sẽ nghỉ chân ở đây tối nay."',
-      status: 'GENERATED'
-    }
-  ]);
+  const [scenes, setScenes] = useState<SceneItem[]>([]);
 
   React.useEffect(() => {
     if (projectDir) {
@@ -85,7 +51,7 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
     }
   }, [projectDir]);
 
-  const [selectedSceneId, setSelectedSceneId] = useState<string>('scene-1');
+  const [selectedSceneId, setSelectedSceneId] = useState<string>('');
 
   const updateStatus = (id: string, newStatus: SceneItem['status']) => {
     setScenes(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
@@ -195,8 +161,38 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
 
       {/* SCENE CARDS CONTAINER */}
       <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
-        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
-          {scenes.map(scene => {
+        {scenes.length === 0 ? (
+          <div className="h-full min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 mb-4 shadow-lg shadow-cyan-500/10">
+              <Clapperboard size={28} />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1 font-['Outfit']">Dự Án Chưa Có Phân Cảnh Video</h3>
+            <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+              Các phân cảnh video (Scene Board & Storyboard) sẽ được tự động tạo từ Kịch Bản Truyện khi bạn tiến hành xử lý dự án.
+            </p>
+            <button
+              onClick={() => {
+                const newScene: SceneItem = {
+                  id: `scene-${Date.now()}`,
+                  sceneNumber: 1,
+                  location: 'Bối cảnh phân cảnh 1',
+                  timeOfDay: 'Ban ngày',
+                  emotion: 'Hào hứng',
+                  duration: 5.0,
+                  narration: 'Nội dung lời dẫn chuyện...',
+                  dialogue: 'Lời thoại nhân vật...',
+                  status: 'GENERATED'
+                };
+                setScenes([newScene]);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/20 transition-all cursor-pointer"
+            >
+              <Plus size={16} /> Thêm Phân Cảnh Mới
+            </button>
+          </div>
+        ) : (
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
+            {scenes.map(scene => {
             const isSelected = selectedSceneId === scene.id;
             return (
               <div
@@ -281,6 +277,7 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );

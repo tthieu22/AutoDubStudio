@@ -15,24 +15,7 @@ interface StoryMemoryProps {
 }
 
 export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
-  const [memories, setMemories] = useState<MemoryItem[]>([
-    {
-      id: 'mem-1',
-      category: 'Important Event',
-      content: 'A Lãng and Lâm Mộc agreed to travel to Đà Lạt together after defeating the bandits at the valley.',
-      importance: 'HIGH',
-      confidence: 0.98,
-      locked: true
-    },
-    {
-      id: 'mem-2',
-      category: 'Relationship',
-      content: 'A Lãng respects Lâm Mộc for her ancient botany knowledge.',
-      importance: 'MEDIUM',
-      confidence: 0.92,
-      locked: false
-    }
-  ]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
 
   const toggleLock = (id: string) => {
     setMemories(prev => prev.map(m => m.id === id ? { ...m, locked: !m.locked } : m));
@@ -73,7 +56,7 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
             const newMem: MemoryItem = {
               id: `mem-${Date.now()}`,
               category: 'Important Event',
-              content: 'New narrative memory record...',
+              content: 'Ghi nhớ sự kiện quan trọng...',
               importance: 'MEDIUM',
               confidence: 0.9,
               locked: false
@@ -88,29 +71,57 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
 
       {/* MEMORY ITEMS LIST */}
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-        {memories.map(mem => (
-          <div key={mem.id} className="p-4 rounded-xl bg-[#111318] border border-white/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-purple-400 uppercase tracking-wider font-['Outfit']">{mem.category}</span>
-                {getImportanceBadge(mem.importance)}
-                <span className="text-[11px] font-mono text-slate-500">• Confidence: {(mem.confidence * 100).toFixed(0)}%</span>
+        {memories.length === 0 ? (
+          <div className="h-full min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 mb-4 shadow-lg shadow-purple-500/10">
+              <Brain size={28} />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1 font-['Outfit']">Dự Án Chưa Có Trí Nhớ Dài Hạn</h3>
+            <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+              Trí nhớ AI (Memory) sẽ tự động lưu lại tình tiết quan trọng, quan hệ nhân vật khi Qwen 2.5 xử lý kịch bản truyện.
+            </p>
+            <button
+              onClick={() => {
+                const newMem: MemoryItem = {
+                  id: `mem-${Date.now()}`,
+                  category: 'Important Event',
+                  content: 'Ghi nhớ sự kiện quan trọng của kịch bản...',
+                  importance: 'HIGH',
+                  confidence: 0.95,
+                  locked: false
+                };
+                setMemories([newMem]);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-purple-600/20 transition-all cursor-pointer"
+            >
+              <Plus size={16} /> Thêm Ghi Nhớ Tình Tiết
+            </button>
+          </div>
+        ) : (
+          memories.map(mem => (
+            <div key={mem.id} className="p-4 rounded-xl bg-[#111318] border border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider font-['Outfit']">{mem.category}</span>
+                  {getImportanceBadge(mem.importance)}
+                  <span className="text-[11px] font-mono text-slate-500">• Confidence: {(mem.confidence * 100).toFixed(0)}%</span>
+                </div>
+
+                <button
+                  onClick={() => toggleLock(mem.id)}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    mem.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
+                  }`}
+                  title={mem.locked ? 'Locked Memory' : 'Unlocked'}
+                >
+                  {mem.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                </button>
               </div>
 
-              <button
-                onClick={() => toggleLock(mem.id)}
-                className={`p-1.5 rounded-lg transition-all ${
-                  mem.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
-                }`}
-                title={mem.locked ? 'Locked Memory' : 'Unlocked'}
-              >
-                {mem.locked ? <Lock size={14} /> : <Unlock size={14} />}
-              </button>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">{mem.content}</p>
             </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed font-sans">{mem.content}</p>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

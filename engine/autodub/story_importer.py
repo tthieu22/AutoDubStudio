@@ -36,30 +36,29 @@ class StoryImporter:
         self.chapters_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_file = self.project_dir / "project.json"
 
-    def analyze_story_url(self, url: str) -> Dict[str, Any]:
-        """Analyzes story URL and detects title, author, and available chapter list."""
-        logger.info(f"Analyzing story URL: {url}")
-        
-        # Mock / Real auto detection logic
-        domain = re.sub(r'https?://', '', url).split('/')[0]
+    def analyze_story_url(self, url: str, progress_callback=None) -> Dict[str, Any]:
+        """Analyzes story URL using Adaptive Discovery Engine and returns Chapter Registry."""
+        logger.info(f"Analyzing story URL with Adaptive Discovery Engine: {url}")
+        from autodub.discovery.engine import AdaptiveDiscoveryEngine
+
+        registry_file = self.project_dir / "story" / "chapter_registry.json"
+        engine = AdaptiveDiscoveryEngine(
+            story_url=url,
+            registry_file=registry_file,
+            progress_callback=progress_callback
+        )
+        registry_data = engine.run()
+
         slug = url.strip('/').split('/')[-1]
         title = slug.replace('-', ' ').title()
-        
-        mock_chapters = []
-        for i in range(1, 51):
-            mock_chapters.append({
-                "number": i,
-                "title": f"Chương {i}: {title} (Phần {i})",
-                "url": f"{url}/chuong-{i}",
-                "status": "PENDING"
-            })
-            
+
         return {
             "title": title,
-            "author": "Tác giả AI / AutoDetect",
-            "domain": domain,
-            "total_chapters": len(mock_chapters),
-            "chapters": mock_chapters
+            "author": "AutoDetect Website",
+            "domain": re.sub(r'https?://', '', url).split('/')[0],
+            "total_chapters": registry_data.get("totalCandidates", 0),
+            "chapters": registry_data.get("chapters", []),
+            "registry": registry_data
         }
 
     def save_chapter(self, chapter_num: int, title: str, content: str) -> str:
@@ -73,21 +72,93 @@ class StoryImporter:
             
         return str(file_path)
 
-    def import_txt_files(self, file_paths: List[str]) -> List[Dict[str, Any]]:
-        """Imports local text files into standardized project chapter structure."""
-        imported = []
-        for idx, path_str in enumerate(file_paths, start=1):
-            path = Path(path_str)
-            if path.exists() and path.is_file():
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    raw_text = f.read()
-                
-                title = path.stem.replace('_', ' ').replace('-', ' ').title()
-                saved_path = self.save_chapter(idx, title, raw_text)
-                imported.append({
-                    "number": idx,
-                    "title": title,
-                    "file": saved_path,
-                    "status": "IMPORTED"
+    def download_and_import_chapters(
+        self,
+        chapters: List[Dict[str, Any]],
+        delay_ms: int = 200,
+        progress_callback: Optional[Any] = None
+    ) -> List[Dict[str, Any]]:
+        """Downloads, cleans, validates, and saves selected chapter URLs to source/chapters/."""
+        import requests
+        import time
+        from urllib.parse import urlparse
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        imported_list = []
+        total = len(chapters)
+
+        for idx, item in enumerate(chapters, start=1):
+            num = item.get("number", idx)
+            title = item.get("title", f"Chương {num}")
+            url = item.get("url", "")
+
+            if progress_callback:
+                progress_callback({
+                    "event": "chapter_import_progress",
+                    "stage": "CHAPTER_PROCESSING",
+                    "current": idx,
+                    "total": total,
+                    "percent": round((idx / total) * 100),
+                    "currentChapter": title,
+                    "url": url
                 })
-        return imported
+
+            # SSRF Safety Check
+            parsed = urlparse(url)
+            hostname = (parsed.hostname or "").lower()
+            if hostname in ["localhost", "127.0.0.1", "0.0.0.0"] or hostname.startswith(("192.168.", "10.", "172.16.")):
+                logger.warning(f"SSRF blocked for dangerous URL: {url}")
+                continue
+
+            raw_html = ""
+            status = "SUCCESS"
+            error_msg = None
+
+            try:
+                time.sleep(delay_ms / 1000.0)
+                res = requests.get(url, headers=headers, timeout=12)
+                if res.status_code == 200:
+                    raw_html = res.text
+                else:
+                    status = "FAILED"
+                    error_msg = f"HTTP_{res.status_code}"
+            except Exception as e:
+                status = "FAILED"
+                error_msg = str(e)
+
+            clean_text = TextCleaner.clean_html_content(raw_html) if raw_html else ""
+            word_count = len(clean_text.split())
+
+            if word_count < 30 and status == "SUCCESS":
+                status = "LOW_CONTENT"
+
+            saved_file = ""
+            if clean_text:
+                saved_file = self.save_chapter(num, title, clean_text)
+
+            chapter_record = {
+                "number": num,
+                "title": title,
+                "url": url,
+                "file": saved_file,
+                "wordCount": word_count,
+                "status": status,
+                "error": error_msg
+            }
+            imported_list.append(chapter_record)
+
+            if progress_callback:
+                progress_callback({
+                    "event": "chapter_import_progress",
+                    "stage": "CHAPTER_COMPLETED",
+                    "current": idx,
+                    "total": total,
+                    "percent": int((idx / total) * 100),
+                    "record": chapter_record
+                })
+
+        logger.info(f"Successfully imported {len(imported_list)} chapters to {self.chapters_dir}")
+        return imported_list

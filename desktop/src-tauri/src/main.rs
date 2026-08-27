@@ -281,14 +281,18 @@ fn create_project(
     fs::create_dir_all(project_dir.join("output")).map_err(|e| e.to_string())?;
     fs::create_dir_all(project_dir.join("logs")).map_err(|e| e.to_string())?;
 
-    // Copy source video into project working source
+    // Copy source video into project working source if it exists, or create default placeholder
     let source_path = Path::new(&source_video_path);
-    if !source_path.exists() {
-        return Err("Selected source video file does not exist.".to_string());
-    }
-    let ext = source_path.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
-    let dest_video = project_dir.join("source").join(format!("input.{}", ext));
-    fs::copy(source_path, &dest_video).map_err(|e| e.to_string())?;
+    let ext = if source_path.exists() {
+        let e = source_path.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
+        let dest_video = project_dir.join("source").join(format!("input.{}", e));
+        let _ = fs::copy(source_path, &dest_video);
+        e.to_string()
+    } else {
+        let dummy_path = project_dir.join("source").join("input.mp4");
+        let _ = fs::write(&dummy_path, b"");
+        "mp4".to_string()
+    };
 
     // Create default project.json
     let now = chrono::Utc::now().to_rfc3339();
@@ -916,6 +920,145 @@ fn write_composition(project_dir: String, data: serde_json::Value) -> Result<(),
     Ok(())
 }
 
+#[tauri::command]
+async fn discover_story_url(window: Window, url: String, project_dir: Option<String>) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"));
+    cmd.args(&["-m", "autodub.cli", "discover-story", "--url", &url]);
+    if let Some(ref p) = project_dir {
+        cmd.args(&["--project-dir", p]);
+    }
+
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn Python process: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let final_result = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let result_clone = final_result.clone();
+    let window_clone = window.clone();
+
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let trimmed = line_str.trim();
+                if trimmed.starts_with('{') && trimmed.ends_with('}') {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        if json.get("event").and_then(|v| v.as_str()) == Some("discovery_complete") {
+                            if let Some(res_val) = json.get("result") {
+                                let mut lock = result_clone.lock().unwrap();
+                                *lock = Some(res_val.clone());
+                            }
+                        }
+                        let _ = window_clone.emit("discovery://progress", json);
+                    }
+                }
+            }
+        }
+    });
+
+    let window_clone2 = window.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = window_clone2.emit("pipeline://log", line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        let lock = final_result.lock().unwrap();
+        if let Some(ref res) = *lock {
+            Ok(res.clone())
+        } else {
+            Ok(serde_json::json!({ "status": "SUCCESS" }))
+        }
+    } else {
+        Err("Story discovery failed".to_string())
+    }
+}
+
+#[tauri::command]
+async fn start_story_import(window: Window, project_dir: String, chapters_json: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"));
+    cmd.args(&["-m", "autodub.cli", "import-story-chapters", "--project-dir", &project_dir, "--chapters-json", &chapters_json]);
+
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn Python process: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let window_clone = window.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let trimmed = line_str.trim();
+                if trimmed.starts_with('{') && trimmed.ends_with('}') {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        let _ = window_clone.emit("chapter://import_progress", json);
+                    }
+                }
+            }
+        }
+    });
+
+    let window_clone2 = window.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = window_clone2.emit("pipeline://log", line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(serde_json::json!({ "status": "SUCCESS" }))
+    } else {
+        Err("Story import failed".to_string())
+    }
+}
+
+#[tauri::command]
+fn list_local_llm_models() -> Result<Vec<String>, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let llm_dir = ws_root.join("models").join("llm");
+    if !llm_dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut models = Vec::new();
+    if let Ok(entries) = fs::read_dir(&llm_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            if path.is_file() || path.is_dir() {
+                models.push(name);
+            }
+        }
+    }
+    models.sort();
+    Ok(models)
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
@@ -941,7 +1084,10 @@ fn main() {
             apply_autofit_qc,
             preview_tts_voice,
             read_composition,
-            write_composition
+            write_composition,
+            discover_story_url,
+            start_story_import,
+            list_local_llm_models
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

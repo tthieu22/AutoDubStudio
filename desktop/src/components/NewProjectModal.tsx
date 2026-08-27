@@ -76,11 +76,11 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const finalProjectName = projectName.trim() || generateTimestampName();
-    const finalVideoPath = videoPath.trim() || (projectMode === 'DUBBING' ? 'C:/Videos/sample_demo_video.mp4' : 'source/story.txt');
+    const finalMediaPath = videoPath.trim() || (projectMode === 'DUBBING' ? 'C:/Videos/sample_demo_video.mp4' : 'source/story.txt');
 
     await onCreateProject(
       finalProjectName,
-      finalVideoPath,
+      finalMediaPath,
       translationStyle,
       translationStyle === 'custom' ? customStyleText : undefined,
       projectMode,
@@ -181,6 +181,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
               </button>
             </div>
           </div>
+
+
 
           {/* DUBBING MODE FIELDS */}
           {projectMode === 'DUBBING' && (

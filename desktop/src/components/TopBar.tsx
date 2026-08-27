@@ -36,6 +36,7 @@ interface TopBarProps {
   ramMetrics?: string;
   vramMetrics?: string;
   unreadNotificationsCount?: number;
+  onOpenStoryWorkspace?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -53,6 +54,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenResourceMonitor,
   onOpenCommandPalette,
   onOpenSettings,
+  onOpenStoryWorkspace,
   ramMetrics = '10.1 GB / 16 GB',
   vramMetrics = '0.28 GB / 4 GB',
   unreadNotificationsCount = 0
@@ -133,10 +135,14 @@ export const TopBar: React.FC<TopBarProps> = ({
               <span>MODE_DUBBING (Lồng Tiếng Video)</span>
             </span>
           ) : (
-            <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Project Type: AI Story Creation Mode">
+            <button 
+              onClick={onOpenStoryWorkspace}
+              className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all" 
+              title="Bấm để mở Story & Chapters Workspace"
+            >
               <BookOpen size={13} className="text-cyan-400" />
               <span>MODE_STORY (Video Truyện AI)</span>
-            </span>
+            </button>
           )}
         </div>
       </div>

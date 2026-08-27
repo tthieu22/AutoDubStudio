@@ -15,29 +15,7 @@ interface WorldBibleProps {
 }
 
 export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
-  const [entities, setEntities] = useState<WorldEntity[]>([
-    {
-      id: 'w-1',
-      category: 'Location',
-      name: 'Đà Lạt (Thành phố Ngàn Hoa)',
-      description: 'Mountain city in the Central Highlands, famous for foggy pine forests, cool climate, and European-style villas.',
-      locked: true
-    },
-    {
-      id: 'w-2',
-      category: 'Organization',
-      name: 'Vạn Hương Các (Guild of Fragrance)',
-      description: 'Ancient merchant guild specializing in rare botanicals and tea craftsmanship.',
-      locked: false
-    },
-    {
-      id: 'w-3',
-      category: 'Terminology',
-      name: 'Linh Khí (Spiritual Qi)',
-      description: 'Environmental energy density flowing through high altitude mountain peaks.',
-      locked: true
-    }
-  ]);
+  const [entities, setEntities] = useState<WorldEntity[]>([]);
 
   React.useEffect(() => {
     if (projectDir) {
@@ -139,29 +117,56 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
 
       {/* ENTITIES LIST */}
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-        {filteredEntities.map(ent => (
-          <div key={ent.id} className="p-4 rounded-xl bg-[#111318] border border-white/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {getCategoryIcon(ent.category)}
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-['Outfit']">{ent.category}</span>
-                <h3 className="text-sm font-bold text-white font-['Outfit']">{ent.name}</h3>
+        {filteredEntities.length === 0 ? (
+          <div className="h-full min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 mb-4 shadow-lg shadow-indigo-500/10">
+              <Globe size={28} />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1 font-['Outfit']">Dự Án Chưa Có Bối Cảnh / Thế Giới Quan</h3>
+            <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+              Bạn có thể tự định nghĩa địa danh, tổ chức, quy luật thế giới quan để AI luôn tuân thủ nhất quán trong suốt câu chuyện.
+            </p>
+            <button
+              onClick={() => {
+                const newEnt: WorldEntity = {
+                  id: `w-${Date.now()}`,
+                  category: 'Location',
+                  name: 'Địa Danh / Quy Luật Mới',
+                  description: 'Chi tiết bối cảnh thế giới quan...',
+                  locked: false
+                };
+                setEntities([newEnt]);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/20 transition-all cursor-pointer"
+            >
+              <Plus size={16} /> Thêm Bối Cảnh Thế Giới Quan
+            </button>
+          </div>
+        ) : (
+          filteredEntities.map(ent => (
+            <div key={ent.id} className="p-4 rounded-xl bg-[#111318] border border-white/5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {getCategoryIcon(ent.category)}
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-['Outfit']">{ent.category}</span>
+                  <h3 className="text-sm font-bold text-white font-['Outfit']">{ent.name}</h3>
+                </div>
+
+                <button
+                  onClick={() => toggleLock(ent.id)}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    ent.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
+                  }`}
+                  title={ent.locked ? 'Locked World Rule' : 'Unlocked'}
+                >
+                  {ent.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                </button>
               </div>
 
-              <button
-                onClick={() => toggleLock(ent.id)}
-                className={`p-1.5 rounded-lg transition-all ${
-                  ent.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
-                }`}
-                title={ent.locked ? 'Locked World Rule' : 'Unlocked'}
-              >
-                {ent.locked ? <Lock size={14} /> : <Unlock size={14} />}
-              </button>
+              <p className="text-xs text-slate-300 leading-relaxed">{ent.description}</p>
             </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">{ent.description}</p>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

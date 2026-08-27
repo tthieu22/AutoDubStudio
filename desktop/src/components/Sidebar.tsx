@@ -79,13 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectProject,
   onCreateNewProject,
   onDeleteProject,
-  badges = {
-    scenesCount: '8/10',
-    imagesCount: '7/10',
-    reviewCount: 3,
-    jobsCount: 2,
-    errorsCount: 0
-  }
+  badges = {}
 }) => {
   const currentProjName = selectedProjectDir
     ? selectedProjectDir.split('/').pop()?.split('\\').pop() || selectedProjectDir
@@ -225,12 +219,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
               className="flex-1 bg-[#111318] border border-white/10 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
             >
-              {projectsList.length === 0 && <option value="">No projects yet</option>}
-              {projectsList.map(p => (
-                <option key={p} value={p}>
-                  📁 {p}
-                </option>
-              ))}
+              {projectsList.map(p => {
+                const isStory = p.toLowerCase().includes('story') || p.toLowerCase().includes('truyen');
+                const isAudio = p.toLowerCase().includes('audio') || p.toLowerCase().includes('podcast') || p.toLowerCase().includes('radio');
+                const prefix = isStory ? '📖 [STORY]' : isAudio ? '🎙️ [AUDIO]' : '🎬 [VIDEO]';
+                return (
+                  <option key={p} value={p}>
+                    {prefix} {p}
+                  </option>
+                );
+              })}
               <option value="__NEW__">+ Create New Project...</option>
             </select>
 
