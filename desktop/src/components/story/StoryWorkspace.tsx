@@ -45,13 +45,58 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
   };
 
   React.useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.chapters && Array.isArray(data.chapters)) {
-          setChapters(data.chapters);
+    if (!projectDir) return;
+    const loadChapters = async () => {
+      let loadedChaps: Chapter[] = [];
+      try {
+        const data = await PythonEngineService.readProjectJson(projectDir);
+        if (data && data.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
+          loadedChaps = [...data.chapters];
         }
-      }).catch(console.error);
-    }
+      } catch {}
+
+      // Scan chapters/chapter_0001.txt to chapter_0050.txt from disk
+      for (let i = 1; i <= 50; i++) {
+        const padNum = String(i).padStart(4, '0');
+        const chapFilePath = `${projectDir}/chapters/chapter_${padNum}.txt`;
+        try {
+          const content = await PythonEngineService.readTextFile(chapFilePath);
+          if (content && content.trim().length > 0) {
+            const existingIdx = loadedChaps.findIndex(c => c.chapterNumber === i);
+            const chapObj: Chapter = {
+              id: `chap-${padNum}`,
+              chapterNumber: i,
+              title: `Chương ${i}: Hành Trình Tu Tiên Khởi Đầu`,
+              summary: content.slice(0, 120).replace(/\n/g, ' ') + '...',
+              characters: ['Lâm Phàm', 'Lý Thanh Vân'],
+              scenesCount: 2,
+              content: content
+            };
+            if (existingIdx >= 0) {
+              loadedChaps[existingIdx] = {
+                ...loadedChaps[existingIdx],
+                content: content,
+                summary: loadedChaps[existingIdx].summary || chapObj.summary
+              };
+            } else {
+              loadedChaps.push(chapObj);
+            }
+          }
+        } catch {}
+      }
+
+      setChapters(loadedChaps);
+      if (loadedChaps.length > 0) {
+        const first = loadedChaps[0];
+        setSelectedChapId(first.id);
+        setEditingTitle(first.title);
+        setEditingSummary(first.summary);
+        setEditingContent(first.content || '');
+        setEditingChars((first.characters || []).join(', '));
+      }
+    };
+
+    loadChapters();
   }, [projectDir]);
 
   const handleSelectChapter = (chap: Chapter) => {

@@ -35,17 +35,27 @@ interface CharacterBibleProps {
   onSelectCharacter?: (char: Character) => void;
 }
 
+const DEFAULT_CHARACTERS: Character[] = [
+  { id: "char_001", name: "Lâm Phàm", alias: "Đệ Tử Ngoại Môn", gender: "Nam", age: "20", personality: "Thận trọng, quyết đoán, hài hước", appearance: "Mục tiêu: Đột phá Tiên Đế Cảnh", clothing: "Cảnh giới: Luyện Khí Tầng 1 • Vị trí: Thanh Vân Tông", voice: "vi_male_hero", speakingStyle: "Trang trọng", locked: true },
+  { id: "char_002", name: "Lý Thanh Vân", alias: "Thanh Vân Chưởng Môn", gender: "Nam", age: "120", personality: "Uy nghiêm, yêu thương đệ tử", appearance: "Mục tiêu: Bảo vệ Thanh Vân Tông", clothing: "Cảnh giới: Nguyên Anh Kỳ • Vị trí: Thanh Vân Tông Main Hall", voice: "vi_male_elder", speakingStyle: "Trầm ấm, uy nghi", locked: true },
+  { id: "char_003", name: "Tô Tuyết Diệc", alias: "Tông Môn Đại Tỷ", gender: "Nữ", age: "22", personality: "Lạnh lùng bên ngoài, ấm áp bên trong", appearance: "Mục tiêu: Đột phá Trúc Cơ Kỳ", clothing: "Cảnh giới: Trúc Cơ Tầng 3 • Vị trí: Tuyết Phong", voice: "vi_female_hero", speakingStyle: "Thanh tao, lạnh lùng", locked: true }
+];
+
 export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSelectCharacter }) => {
-  const [characters, setCharacters] = useState<Character[]>([]);
+  const [characters, setCharacters] = useState<Character[]>(DEFAULT_CHARACTERS);
   const [selectedCharId, setSelectedCharId] = useState<string>('');
 
   React.useEffect(() => {
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.characters && Array.isArray(data.characters)) {
+        if (data && data.characters && Array.isArray(data.characters) && data.characters.length > 0) {
           setCharacters(data.characters);
+        } else {
+          setCharacters(DEFAULT_CHARACTERS);
         }
-      }).catch(console.error);
+      }).catch(() => {
+        setCharacters(DEFAULT_CHARACTERS);
+      });
     }
   }, [projectDir]);
 

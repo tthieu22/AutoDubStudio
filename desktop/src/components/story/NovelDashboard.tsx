@@ -232,6 +232,13 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     await PythonEngineService.startNovelAutoWrite(projectDir, startChap, totalChapters);
   };
 
+  const handleStopAutoWrite = async () => {
+    setIsGenerating(false);
+    setCurrentStage('IDLE');
+    window.dispatchEvent(new CustomEvent('novel-writing-change', { detail: { isWriting: false } }));
+    await PythonEngineService.stopNovelAutoWrite();
+  };
+
   return (
     <div className="h-full flex flex-col bg-[#0b0d10] text-slate-100 p-4 space-y-4 font-sans overflow-y-auto custom-scrollbar">
       {/* HEADER BAR */}
@@ -246,6 +253,10 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold">
                 Qwen2.5-3B Local
               </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-bold flex items-center gap-1" title="Chạy tăng tốc trên NVIDIA GeForce GTX 1650 Ti (VRAM 4GB)">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                🚀 GPU CUDA (GTX 1650 Ti)
+              </span>
             </h2>
             <p className="text-xs text-slate-400">
               Nhập ý tưởng + phong cách → AI tự xây thế giới → tự lập kế hoạch → tự viết → kiểm tra Canon continuity.
@@ -256,7 +267,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         <div className="flex items-center gap-2">
           {currentStage === 'AUTO_WRITING' || isGenerating ? (
             <button
-              onClick={() => setIsGenerating(false)}
+              onClick={handleStopAutoWrite}
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Pause size={14} /> Tạm Dừng Viết

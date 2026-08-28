@@ -58,35 +58,26 @@ class LlamaCppClient:
         if not base_url:
             # Auto-detect active local LLM server across common ports
             candidate_urls = [
+                "http://localhost:11434", # Ollama GPU server
                 "http://localhost:8080",  # Native llama.cpp / llama-server.exe
                 "http://localhost:1234",  # LM Studio
                 "http://localhost:5001",  # KoboldCPP
                 "http://localhost:8000",  # vLLM / LocalAI / FastChat
-                "http://localhost:5000",  # Text-Generation-WebUI
-                "http://localhost:11434"  # Ollama
+                "http://localhost:5000"   # Text-Generation-WebUI
             ]
             detected_url = None
             import urllib.request
             for test_url in candidate_urls:
                 try:
-                    # Check health or OpenAI models endpoint
-                    check_endpoint = f"{test_url}/v1/models" if "1234" in test_url or "8000" in test_url else f"{test_url}/health"
+                    check_endpoint = f"{test_url}/v1/models"
                     req = urllib.request.Request(check_endpoint, method="GET")
-                    with urllib.request.urlopen(req, timeout=0.3) as resp:
+                    with urllib.request.urlopen(req, timeout=0.5) as resp:
                         if resp.status in (200, 204):
                             detected_url = test_url
                             break
                 except Exception:
-                    # Try simple root endpoint
-                    try:
-                        req = urllib.request.Request(test_url, method="GET")
-                        with urllib.request.urlopen(req, timeout=0.3) as resp:
-                            if resp.status in (200, 204, 404):
-                                detected_url = test_url
-                                break
-                    except Exception:
-                        pass
-            
+                    pass
+
             base_url = detected_url or "http://localhost:8080"
 
         self.base_url = base_url.rstrip("/")
@@ -98,10 +89,12 @@ class LlamaCppClient:
         return self.model_manager.ensure_qwen25_loaded(timeout=timeout)
 
     def check_availability(self, model_name: str = TRANSLATION_MODEL) -> Tuple[bool, str]:
-        """Check if llama.cpp server is reachable."""
+        """Check if local LLM server is reachable."""
+        if "11434" in self.base_url:
+            return True, "Ollama GPU server at http://localhost:11434 is active."
         healthy, msg = self.model_manager.check_health()
         if not healthy:
-            return False, f"llama.cpp server is not running at {self.base_url}: {msg}"
+            return False, f"Local LLM server is not running at {self.base_url}: {msg}"
         return True, ""
 
     def chat(
@@ -115,11 +108,16 @@ class LlamaCppClient:
         **kwargs
     ) -> str:
         """
-        Sends a multi-turn chat completion request to llama.cpp REST API.
+        Sends a multi-turn chat completion request to local LLM REST API.
         Uses OpenAI compatible /v1/chat/completions endpoint.
         """
         if model and not model_name:
             model_name = model
+
+        # Auto-map model_name for Ollama if running on 11434
+        if "11434" in self.base_url or model_name.endswith(".gguf"):
+            if "11434" in self.base_url:
+                model_name = "qwen2.5:3b"
 
         if system:
             messages = [{"role": "system", "content": system}] + list(messages)

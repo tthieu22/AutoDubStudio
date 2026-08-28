@@ -1059,10 +1059,6 @@ fn list_local_llm_models() -> Result<Vec<String>, String> {
     Ok(models)
 }
 
-#[tauri::command]
-async fn initialize_novel(window: Window, project_dir: String, story_idea_json: String) -> Result<serde_json::Value, String> {
-    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
-    let python_path = find_python_path();
 fn append_novel_log(p_path: &Path, line: &str) {
     let log_file = p_path.join("novel_execution.log");
     if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_file) {
@@ -1278,14 +1274,25 @@ fn start_novel_auto_write(
 }
 
 #[tauri::command]
-async fn get_novel_canon_facts(project_dir: String, _limit: usize) -> Result<serde_json::Value, String> {
-    let p_path = PathBuf::from(&project_dir);
-    let db_path = p_path.join("story.db");
-    if db_path.exists() {
-        // Reads facts if present
+fn stop_novel_auto_write(
+    active_proc: State<'_, ProcessState>,
+) -> Result<(), String> {
+    let mut lock = active_proc.lock().unwrap();
+    if let Some(ref mut child) = lock.child {
+        let pid = child.id();
+        send_sigint(pid);
+        thread::sleep(Duration::from_millis(150));
+        let _ = child.kill();
+        lock.child = None;
+        lock.project_id = None;
     }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_novel_canon_facts(_project_dir: String, _limit: Option<i64>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!([
-        { "id": 1, "chapter_num": 1, "category": "realm_change", "fact_text": "Lâm Phàm xuyên không đến Thanh Vân Tông, Luyện Khí Tầng 1", "confidence": 1.0 }
+        { "id": "fact_1", "subject": "Lâm Phàm", "predicate": "sở hữu", "object": "Vô Địch Hệ Thống", "confidence": 1.0, "chapter": 1 }
     ]))
 }
 
@@ -1307,7 +1314,7 @@ fn read_text_file(file_path: String) -> Result<String, String> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
         .invoke_handler(tauri::generate_handler![
             run_preflight_check,
@@ -1339,9 +1346,26 @@ fn main() {
             initialize_novel,
             generate_novel_master_plan,
             start_novel_auto_write,
+            stop_novel_auto_write,
             get_novel_canon_facts,
             get_novel_plot_threads
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
+            let active_proc = app_handle.state::<Mutex<ActiveProcess>>();
+            if let Ok(mut lock) = active_proc.lock() {
+                if let Some(ref mut child) = lock.child {
+                    let pid = child.id();
+                    send_sigint(pid);
+                    let _ = child.kill();
+                    lock.child = None;
+                    lock.project_id = None;
+                }
+            };
+        }
+        _ => {}
+    });
 }

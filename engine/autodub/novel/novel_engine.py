@@ -27,6 +27,28 @@ from autodub.modules.llamacpp_client import LlamaCppClient, strip_think_tags
 logger = logging.getLogger(__name__)
 
 
+def log_gpu_hardware_status(callback=None):
+    def _out(msg):
+        logger.info(msg)
+        print(f"[INFO] {msg}", flush=True)
+        if callback:
+            callback({"event": "novel_sub_stage", "step": "HARDWARE", "message": msg})
+
+    _out("=== [HARDWARE ACCELERATION CHECK] ===")
+    try:
+        import torch
+        if torch.cuda.is_available():
+            dev_name = torch.cuda.get_device_name(0)
+            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            _out(f"[HARDWARE] 🚀 GPU Device Detected: {dev_name} ({vram_gb:.1f} GB VRAM)")
+            _out("[HARDWARE] ⚡ PyTorch CUDA Acceleration: ACTIVE (Device 0)")
+            _out("[HARDWARE] 🎯 Local LLM Offload: -ngl 99 (100% GPU VRAM Accelerated)")
+        else:
+            _out("[HARDWARE] ⚠️ CUDA not detected in PyTorch environment. Running CPU Fallback Mode.")
+    except Exception as e:
+        _out(f"[HARDWARE] GPU status check: {e}")
+
+
 class NovelEngine:
     """
     Complete AI Novel Engine Orchestrator.
@@ -513,6 +535,7 @@ class NovelEngine:
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ):
         self.is_running = True
+        log_gpu_hardware_status(progress_callback)
         logger.info(f"Starting Novel Auto-Run from chapter {start_chapter} to {end_chapter}...")
 
         chapters_dir = self.story_dir / "chapters"

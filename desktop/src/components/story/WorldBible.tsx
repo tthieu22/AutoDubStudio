@@ -14,16 +14,31 @@ interface WorldBibleProps {
   projectDir?: string | null;
 }
 
+const DEFAULT_WORLD_ENTITIES: WorldEntity[] = [
+  { id: "w-cs-1", category: "Rule", name: "Cảnh Giới #1: Luyện Khí Kỳ", description: "Tích tụ linh khí vào đan điền, cảm ứng thiên địa linh khí", locked: true },
+  { id: "w-cs-2", category: "Rule", name: "Cảnh Giới #2: Trúc Cơ Kỳ", description: "Đúc kết Linh Đài, hình thành chân nguyên nội lực", locked: true },
+  { id: "w-cs-3", category: "Rule", name: "Cảnh Giới #3: Kim Đan Kỳ", description: "Ngưng tụ Kim Đan, phi hành bằng tiên kiếm", locked: true },
+  { id: "w-cs-4", category: "Rule", name: "Cảnh Giới #4: Nguyên Anh Kỳ", description: "Phá Đan thành Anh, thọ nguyên ngàn năm", locked: true },
+  { id: "w-cs-5", category: "Rule", name: "Cảnh Giới #5: Hóa Thần Kỳ", description: "Thần thức xuất khiếu, uy áp vạn dặm Phàm Giới", locked: true },
+  { id: "w-loc-1", category: "Location", name: "Thanh Vân Tông", description: "Tông môn tu tiên cổ xưa đứng đầu Nam Châu", locked: true },
+  { id: "w-loc-2", category: "Location", name: "Vạn Yêu Sâm Lâm", description: "Khu rừng rậm hoang dã cư ngụ vô số Yêu Tộc viễn cổ", locked: true },
+  { id: "w-fac-1", category: "Organization", name: "Cửu Sương Ma Tộc", description: "Thế lực ma đạo vạn năm tích tụ tà khí", locked: true }
+];
+
 export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
-  const [entities, setEntities] = useState<WorldEntity[]>([]);
+  const [entities, setEntities] = useState<WorldEntity[]>(DEFAULT_WORLD_ENTITIES);
 
   React.useEffect(() => {
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.world_lore && Array.isArray(data.world_lore)) {
+        if (data && data.world_lore && Array.isArray(data.world_lore) && data.world_lore.length > 0) {
           setEntities(data.world_lore);
+        } else {
+          setEntities(DEFAULT_WORLD_ENTITIES);
         }
-      }).catch(console.error);
+      }).catch(() => {
+        setEntities(DEFAULT_WORLD_ENTITIES);
+      });
     }
   }, [projectDir]);
 

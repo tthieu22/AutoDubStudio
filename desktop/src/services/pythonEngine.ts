@@ -439,7 +439,7 @@ export class PythonEngineService {
         rules: ["Cảnh giới cố định", "Nhân vật không biết trước tương lai"]
       };
     }
-    return invoke<any>('initialize_novel', { projectDir, storyIdeaJson: JSON.stringify(storyIdea) });
+    return invoke<any>('initialize_novel', { projectDir, idea: storyIdea });
   }
 
   static async generateNovelMasterPlan(projectDir: string): Promise<any[]> {
@@ -459,6 +459,11 @@ export class PythonEngineService {
       return;
     }
     return invoke<void>('start_novel_auto_write', { projectDir, startChapter, endChapter });
+  }
+
+  static async stopNovelAutoWrite(): Promise<void> {
+    if (!isTauri()) return;
+    return invoke<void>('stop_novel_auto_write');
   }
 
   static async getCanonFacts(projectDir: string, limit: number = 30): Promise<any[]> {
