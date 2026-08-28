@@ -10,7 +10,11 @@ import {
   Mic, 
   Image as ImageIcon,
   Sliders,
-  Trash2
+  Trash2,
+  Copy,
+  Check,
+  FileJson,
+  FileText
 } from 'lucide-react';
 
 import { PythonEngineService } from '../../services/pythonEngine';
@@ -44,6 +48,25 @@ const DEFAULT_CHARACTERS: Character[] = [
 export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSelectCharacter }) => {
   const [characters, setCharacters] = useState<Character[]>(DEFAULT_CHARACTERS);
   const [selectedCharId, setSelectedCharId] = useState<string>('');
+  const [copiedCharId, setCopiedCharId] = useState<string | null>(null);
+  const [copiedType, setCopiedType] = useState<'text' | 'json' | null>(null);
+
+  const handleCopyCharText = (char: Character, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const info = `[Tên: ${char.name}] (${char.alias})\nGiới tính: ${char.gender} | Tuổi: ${char.age}\nTính cách: ${char.personality}\nNgoại hình: ${char.appearance}\nTrang phục: ${char.clothing}\nGiọng đọc: ${char.voice} | Phong cách: ${char.speakingStyle}`;
+    navigator.clipboard.writeText(info);
+    setCopiedCharId(char.id);
+    setCopiedType('text');
+    setTimeout(() => { setCopiedCharId(null); setCopiedType(null); }, 2000);
+  };
+
+  const handleCopyCharJson = (char: Character, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(JSON.stringify(char, null, 2));
+    setCopiedCharId(char.id);
+    setCopiedType('json');
+    setTimeout(() => { setCopiedCharId(null); setCopiedType(null); }, 2000);
+  };
 
   React.useEffect(() => {
     if (projectDir) {
@@ -182,15 +205,35 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
                     </div>
                   </div>
 
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleLock(char.id); }}
-                    className={`p-1.5 rounded-lg transition-all ${
-                      char.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
-                    }`}
-                    title={char.locked ? 'Locked Character Data' : 'Unlocked'}
-                  >
-                    {char.locked ? <Lock size={14} /> : <Unlock size={14} />}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => handleCopyCharText(char, e)}
+                      className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                        copiedCharId === char.id && copiedType === 'text' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                      title="Sao chép văn bản hồ sơ nhân vật"
+                    >
+                      {copiedCharId === char.id && copiedType === 'text' ? <Check size={14} /> : <FileText size={14} />}
+                    </button>
+                    <button
+                      onClick={(e) => handleCopyCharJson(char, e)}
+                      className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                        copiedCharId === char.id && copiedType === 'json' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                      title="Sao chép JSON nhân vật đầy đủ"
+                    >
+                      {copiedCharId === char.id && copiedType === 'json' ? <Check size={14} /> : <FileJson size={14} />}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleLock(char.id); }}
+                      className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                        char.locked ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                      title={char.locked ? 'Locked Character Data' : 'Unlocked'}
+                    >
+                      {char.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-white/5">

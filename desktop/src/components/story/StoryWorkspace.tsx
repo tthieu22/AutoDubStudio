@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Layers, Users, Calendar, Sparkles, ChevronRight, FileText, Plus, Edit3, Trash2, Save, X, RefreshCw } from 'lucide-react';
+import { BookOpen, Layers, Users, Calendar, Sparkles, ChevronRight, FileText, Plus, Edit3, Trash2, Save, X, RefreshCw, Copy, Check, FileJson, SlidersHorizontal, Settings, ArrowUpDown } from 'lucide-react';
 
 export interface Chapter {
   id: string;
@@ -28,15 +28,73 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
   const [editingContent, setEditingContent] = useState('');
   const [editingChars, setEditingChars] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [copiedChapId, setCopiedChapId] = useState<string | null>(null);
+  const [copiedType, setCopiedType] = useState<'content' | 'json' | 'formatted' | null>(null);
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const [showCopyConfig, setShowCopyConfig] = useState(false);
+  const [copyConfig, setCopyConfig] = useState({
+    includeTitle: true,
+    includeCharacters: true,
+    includeSummary: true,
+    includeContent: true,
+    includeMetadata: true
+  });
 
   const selectedChap = chapters.find(c => c.id === selectedChapId);
 
+  const triggerCopiedFeedback = (chapId: string, type: 'content' | 'json' | 'formatted') => {
+    setCopiedChapId(chapId);
+    setCopiedType(type);
+    setTimeout(() => {
+      setCopiedChapId(null);
+      setCopiedType(null);
+    }, 2000);
+  };
+
+  const handleCopyJson = (chap: Chapter, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const jsonObject: Record<string, any> = {};
+    if (copyConfig.includeMetadata) {
+      jsonObject.id = chap.id;
+      jsonObject.chapterNumber = chap.chapterNumber;
+      jsonObject.scenesCount = chap.scenesCount;
+    }
+    if (copyConfig.includeTitle) jsonObject.title = chap.title;
+    if (copyConfig.includeCharacters) jsonObject.characters = chap.characters;
+    if (copyConfig.includeSummary) jsonObject.summary = chap.summary;
+    if (copyConfig.includeContent) jsonObject.content = chap.content || '';
+
+    navigator.clipboard.writeText(JSON.stringify(jsonObject, null, 2));
+    triggerCopiedFeedback(chap.id, 'json');
+  };
+
+  const handleCopyContentOnly = (chap: Chapter, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const text = chap.content || chap.summary || chap.title;
+    navigator.clipboard.writeText(text);
+    triggerCopiedFeedback(chap.id, 'content');
+  };
+
+  const handleCopyFormattedText = (chap: Chapter, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const parts: string[] = [];
+    if (copyConfig.includeTitle) parts.push(`Chương ${chap.chapterNumber}: ${chap.title}`);
+    if (copyConfig.includeCharacters && chap.characters?.length) parts.push(`Nhân vật: ${chap.characters.join(', ')}`);
+    if (copyConfig.includeSummary) parts.push(`Tóm tắt:\n${chap.summary}`);
+    if (copyConfig.includeContent) parts.push(`Nội dung kịch bản:\n${chap.content || '(Chưa có nội dung)'}`);
+
+    navigator.clipboard.writeText(parts.join('\n\n'));
+    triggerCopiedFeedback(chap.id, 'formatted');
+  };
+
   const saveChaptersToProject = async (newChaps: Chapter[]) => {
-    setChapters(newChaps);
+    const sorted = [...newChaps].sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
+    setChapters(sorted);
     if (projectDir) {
       try {
         const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
-        json.chapters = newChaps;
+        json.chapters = sorted;
         await PythonEngineService.writeProjectJson(projectDir, json);
       } catch (e) {
         console.error('Failed to save chapters to project.json:', e);
@@ -85,6 +143,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
         } catch {}
       }
 
+      loadedChaps.sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
       setChapters(loadedChaps);
       if (loadedChaps.length > 0) {
         const first = loadedChaps[0];
@@ -200,6 +259,21 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
       <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
         {/* LEFT: CHAPTERS LIST */}
         <div className={`${selectedChap ? 'w-[340px] min-w-[300px]' : 'w-full'} overflow-y-auto space-y-2.5 custom-scrollbar transition-all`}>
+          {chapters.length > 0 && (
+            <div className="flex items-center justify-between px-1 pb-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Danh sách ({chapters.length} chương)
+              </span>
+              <button
+                onClick={() => setSortAsc(!sortAsc)}
+                className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-white/5 hover:bg-white/10 px-2 py-1 rounded cursor-pointer transition-all border border-white/5"
+                title="Đổi thứ tự sắp xếp chương"
+              >
+                <ArrowUpDown size={12} /> {sortAsc ? 'Từ nhỏ ➔ lớn (1 ➔ N)' : 'Từ lớn ➔ nhỏ (N ➔ 1)'}
+              </button>
+            </div>
+          )}
+
           {chapters.length === 0 ? (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center">
               <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 mb-4 shadow-lg shadow-cyan-500/10">
@@ -217,7 +291,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
               </button>
             </div>
           ) : (
-            chapters.map(chap => {
+            [...chapters].sort((a, b) => sortAsc ? (a.chapterNumber || 0) - (b.chapterNumber || 0) : (b.chapterNumber || 0) - (a.chapterNumber || 0)).map(chap => {
               const isSelected = selectedChapId === chap.id;
               return (
                 <div
@@ -237,13 +311,37 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
                       <h3 className="text-sm font-bold text-white font-['Outfit'] truncate max-w-[200px]">{chap.title}</h3>
                     </div>
 
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chap.id); }}
-                      className="p-1 rounded bg-rose-500/0 hover:bg-rose-500/20 text-transparent group-hover:text-rose-400 transition-all"
-                      title="Xóa chương"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleCopyContentOnly(chap, e)}
+                        className={`p-1 rounded transition-all cursor-pointer ${
+                          copiedChapId === chap.id && copiedType === 'content'
+                            ? 'bg-emerald-500/20 text-emerald-400 opacity-100'
+                            : 'bg-white/0 hover:bg-white/10 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100'
+                        }`}
+                        title="Copy chỉ nội dung"
+                      >
+                        {copiedChapId === chap.id && copiedType === 'content' ? <Check size={13} /> : <FileText size={13} />}
+                      </button>
+                      <button
+                        onClick={(e) => handleCopyJson(chap, e)}
+                        className={`p-1 rounded transition-all cursor-pointer ${
+                          copiedChapId === chap.id && copiedType === 'json'
+                            ? 'bg-emerald-500/20 text-emerald-400 opacity-100'
+                            : 'bg-white/0 hover:bg-white/10 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100'
+                        }`}
+                        title="Copy định dạng JSON đầy đủ"
+                      >
+                        {copiedChapId === chap.id && copiedType === 'json' ? <Check size={13} /> : <FileJson size={13} />}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chap.id); }}
+                        className="p-1 rounded bg-rose-500/0 hover:bg-rose-500/20 text-transparent group-hover:text-rose-400 transition-all cursor-pointer"
+                        title="Xóa chương"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
 
                   <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2 mb-2">{chap.summary}</p>
@@ -289,7 +387,81 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 relative">
+                {/* CONFIG POPUP TOGGLE */}
+                <button
+                  onClick={() => setShowCopyConfig(!showCopyConfig)}
+                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                    showCopyConfig
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+                  }`}
+                  title="Cấu hình các trường thông tin sao chép"
+                >
+                  <SlidersHorizontal size={14} />
+                </button>
+
+                {showCopyConfig && (
+                  <div className="absolute right-0 top-10 z-50 w-64 bg-[#161922] border border-white/15 rounded-xl p-3.5 shadow-2xl space-y-2 backdrop-blur-xl animate-in fade-in zoom-in-95">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-1">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <SlidersHorizontal size={13} className="text-cyan-400" /> Cấu hình sao chép
+                      </span>
+                      <button onClick={() => setShowCopyConfig(false)} className="text-slate-400 hover:text-white p-0.5">
+                        <X size={13} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <label className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyConfig.includeTitle}
+                          onChange={e => setCopyConfig({ ...copyConfig, includeTitle: e.target.checked })}
+                          className="rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-0"
+                        />
+                        Tiêu đề chương
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyConfig.includeCharacters}
+                          onChange={e => setCopyConfig({ ...copyConfig, includeCharacters: e.target.checked })}
+                          className="rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-0"
+                        />
+                        Danh sách nhân vật
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyConfig.includeSummary}
+                          onChange={e => setCopyConfig({ ...copyConfig, includeSummary: e.target.checked })}
+                          className="rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-0"
+                        />
+                        Tóm tắt nội dung
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyConfig.includeContent}
+                          onChange={e => setCopyConfig({ ...copyConfig, includeContent: e.target.checked })}
+                          className="rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-0"
+                        />
+                        Kịch bản / Nội dung chương
+                      </label>
+                      <label className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyConfig.includeMetadata}
+                          onChange={e => setCopyConfig({ ...copyConfig, includeMetadata: e.target.checked })}
+                          className="rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-0"
+                        />
+                        Metadata (ID, Số chương, Scenes)
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 {isEditing ? (
                   <>
                     <button
@@ -307,6 +479,69 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
                   </>
                 ) : (
                   <>
+                    {/* BUTTON 1: COPY ONLY CONTENT */}
+                    <button
+                      onClick={() => handleCopyContentOnly(selectedChap)}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                        copiedChapId === selectedChap.id && copiedType === 'content'
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                          : 'bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30'
+                      }`}
+                      title="Chỉ sao chép văn bản kịch bản"
+                    >
+                      {copiedChapId === selectedChap.id && copiedType === 'content' ? (
+                        <>
+                          <Check size={13} /> Đã chép Nội dung
+                        </>
+                      ) : (
+                        <>
+                          <FileText size={13} /> Copy Nội Dung
+                        </>
+                      )}
+                    </button>
+
+                    {/* BUTTON 2: COPY JSON */}
+                    <button
+                      onClick={() => handleCopyJson(selectedChap)}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                        copiedChapId === selectedChap.id && copiedType === 'json'
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                          : 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30'
+                      }`}
+                      title="Sao chép toàn bộ thông tin dưới dạng JSON"
+                    >
+                      {copiedChapId === selectedChap.id && copiedType === 'json' ? (
+                        <>
+                          <Check size={13} /> Đã chép JSON
+                        </>
+                      ) : (
+                        <>
+                          <FileJson size={13} /> Copy JSON
+                        </>
+                      )}
+                    </button>
+
+                    {/* BUTTON 3: COPY FORMATTED FULL TEXT */}
+                    <button
+                      onClick={() => handleCopyFormattedText(selectedChap)}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                        copiedChapId === selectedChap.id && copiedType === 'formatted'
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                          : 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30'
+                      }`}
+                      title="Sao chép các trường đã chọn dạng văn bản"
+                    >
+                      {copiedChapId === selectedChap.id && copiedType === 'formatted' ? (
+                        <>
+                          <Check size={13} /> Đã chép Tất cả
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} /> Copy Tất Cả
+                        </>
+                      )}
+                    </button>
+
                     <button
                       onClick={() => setIsEditing(true)}
                       className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -385,9 +620,27 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
 
             {/* CONTENT / SCRIPT SECTION */}
             <div>
-              <label className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold mb-2 block">
-                Nội Dung / Kịch Bản Chương
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                  Nội Dung / Kịch Bản Chương
+                </label>
+                {!isEditing && (
+                  <button
+                    onClick={() => handleCopyContentOnly(selectedChap)}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {copiedChapId === selectedChap.id && copiedType === 'content' ? (
+                      <>
+                        <Check size={12} className="text-emerald-400" /> <span className="text-emerald-400 font-bold">Đã sao chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText size={12} /> Sao chép kịch bản
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
               {isEditing ? (
                 <textarea
                   value={editingContent}
