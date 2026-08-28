@@ -65,6 +65,17 @@ export default function App() {
   const [projectsList, setProjectsList] = useState<string[]>([]);
   const [selectedProjectDir, setSelectedProjectDir] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isNovelWriting, setIsNovelWriting] = useState(false);
+
+  useEffect(() => {
+    const handleWritingChange = (e: any) => {
+      if (e && e.detail) {
+        setIsNovelWriting(!!e.detail.isWriting);
+      }
+    };
+    window.addEventListener('novel-writing-change', handleWritingChange);
+    return () => window.removeEventListener('novel-writing-change', handleWritingChange);
+  }, []);
 
   // Custom Pipeline Hook Integration
   const {
@@ -662,6 +673,7 @@ export default function App() {
         setActiveTab={handleTabChange}
         pipelineMode={pipelineMode}
         pipelineStatus={pipelineStatus}
+        isNovelWriting={isNovelWriting}
         stageProgresses={stageProgresses}
         onStartPipeline={startPhase1Pipeline}
         onCancelPipeline={handleCancelPipeline}

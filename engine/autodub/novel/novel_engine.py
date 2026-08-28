@@ -393,11 +393,17 @@ class NovelEngine:
             full_context = self.context_builder.build_writer_context(chapter_num, sc, char_ids)
             writer_prompt = NovelWriterPrompt.build_prompt(chapter_num, sc.get("scene_index", sc_idx), sc, full_context)
 
-            # Generate prose text
-            scene_text = self.llm.generate(prompt=writer_prompt, timeout=120)
-            cleaned_scene = strip_think_tags(scene_text)
+            # Generate prose text with try/except fallback so process never crashes if LLM server is offline
+            try:
+                scene_text = self.llm.generate(prompt=writer_prompt, timeout=120)
+                cleaned_scene = strip_think_tags(scene_text)
+            except Exception as e:
+                logger.warning(f"LLM generate failed for Scene {sc_idx}: {e}")
+                _notify("WARNING", f"[CẢNH BÁO] Chưa bật Local LLM Server ({self.llm.base_url}). Đang dùng Bộ văn phong mặc định cho Scene {sc_idx}...")
+                cleaned_scene = f"### Phân Cảnh {sc_idx}: {sc.get('goal', 'Diễn biến câu chuyện')}\n\nLâm Phàm đứng giữa sân khấu Thanh Vân Tông, ngước nhìn mây mù cuồn cuộn trên vách núi. Linh khí xung quanh tràn vào cơ thể qua các khiếu huyệt, âm thanh hệ thống vang lên rõ ràng trong tâm trí. Dù diện đối với những lời gièm pha của đồng môn, ánh mắt hắn vẫn điềm nhiên thanh thản, tự tin dấn thân vào hành trình chinh phục đỉnh cao tiên đạo..."
+
             if not cleaned_scene or len(cleaned_scene) < 50:
-                cleaned_scene = f"Scene {sc.get('scene_index')}: {sc.get('goal')}. Lâm Phàm chuẩn bị đối mặt với thử thách lớn..."
+                cleaned_scene = f"Phân cảnh {sc.get('scene_index')}: {sc.get('goal')}. Lâm Phàm chuẩn bị đối mặt với thử thách lớn..."
 
             scene_drafts.append(cleaned_scene)
 

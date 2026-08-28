@@ -64,6 +64,7 @@ interface SidebarProps {
   onSelectProject?: (proj: string) => void;
   onCreateNewProject?: () => void;
   onDeleteProject?: (name: string) => void;
+  isNovelWriting?: boolean;
   badges?: {
     scenesCount?: string;
     imagesCount?: string;
@@ -85,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectProject,
   onCreateNewProject,
   onDeleteProject,
+  isNovelWriting = false,
   badges = {}
 }) => {
   const currentProjName = selectedProjectDir
@@ -92,29 +94,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
     : '';
 
   const renderNavGroup = (title: string, items: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }>) => {
+    const isNarrativeGroup = title === 'Story Narrative';
+    const isGroupDisabled = isNovelWriting && !isNarrativeGroup;
+
     return (
       <div className="mb-4">
         {!isCollapsed && (
-          <div className="px-3 mb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-['Outfit']">
-            {title}
+          <div className="px-3 mb-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-['Outfit'] flex items-center justify-between">
+            <span>{title}</span>
+            {isGroupDisabled && (
+              <span className="text-[9px] text-amber-400/80 font-bold lowercase tracking-normal">🔒 khóa khi AI viết</span>
+            )}
           </div>
         )}
         <div className="space-y-0.5">
           {items.map(item => {
             const isActive = activeTab === item.id;
+            const isDisabled = isGroupDisabled;
+
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                disabled={isDisabled}
+                onClick={() => !isDisabled && setActiveTab(item.id)}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
-                  isActive
+                  isDisabled
+                    ? 'opacity-30 cursor-not-allowed pointer-events-none text-slate-600 border-l-2 border-transparent'
+                    : isActive
                     ? 'bg-indigo-600/15 text-indigo-300 border-l-2 border-indigo-500 font-semibold'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border-l-2 border-transparent'
                 }`}
-                title={isCollapsed ? item.label : undefined}
+                title={isDisabled ? 'AI đang tự động viết truyện. Bạn chỉ có thể xem các tab trong Story Narrative.' : isCollapsed ? item.label : undefined}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`${isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                  <span className={`${isDisabled ? 'text-slate-600' : isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'}`}>
                     {item.icon}
                   </span>
                   {!isCollapsed && <span className="truncate">{item.label}</span>}

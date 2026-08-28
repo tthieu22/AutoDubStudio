@@ -24,6 +24,7 @@ interface AppShellProps {
   onOpenOutputFolder: () => void;
   ramMetrics?: string;
   vramMetrics?: string;
+  isNovelWriting?: boolean;
   mainContent: React.ReactNode;
   inspectorContent?: React.ReactNode;
   inspectorTitle?: string;
@@ -54,6 +55,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenOutputFolder,
   ramMetrics = '10.1 GB / 16.0 GB',
   vramMetrics = '0.28 GB / 4.00 GB',
+  isNovelWriting = false,
   mainContent,
   inspectorContent,
   inspectorTitle,
@@ -174,6 +176,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onSelectProject={onSelectProject}
           onCreateNewProject={onCreateNewProject}
           onDeleteProject={onDeleteProject}
+          isNovelWriting={isNovelWriting}
         />
 
         {/* SIDEBAR RESIZE HANDLE */}

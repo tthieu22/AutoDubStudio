@@ -53,18 +53,41 @@ class LlamaCppClient:
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
-            base_url = os.environ.get("LLAMACPP_BASE_URL", os.environ.get("LLAMA_SERVER_URL", os.environ.get("OLLAMA_BASE_URL", "")))
+            base_url = os.environ.get("LLAMACPP_BASE_URL", os.environ.get("LLAMA_SERVER_URL", os.environ.get("LOCAL_LLM_URL", "")))
+        
         if not base_url:
-            # Auto-detect whether Ollama (11434) or llama.cpp (8080) is running
-            base_url = "http://localhost:11434"
-            try:
-                import urllib.request
-                req = urllib.request.Request("http://localhost:8080/health", method="GET")
-                with urllib.request.urlopen(req, timeout=1) as resp:
-                    if resp.status == 200:
-                        base_url = "http://localhost:8080"
-            except Exception:
-                pass
+            # Auto-detect active local LLM server across common ports
+            candidate_urls = [
+                "http://localhost:8080",  # Native llama.cpp / llama-server.exe
+                "http://localhost:1234",  # LM Studio
+                "http://localhost:5001",  # KoboldCPP
+                "http://localhost:8000",  # vLLM / LocalAI / FastChat
+                "http://localhost:5000",  # Text-Generation-WebUI
+                "http://localhost:11434"  # Ollama
+            ]
+            detected_url = None
+            import urllib.request
+            for test_url in candidate_urls:
+                try:
+                    # Check health or OpenAI models endpoint
+                    check_endpoint = f"{test_url}/v1/models" if "1234" in test_url or "8000" in test_url else f"{test_url}/health"
+                    req = urllib.request.Request(check_endpoint, method="GET")
+                    with urllib.request.urlopen(req, timeout=0.3) as resp:
+                        if resp.status in (200, 204):
+                            detected_url = test_url
+                            break
+                except Exception:
+                    # Try simple root endpoint
+                    try:
+                        req = urllib.request.Request(test_url, method="GET")
+                        with urllib.request.urlopen(req, timeout=0.3) as resp:
+                            if resp.status in (200, 204, 404):
+                                detected_url = test_url
+                                break
+                    except Exception:
+                        pass
+            
+            base_url = detected_url or "http://localhost:8080"
 
         self.base_url = base_url.rstrip("/")
         self.model_manager = LlamaCppModelManager(base_url=self.base_url)

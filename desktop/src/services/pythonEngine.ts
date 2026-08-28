@@ -481,6 +481,17 @@ export class PythonEngineService {
     return invoke<any[]>('get_novel_plot_threads', { projectDir });
   }
 
+  static async readTextFile(filePath: string): Promise<string> {
+    if (!isTauri()) {
+      return "";
+    }
+    try {
+      return await invoke<string>('read_text_file', { filePath });
+    } catch {
+      return "";
+    }
+  }
+
   static subscribeNovelProgress(callback: (event: any) => void) {
     if (!isTauri()) {
       return () => {};

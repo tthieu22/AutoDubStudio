@@ -1063,13 +1063,18 @@ fn list_local_llm_models() -> Result<Vec<String>, String> {
 async fn initialize_novel(window: Window, project_dir: String, story_idea_json: String) -> Result<serde_json::Value, String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let python_path = find_python_path();
+fn append_novel_log(p_path: &Path, line: &str) {
+    let log_file = p_path.join("novel_execution.log");
+    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_file) {
+        use std::io::Write;
+        let _ = writeln!(f, "{}", line);
+    }
+}
 
-    let idea: serde_json::Value = serde_json::from_str(&story_idea_json).unwrap_or(serde_json::json!({}));
-    let title = idea.get("title").and_then(|v| v.as_str()).unwrap_or("Vô Địch Tiên Đế");
-    let genre = idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Tiên hiệp");
-    let style = idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc");
-    let chapters = idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000);
-
+#[tauri::command]
+async fn initialize_novel(window: Window, project_dir: String, idea: serde_json::Value) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
     let p_path = PathBuf::from(&project_dir);
 
     let mut cmd = Command::new(&python_path);
@@ -1077,10 +1082,10 @@ async fn initialize_novel(window: Window, project_dir: String, story_idea_json: 
         .args(&[
             "-m", "autodub.cli", "novel", "init",
             "--project", &p_path.to_string_lossy(),
-            "--title", title,
-            "--genre", genre,
-            "--style", style,
-            "--chapters", &chapters.to_string(),
+            "--title", idea.get("title").and_then(|v| v.as_str()).unwrap_or("Vô Địch Tiên Đế"),
+            "--genre", idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Tiên hiệp + Xuyên không"),
+            "--style", idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc, tiết tấu nhanh"),
+            "--chapters", &idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000).to_string(),
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1090,21 +1095,25 @@ async fn initialize_novel(window: Window, project_dir: String, story_idea_json: 
     let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
 
     let win1 = window.clone();
+    let p_path1 = p_path.clone();
     let t1 = thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let _ = win1.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path1, &line_str);
             }
         }
     });
 
     let win2 = window.clone();
+    let p_path2 = p_path.clone();
     let t2 = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let _ = win2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path2, &line_str);
             }
         }
     });
@@ -1148,21 +1157,25 @@ async fn generate_novel_master_plan(window: Window, project_dir: String) -> Resu
     let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
 
     let win1 = window.clone();
+    let p_path1 = p_path.clone();
     let t1 = thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let _ = win1.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path1, &line_str);
             }
         }
     });
 
     let win2 = window.clone();
+    let p_path2 = p_path.clone();
     let t2 = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let _ = win2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path2, &line_str);
             }
         }
     });
@@ -1230,11 +1243,16 @@ fn start_novel_auto_write(
     lock.project_id = Some(project_dir.clone());
 
     let window_clone = window.clone();
+    let p_path_w1 = p_path.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(line_str) = line {
                 let trimmed = line_str.trim();
+                if !trimmed.is_empty() {
+                    let _ = window_clone.emit("pipeline://log", trimmed);
+                    append_novel_log(&p_path_w1, trimmed);
+                }
                 if trimmed.starts_with('{') && trimmed.ends_with('}') {
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
                         let _ = window_clone.emit("novel://progress", json);
@@ -1245,11 +1263,13 @@ fn start_novel_auto_write(
     });
 
     let window_clone2 = window.clone();
+    let p_path_w2 = p_path.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(line_str) = line {
-                let _ = window_clone2.emit("pipeline://log", line_str);
+                let _ = window_clone2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path_w2, &line_str);
             }
         }
     });
@@ -1276,6 +1296,16 @@ async fn get_novel_plot_threads(_project_dir: String) -> Result<serde_json::Valu
     ]))
 }
 
+#[tauri::command]
+fn read_text_file(file_path: String) -> Result<String, String> {
+    let p = PathBuf::from(&file_path);
+    if p.exists() {
+        fs::read_to_string(&p).map_err(|e| e.to_string())
+    } else {
+        Ok("".to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
@@ -1288,6 +1318,7 @@ fn main() {
             read_project_json,
             write_project_json,
             read_pipeline_log,
+            read_text_file,
             start_pipeline,
             cancel_pipeline,
             resume_pipeline,
