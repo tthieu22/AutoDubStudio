@@ -53,7 +53,19 @@ class LlamaCppClient:
 
     def __init__(self, base_url: Optional[str] = None):
         if not base_url:
-            base_url = os.environ.get("LLAMACPP_BASE_URL", os.environ.get("LLAMA_SERVER_URL", "http://localhost:8080"))
+            base_url = os.environ.get("LLAMACPP_BASE_URL", os.environ.get("LLAMA_SERVER_URL", os.environ.get("OLLAMA_BASE_URL", "")))
+        if not base_url:
+            # Auto-detect whether Ollama (11434) or llama.cpp (8080) is running
+            base_url = "http://localhost:11434"
+            try:
+                import urllib.request
+                req = urllib.request.Request("http://localhost:8080/health", method="GET")
+                with urllib.request.urlopen(req, timeout=1) as resp:
+                    if resp.status == 200:
+                        base_url = "http://localhost:8080"
+            except Exception:
+                pass
+
         self.base_url = base_url.rstrip("/")
         self.model_manager = LlamaCppModelManager(base_url=self.base_url)
         self.last_metrics: Dict[str, Any] = {}

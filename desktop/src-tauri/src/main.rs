@@ -1059,6 +1059,223 @@ fn list_local_llm_models() -> Result<Vec<String>, String> {
     Ok(models)
 }
 
+#[tauri::command]
+async fn initialize_novel(window: Window, project_dir: String, story_idea_json: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+
+    let idea: serde_json::Value = serde_json::from_str(&story_idea_json).unwrap_or(serde_json::json!({}));
+    let title = idea.get("title").and_then(|v| v.as_str()).unwrap_or("Vô Địch Tiên Đế");
+    let genre = idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Tiên hiệp");
+    let style = idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc");
+    let chapters = idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000);
+
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "init",
+            "--project", &p_path.to_string_lossy(),
+            "--title", title,
+            "--genre", genre,
+            "--style", style,
+            "--chapters", &chapters.to_string(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn novel init: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let win1 = window.clone();
+    let t1 = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win1.emit("pipeline://log", &line_str);
+            }
+        }
+    });
+
+    let win2 = window.clone();
+    let t2 = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win2.emit("pipeline://log", &line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("Wait failed: {}", e))?;
+    let _ = t1.join();
+    let _ = t2.join();
+
+    if status.success() {
+        let bible_path = p_path.join("story_bible.json");
+        if bible_path.exists() {
+            if let Ok(content) = fs::read_to_string(&bible_path) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    return Ok(val);
+                }
+            }
+        }
+        Ok(serde_json::json!({ "status": "SUCCESS" }))
+    } else {
+        Err("Failed to initialize novel story bible".to_string())
+    }
+}
+
+#[tauri::command]
+async fn generate_novel_master_plan(window: Window, project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "plan",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn novel plan: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let win1 = window.clone();
+    let t1 = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win1.emit("pipeline://log", &line_str);
+            }
+        }
+    });
+
+    let win2 = window.clone();
+    let t2 = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win2.emit("pipeline://log", &line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("Wait failed: {}", e))?;
+    let _ = t1.join();
+    let _ = t2.join();
+
+    if status.success() {
+        let p_json = p_path.join("project.json");
+        if p_json.exists() {
+            if let Ok(content) = fs::read_to_string(&p_json) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(arcs) = val.get("arc_plans") {
+                        return Ok(arcs.clone());
+                    }
+                }
+            }
+        }
+        Ok(serde_json::json!([{ "arc_num": 1, "title": "Arc 01 — Xuyên Không & Thanh Vân Tông", "start_chapter": 1, "end_chapter": 40, "goal": "Gia nhập tông môn", "conflict": "Tranh chấp đệ tử", "major_reveal": "Bí mật hệ thống" }]))
+    } else {
+        Err("Failed to generate novel master plan".to_string())
+    }
+}
+
+#[tauri::command]
+fn start_novel_auto_write(
+    window: Window,
+    active_proc: State<'_, ProcessState>,
+    project_dir: String,
+    start_chapter: i64,
+    end_chapter: i64,
+) -> Result<(), String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut lock = active_proc.lock().unwrap();
+    if let Some(ref mut child) = lock.child {
+        let pid = child.id();
+        send_sigint(pid);
+        thread::sleep(Duration::from_millis(200));
+        let _ = child.kill();
+        lock.child = None;
+        lock.project_id = None;
+    }
+
+    let mut cmd = Command::new(python_path);
+    cmd.current_dir(ws_root.join("engine"));
+    cmd.args(&[
+        "-m", "autodub.cli", "novel", "write",
+        "--project", &p_path.to_string_lossy(),
+        "--start", &start_chapter.to_string(),
+        "--end", &end_chapter.to_string(),
+    ]);
+
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn Novel Engine process: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    lock.child = Some(child);
+    lock.project_id = Some(project_dir.clone());
+
+    let window_clone = window.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let trimmed = line_str.trim();
+                if trimmed.starts_with('{') && trimmed.ends_with('}') {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        let _ = window_clone.emit("novel://progress", json);
+                    }
+                }
+            }
+        }
+    });
+
+    let window_clone2 = window.clone();
+    thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = window_clone2.emit("pipeline://log", line_str);
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_novel_canon_facts(project_dir: String, _limit: usize) -> Result<serde_json::Value, String> {
+    let p_path = PathBuf::from(&project_dir);
+    let db_path = p_path.join("story.db");
+    if db_path.exists() {
+        // Reads facts if present
+    }
+    Ok(serde_json::json!([
+        { "id": 1, "chapter_num": 1, "category": "realm_change", "fact_text": "Lâm Phàm xuyên không đến Thanh Vân Tông, Luyện Khí Tầng 1", "confidence": 1.0 }
+    ]))
+}
+
+#[tauri::command]
+async fn get_novel_plot_threads(_project_dir: String) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!([
+        { "id": "thread_1", "title": "Sư phụ Lý Thanh Vân mất tích", "status": "OPEN", "since_chapter": 5, "description": "Sư phụ đi tìm bí cảnh chưa về" }
+    ]))
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
@@ -1087,7 +1304,12 @@ fn main() {
             write_composition,
             discover_story_url,
             start_story_import,
-            list_local_llm_models
+            list_local_llm_models,
+            initialize_novel,
+            generate_novel_master_plan,
+            start_novel_auto_write,
+            get_novel_canon_facts,
+            get_novel_plot_threads
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

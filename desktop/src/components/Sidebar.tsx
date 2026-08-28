@@ -245,11 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {currentProjName && onDeleteProject && (
               <button
-                onClick={() => {
-                  if (window.confirm(`Bạn có chắc chắn muốn xóa dự án "${currentProjName}" không?`)) {
-                    onDeleteProject(currentProjName);
-                  }
-                }}
+                onClick={() => onDeleteProject(currentProjName)}
                 className="h-7 w-7 flex items-center justify-center rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 transition-all flex-shrink-0 cursor-pointer"
                 title={`Xóa dự án ${currentProjName}`}
               >

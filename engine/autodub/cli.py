@@ -118,6 +118,12 @@ def main():
     imp_sp.add_argument("--project-dir", required=True, help="Project directory path")
     imp_sp.add_argument("--chapters-json", required=True, help="JSON string of selected chapters array")
 
+    # preview-tts --text <text> [--voice <voice>] [--output <file>]
+    prev_tts_sp = subparsers.add_parser("preview-tts", help="Generate audio preview of text using Edge TTS")
+    prev_tts_sp.add_argument("--text", required=True, help="Text content to speak")
+    prev_tts_sp.add_argument("--voice", default="vi-VN-HoaiMyNeural", help="Voice model")
+    prev_tts_sp.add_argument("--output", default="preview.mp3", help="Output audio file path")
+
 
 
 
@@ -354,7 +360,7 @@ def main():
         elif args.command == "preview-tts":
             text = args.text
             voice = args.voice.lower()
-            gender = args.gender.lower()
+            gender = getattr(args, "gender", "").lower()
             output_file = Path(args.output)
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -375,12 +381,32 @@ def main():
             try:
                 import asyncio
                 import edge_tts
-                async def _gen():
-                    communicate = edge_tts.Communicate(text, tts_voice)
-                    await communicate.save(str(output_file))
-                asyncio.run(_gen())
-                b64 = _encode_b64(output_file)
-                print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "edge-tts", "voice": tts_voice}))
+                voices_to_try = [tts_voice]
+                if tts_voice != "vi-VN-HoaiMyNeural":
+                    voices_to_try.append("vi-VN-HoaiMyNeural")
+                if tts_voice != "vi-VN-NamMinhNeural":
+                    voices_to_try.append("vi-VN-NamMinhNeural")
+
+                success = False
+                last_err = ""
+                for v in voices_to_try:
+                    try:
+                        async def _gen():
+                            communicate = edge_tts.Communicate(text, v)
+                            await communicate.save(str(output_file))
+                        asyncio.run(_gen())
+                        if output_file.exists() and output_file.stat().st_size > 100:
+                            tts_voice = v
+                            success = True
+                            break
+                    except Exception as ve:
+                        last_err = str(ve)
+
+                if success:
+                    b64 = _encode_b64(output_file)
+                    print(json.dumps({"success": True, "file": str(output_file.resolve()), "audio_b64": b64, "engine": "edge-tts", "voice": tts_voice}))
+                else:
+                    print(json.dumps({"success": False, "error": last_err or "No audio received"}))
             except Exception as e:
                 print(json.dumps({"success": False, "error": str(e)}))
 
@@ -418,13 +444,18 @@ def main():
             engine = NovelEngine(p_dir, story_id=p_dir.name)
 
             if args.action == "init":
+                print(f"[INFO] === BƯỚC 1/7: AI STORY DIRECTOR KHỞI TẠO THẾ GIỚI ===", flush=True)
+                print(f"[INFO] Tên truyện: {args.title} | Thể loại: {args.genre} | Phong cách: {args.style}", flush=True)
+                print(f"[INFO] Đang gọi LLM (Qwen2.5-3B Local) tạo Cảnh giới tu tiên, Tông môn & Nhân vật...", flush=True)
                 idea = StoryIdea(title=args.title, genre=args.genre, style=args.style, total_chapters=args.chapters)
                 bible = engine.initialize_story(idea)
-                print(f"[SUCCESS] Novel '{args.title}' initialized at {p_dir}")
+                print(f"[SUCCESS] Đã tạo xong Story Bible & Hồ sơ thế giới thành công cho '{args.title}'!", flush=True)
 
             elif args.action == "plan":
+                print(f"[INFO] === BƯỚC 2-3/7: MASTER PLANNER TẠO 25 ARCS KỊCH BẢN ===", flush=True)
+                print(f"[INFO] Đang phân bổ 25 Arcs liên hoàn trải dài {args.chapters} chương...", flush=True)
                 arcs = engine.generate_master_plan(args.chapters)
-                print(f"[SUCCESS] Master plan generated with {len(arcs)} arcs")
+                print(f"[SUCCESS] Đã tạo xong Master Plan với {len(arcs)} Arcs kịch bản chi tiết!", flush=True)
 
             elif args.action == "write":
                 def _cli_cb(evt):

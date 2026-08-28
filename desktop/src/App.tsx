@@ -357,15 +357,24 @@ export default function App() {
   };
 
   const handleDeleteProject = async (name: string) => {
-    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa dự án "${name}" không? Thao tác này sẽ xóa toàn bộ tệp tin liên quan và không thể khôi phục.`);
+    const folderName = name.split('/').pop()?.split('\\').pop() || name;
+    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa dự án "${folderName}" không? Thao tác này sẽ xóa toàn bộ tệp tin liên quan và không thể khôi phục.`);
     if (!confirmDelete) return;
 
     try {
-      await PythonEngineService.deleteProject(name);
-      await loadProjects();
-      if (selectedProjectDir && (selectedProjectDir.endsWith(name) || selectedProjectDir.endsWith(name + '/') || selectedProjectDir.endsWith(name + '\\'))) {
+      await PythonEngineService.deleteProject(folderName);
+      const updatedList = await PythonEngineService.listProjects();
+      setProjectsList(updatedList);
+
+      if (!updatedList || updatedList.length === 0) {
         setSelectedProjectDir(null);
         setCurrentScreen('home');
+      } else {
+        const nextProjName = updatedList[0];
+        const nextPath = nextProjName.includes('/') || nextProjName.includes('\\')
+          ? nextProjName
+          : `d:/FullStack/AutoDubStudio/projects/${nextProjName}`;
+        handleSelectProject(nextPath);
       }
     } catch (err: any) {
       alert(`Xóa dự án thất bại: ${err}`);
@@ -431,7 +440,17 @@ export default function App() {
 
   const handleTabChange = (tab: SidebarTab) => {
     setActiveTab(tab);
-    if (selectedProjectDir) {
+    
+    let targetDir = selectedProjectDir;
+    if (!targetDir && projectsList.length > 0) {
+      const firstProj = projectsList[0];
+      targetDir = firstProj.includes('/') || firstProj.includes('\\')
+        ? firstProj
+        : `d:/FullStack/AutoDubStudio/projects/${firstProj}`;
+      setSelectedProjectDir(targetDir);
+    }
+
+    if (targetDir) {
       setCurrentScreen('project');
     }
   };

@@ -189,11 +189,17 @@ export class PythonEngineService {
   }
 
   static async deleteProject(name: string): Promise<void> {
+    const folderName = name.split('/').pop()?.split('\\').pop() || name;
     if (!isTauri()) {
-      delete mockProjects[name];
+      delete mockProjects[folderName];
+      Object.keys(mockProjects).forEach(key => {
+        if (key === folderName || key.endsWith('/' + folderName) || key.endsWith('\\' + folderName) || key.includes(folderName)) {
+          delete mockProjects[key];
+        }
+      });
       return;
     }
-    return invoke<void>('delete_project', { name });
+    return invoke<void>('delete_project', { name: folderName });
   }
 
   static async readProjectJson(projectDir: string): Promise<any> {

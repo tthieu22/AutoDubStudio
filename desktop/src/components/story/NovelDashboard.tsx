@@ -36,27 +36,75 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   useEffect(() => {
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.novel_idea) {
+        if (!data) return;
+        if (data.novel_idea) {
           setTitle(data.novel_idea.title || title);
           setGenre(data.novel_idea.genre || genre);
           setStyle(data.novel_idea.style || style);
+          if (data.novel_idea.protagonist) {
+            setProtagonistName(data.novel_idea.protagonist.name || protagonistName);
+            setProtagonistAge(data.novel_idea.protagonist.age || protagonistAge);
+            setProtagonistBg(data.novel_idea.protagonist.background || protagonistBg);
+          }
+          if (data.novel_idea.total_chapters) {
+            setTotalChapters(data.novel_idea.total_chapters);
+          }
         }
-        if (data && data.story_bible) {
+        if (data.story_bible) {
           setStoryBible(data.story_bible);
+          setCurrentStage(prev => prev === 'IDLE' ? 'READY' : prev);
+        }
+        if (data.novel_logs && Array.isArray(data.novel_logs)) {
+          setLogs(data.novel_logs);
+        }
+        if (data.novel_current_stage) {
+          setCurrentStage(data.novel_current_stage);
+        }
+        if (typeof data.novel_current_chapter === 'number') {
+          setCurrentChapterNum(data.novel_current_chapter);
+        }
+        if (typeof data.novel_progress_percent === 'number') {
+          setProgressPercent(data.novel_progress_percent);
         }
       }).catch(console.error);
     }
 
     let unsubFn: (() => void) | null = null;
+    let unsubLogFn: (() => void) | null = null;
+
     const res = PythonEngineService.subscribeNovelProgress((evt: any) => {
       if (evt.event === 'novel_chapter_start') {
         setCurrentChapterNum(evt.current);
         setProgressPercent(evt.percent || 0);
         setCurrentStage(`WRITING_CHAPTER_${evt.current}`);
-        setLogs(prev => [`[INFO] Starting Chapter ${evt.current} generation pipeline...`, ...prev.slice(0, 50)]);
+        setLogs(prev => {
+          const newLogs = [`[INFO] Starting Chapter ${evt.current} generation pipeline...`, ...prev.slice(0, 100)];
+          saveNovelStateToProject({ novel_logs: newLogs, novel_current_chapter: evt.current, novel_progress_percent: evt.percent || 0, novel_current_stage: `WRITING_CHAPTER_${evt.current}` });
+          return newLogs;
+        });
+      } else if (evt.event === 'novel_sub_stage') {
+        setCurrentStage(evt.step || 'WRITING');
+        setLogs(prev => {
+          const newLogs = [`[INFO] ${evt.message}`, ...prev.slice(0, 100)];
+          saveNovelStateToProject({ novel_logs: newLogs });
+          return newLogs;
+        });
       } else if (evt.event === 'novel_chapter_complete') {
-        setLogs(prev => [`[SUCCESS] Chapter ${evt.current} generated & validated into Canon DB! (${evt.chapter_data?.word_count || 0} words)`, ...prev.slice(0, 50)]);
+        setLogs(prev => {
+          const wordInfo = evt.chapter_data?.skipped ? 'Skipped (already exists)' : `${evt.chapter_data?.word_count || 0} words`;
+          const newLogs = [`[SUCCESS] Chapter ${evt.current} generated & validated into Canon DB! (${wordInfo})`, ...prev.slice(0, 100)];
+          saveNovelStateToProject({ novel_logs: newLogs, novel_current_chapter: evt.current });
+          return newLogs;
+        });
       }
+    });
+
+    const resLog = PythonEngineService.subscribeLog((line: string) => {
+      setLogs(prev => {
+        const newLogs = [line, ...prev.slice(0, 100)];
+        saveNovelStateToProject({ novel_logs: newLogs });
+        return newLogs;
+      });
     });
 
     if (res && typeof (res as any).then === 'function') {
@@ -67,13 +115,33 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
       unsubFn = res;
     }
 
+    if (resLog && typeof (resLog as any).then === 'function') {
+      (resLog as Promise<any>).then(unsub => {
+        if (typeof unsub === 'function') unsubLogFn = unsub;
+      });
+    } else if (typeof resLog === 'function') {
+      unsubLogFn = resLog;
+    }
+
     return () => {
       if (unsubFn) unsubFn();
+      if (unsubLogFn) unsubLogFn();
     };
   }, [projectDir]);
 
-  const handleInitializeNovel = async () => {
+  const saveNovelStateToProject = async (patchData: Record<string, any>) => {
     if (!projectDir) return;
+    try {
+      const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+      const updated = { ...json, ...patchData };
+      await PythonEngineService.writeProjectJson(projectDir, updated);
+    } catch (e) {
+      console.error('Failed to save novel state to project.json:', e);
+    }
+  };
+
+  const handleInitializeNovel = async () => {
+    if (!projectDir) return null;
     setIsGenerating(true);
     setCurrentStage('INITIALIZING_STORY_BIBLE');
     setLogs(prev => ['[INFO] AI Story Director building Story Bible & World Rules...', ...prev]);
@@ -87,16 +155,26 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         total_chapters: totalChapters
       };
 
+      await saveNovelStateToProject({ novel_idea: idea, novel_current_stage: 'INITIALIZING_STORY_BIBLE' });
+
       const bible = await PythonEngineService.initializeNovel(projectDir, idea);
       setStoryBible(bible);
+      
       setLogs(prev => ['[SUCCESS] Story Bible generated! Creating Master Plan (20-30 Arcs)...', ...prev]);
-
       setCurrentStage('GENERATING_MASTER_PLAN');
-      await PythonEngineService.generateNovelMasterPlan(projectDir);
+
+      await saveNovelStateToProject({ story_bible: bible, novel_current_stage: 'GENERATING_MASTER_PLAN' });
+
+      const masterPlan = await PythonEngineService.generateNovelMasterPlan(projectDir);
       setLogs(prev => ['[SUCCESS] Master Plan created! Ready for Auto-Write.', ...prev]);
       setCurrentStage('READY');
+
+      await saveNovelStateToProject({ arc_plans: masterPlan, novel_current_stage: 'READY' });
+      return bible;
     } catch (e: any) {
-      setLogs(prev => [`[ERROR] Failed to initialize novel: ${e.message}`, ...prev]);
+      const errMsg = typeof e === 'string' ? e : e?.message || JSON.stringify(e);
+      setLogs(prev => [`[ERROR] Failed to initialize novel: ${errMsg}`, ...prev]);
+      return null;
     } finally {
       setIsGenerating(false);
     }
@@ -104,9 +182,25 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
 
   const handleStartAutoWrite = async () => {
     if (!projectDir) return;
+
+    let activeBible = storyBible;
+    if (!activeBible) {
+      setLogs(prev => ['[INFO] Chưa phát hiện Story Bible & Master Plan. Tự động thực hiện Bước 1, 2, 3 trước...', ...prev]);
+      activeBible = await handleInitializeNovel();
+      if (!activeBible) {
+        setLogs(prev => ['[ERROR] Khởi tạo thế giới thất bại. Đã dừng quy trình.', ...prev]);
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setCurrentStage('AUTO_WRITING');
-    setLogs(prev => ['[INFO] Launching Novel Engine Auto-Write Loop...', ...prev]);
+    const startLog = '[INFO] Launching Novel Engine Auto-Write Loop...';
+    setLogs(prev => {
+      const updated = [startLog, ...prev];
+      saveNovelStateToProject({ novel_logs: updated, novel_current_stage: 'AUTO_WRITING' });
+      return updated;
+    });
     await PythonEngineService.startNovelAutoWrite(projectDir, 1, totalChapters);
   };
 
@@ -154,27 +248,94 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
       {/* PIPELINE STAGES VISUALIZER */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 bg-[#111318] p-3 rounded-xl border border-white/5 text-xs">
         {[
-          { label: '1. IDEA', desc: 'Ý Tưởng Truyện', icon: Sparkles, active: currentStage === 'IDLE' },
-          { label: '2. STORY BIBLE', desc: 'Hồ Sơ Thế Giới', icon: BookOpen, active: currentStage === 'INITIALIZING_STORY_BIBLE' },
-          { label: '3. MASTER PLAN', desc: '20-30 Arcs Plan', icon: Layers, active: currentStage === 'GENERATING_MASTER_PLAN' },
-          { label: '4. SCENE PLAN', desc: 'Lập 3-5 Scenes', icon: Sliders, active: currentStage.includes('WRITING') },
-          { label: '5. AI WRITER', desc: 'Qwen 3B Viết', icon: Cpu, active: currentStage.includes('WRITING') },
-          { label: '6. EDITOR', desc: 'Biên Tập Văn Phong', icon: FileText, active: currentStage.includes('WRITING') },
-          { label: '7. CANON DB', desc: 'Xác Nhận Facts', icon: ShieldCheck, active: currentStage.includes('WRITING') }
-        ].map((st, i) => (
-          <div
-            key={i}
-            className={`p-2.5 rounded-lg border flex flex-col items-center text-center transition-all ${
-              st.active
-                ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300 shadow-md shadow-cyan-500/10'
-                : 'bg-black/30 border-white/5 text-slate-400'
-            }`}
-          >
-            <st.icon size={16} className={st.active ? 'text-cyan-400 animate-pulse mb-1' : 'text-slate-500 mb-1'} />
-            <span className="font-bold text-[11px] font-['Outfit'] uppercase">{st.label}</span>
-            <span className="text-[10px] text-slate-500 mt-0.5">{st.desc}</span>
-          </div>
-        ))}
+          { id: 1, label: '1. IDEA', desc: 'Ý Tưởng Truyện', icon: Sparkles },
+          { id: 2, label: '2. STORY BIBLE', desc: 'Hồ Sơ Thế Giới', icon: BookOpen },
+          { id: 3, label: '3. MASTER PLAN', desc: '20-30 Arcs Plan', icon: Layers },
+          { id: 4, label: '4. SCENE PLAN', desc: 'Lập 3-5 Scenes', icon: Sliders },
+          { id: 5, label: '5. AI WRITER', desc: 'Qwen 3B Viết', icon: Cpu },
+          { id: 6, label: '6. EDITOR', desc: 'Biên Tập Văn Phong', icon: FileText },
+          { id: 7, label: '7. CANON DB', desc: 'Xác Nhận Facts', icon: ShieldCheck }
+        ].map((st) => {
+          let status: 'COMPLETED' | 'ACTIVE' | 'PENDING' = 'PENDING';
+
+          const hasBible = !!storyBible;
+          const isInitializingBible = currentStage === 'INITIALIZING_STORY_BIBLE';
+          const isGeneratingMasterPlan = currentStage === 'GENERATING_MASTER_PLAN';
+
+          if (st.id === 1) {
+            status = hasBible || currentStage !== 'IDLE' ? 'COMPLETED' : 'ACTIVE';
+          } else if (st.id === 2) {
+            if (isInitializingBible) status = 'ACTIVE';
+            else if (hasBible) status = 'COMPLETED';
+            else status = 'PENDING';
+          } else if (st.id === 3) {
+            if (isGeneratingMasterPlan) status = 'ACTIVE';
+            else if (hasBible && !isInitializingBible) status = 'COMPLETED';
+            else status = 'PENDING';
+          } else if (st.id === 4) {
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) {
+              status = 'PENDING';
+            } else if (['CHAPTER_PLANNER', 'CREATIVE_ENGINE', 'SCENE_PLANNER', 'AUTO_WRITING'].includes(currentStage) || currentStage.startsWith('WRITING')) {
+              status = 'ACTIVE';
+            } else if (['WRITER', 'WRITING_SCENE', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR'].includes(currentStage)) {
+              status = 'COMPLETED';
+            } else {
+              status = 'PENDING';
+            }
+          } else if (st.id === 5) {
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) {
+              status = 'PENDING';
+            } else if (['WRITER', 'WRITING_SCENE'].includes(currentStage)) {
+              status = 'ACTIVE';
+            } else if (['EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR'].includes(currentStage)) {
+              status = 'COMPLETED';
+            } else {
+              status = 'PENDING';
+            }
+          } else if (st.id === 6) {
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) {
+              status = 'PENDING';
+            } else if (currentStage === 'EDITOR') {
+              status = 'ACTIVE';
+            } else if (['VALIDATOR', 'MEMORY_EXTRACTOR'].includes(currentStage)) {
+              status = 'COMPLETED';
+            } else {
+              status = 'PENDING';
+            }
+          } else if (st.id === 7) {
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) {
+              status = 'PENDING';
+            } else if (['VALIDATOR', 'MEMORY_EXTRACTOR'].includes(currentStage)) {
+              status = 'ACTIVE';
+            } else {
+              status = 'PENDING';
+            }
+          }
+
+          const isActive = status === 'ACTIVE';
+          const isCompleted = status === 'COMPLETED';
+
+          return (
+            <div
+              key={st.id}
+              className={`p-2.5 rounded-lg border flex flex-col items-center text-center transition-all relative ${
+                isActive
+                  ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-300 shadow-md shadow-cyan-500/10'
+                  : isCompleted
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-black/30 border-white/5 text-slate-500'
+              }`}
+            >
+              {isCompleted ? (
+                <CheckCircle2 size={16} className="text-emerald-400 mb-1" />
+              ) : (
+                <st.icon size={16} className={isActive ? 'text-cyan-400 animate-pulse mb-1' : 'text-slate-500 mb-1'} />
+              )}
+              <span className="font-bold text-[11px] font-['Outfit'] uppercase">{st.label}</span>
+              <span className="text-[10px] text-slate-400 mt-0.5">{st.desc}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* FORM & LOGS GRID */}
