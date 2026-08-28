@@ -58,3 +58,16 @@ HARDWARE_PROFILE = {
     "max_vram_mb": 4096,
     "min_free_vram_mb": 1200
 }
+
+# Novel Engine Configuration
+NOVEL_ENGINE_CONFIG = {
+    "max_scenes_per_chapter": 5,
+    "words_per_scene": (500, 800),
+    "words_per_chapter": (2500, 3500),
+    "max_validation_retries": 3,
+    "context_window_tokens": 8192,
+    "max_output_tokens": 2048,
+    "creative_engine_options": 3,
+    "recent_chapters_for_context": 5,
+    "max_canon_facts_per_query": 20,
+}

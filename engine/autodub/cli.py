@@ -49,14 +49,16 @@ def main():
     list_sp.add_argument("--limit", type=int, default=100, help="Maximum jobs to list")
     list_sp.add_argument("--json", action="store_true", help="Output machine-readable JSON")
 
-    # batch <input_paths...> [--output <dir>] [--workers <n>] [--priority <p>] [--force] [--json]
-    batch_sp = subparsers.add_parser("batch", help="Batch process multiple video files")
-    batch_sp.add_argument("inputs", nargs="+", help="Input video file(s) or directory")
-    batch_sp.add_argument("--output", default="output", help="Output directory path")
-    batch_sp.add_argument("--workers", type=int, default=2, help="Number of concurrent worker threads")
-    batch_sp.add_argument("--priority", type=int, default=5, help="Job priority (higher runs first)")
-    batch_sp.add_argument("--force", action="store_true", help="Force re-processing duplicate jobs")
-    batch_sp.add_argument("--json", action="store_true", help="Output machine-readable JSON results")
+    # novel <action> [--project <dir>] ...
+    novel_sp = subparsers.add_parser("novel", help="AI Novel Engine commands")
+    novel_sp.add_argument("action", choices=["init", "plan", "write", "status"], help="Novel action")
+    novel_sp.add_argument("--project", default="stories/novel_001", help="Story project directory path")
+    novel_sp.add_argument("--title", default="Vô Địch Tiên Đế", help="Novel title")
+    novel_sp.add_argument("--genre", default="Tiên hiệp + Xuyên không", help="Novel genre")
+    novel_sp.add_argument("--style", default="Dễ đọc, tiết tấu nhanh", help="Novel style")
+    novel_sp.add_argument("--chapters", type=int, default=1000, help="Total chapters")
+    novel_sp.add_argument("--start", type=int, default=1, help="Start chapter number")
+    novel_sp.add_argument("--end", type=int, default=100, help="End chapter number")
 
     # run <project_or_job> [--force] [--stop-at <stage>]
     run_sp = subparsers.add_parser("run", help="Run full pipeline for a project or job")
@@ -407,6 +409,32 @@ def main():
 
             imported = importer.download_and_import_chapters(chapters_list, progress_callback=_import_cb)
             print(json.dumps({"success": True, "importedCount": len(imported), "chapters": imported}, indent=2, ensure_ascii=False))
+            return
+
+        elif args.command == "novel":
+            from autodub.novel.novel_engine import NovelEngine
+            from autodub.novel.novel_models import StoryIdea
+            p_dir = Path(args.project)
+            engine = NovelEngine(p_dir, story_id=p_dir.name)
+
+            if args.action == "init":
+                idea = StoryIdea(title=args.title, genre=args.genre, style=args.style, total_chapters=args.chapters)
+                bible = engine.initialize_story(idea)
+                print(f"[SUCCESS] Novel '{args.title}' initialized at {p_dir}")
+
+            elif args.action == "plan":
+                arcs = engine.generate_master_plan(args.chapters)
+                print(f"[SUCCESS] Master plan generated with {len(arcs)} arcs")
+
+            elif args.action == "write":
+                def _cli_cb(evt):
+                    print(json.dumps(evt, ensure_ascii=False), flush=True)
+                engine.run_auto(start_chapter=args.start, end_chapter=args.end, progress_callback=_cli_cb)
+
+            elif args.action == "status":
+                facts = engine.db.get_canon_facts(p_dir.name, limit=10)
+                threads = engine.db.get_open_plot_threads(p_dir.name)
+                print(json.dumps({"project": p_dir.name, "canonFactsCount": len(facts), "openThreadsCount": len(threads)}, indent=2, ensure_ascii=False))
             return
 
 

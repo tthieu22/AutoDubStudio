@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Brain, Plus, Lock, Unlock, Zap, History, Sparkles, CheckCircle2 } from 'lucide-react';
+import { PythonEngineService } from '../../services/pythonEngine';
 
 export interface MemoryItem {
   id: string;
@@ -17,8 +18,32 @@ interface StoryMemoryProps {
 export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
   const [memories, setMemories] = useState<MemoryItem[]>([]);
 
+  React.useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data && data.story_memory && Array.isArray(data.story_memory)) {
+          setMemories(data.story_memory);
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
+
+  const saveMemoriesToProject = async (newMems: MemoryItem[]) => {
+    setMemories(newMems);
+    if (projectDir) {
+      try {
+        const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+        json.story_memory = newMems;
+        await PythonEngineService.writeProjectJson(projectDir, json);
+      } catch (e) {
+        console.error('Failed to save story_memory to project.json:', e);
+      }
+    }
+  };
+
   const toggleLock = (id: string) => {
-    setMemories(prev => prev.map(m => m.id === id ? { ...m, locked: !m.locked } : m));
+    const updated = memories.map(m => m.id === id ? { ...m, locked: !m.locked } : m);
+    saveMemoriesToProject(updated);
   };
 
   const getImportanceBadge = (imp: MemoryItem['importance']) => {
@@ -61,7 +86,7 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
               confidence: 0.9,
               locked: false
             };
-            setMemories(prev => [...prev, newMem]);
+            saveMemoriesToProject([...memories, newMem]);
           }}
           className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/20 transition-all"
         >
@@ -90,7 +115,7 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
                   confidence: 0.95,
                   locked: false
                 };
-                setMemories([newMem]);
+                saveMemoriesToProject([...memories, newMem]);
               }}
               className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-purple-600/20 transition-all cursor-pointer"
             >

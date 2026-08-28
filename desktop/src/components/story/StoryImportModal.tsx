@@ -12,7 +12,8 @@ import {
   Download, 
   CheckSquare, 
   Square,
-  Sparkles
+  Sparkles,
+  Copy
 } from 'lucide-react';
 import { PythonEngineService } from '../../services/pythonEngine';
 import { DiscoveryReviewModal, DiscoveryRegistryData, DiscoveredChapter } from './DiscoveryReviewModal';
@@ -274,7 +275,19 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
                     {isAnalyzing ? <RefreshCw size={12} className="animate-spin text-purple-400" /> : <Check size={12} className="text-emerald-400" />}
                     <span>{discoveryStage || 'Tiến trình phân tích URL'}</span>
                   </span>
-                  <span className="font-mono font-bold text-cyan-400">{discoveryPercent}%</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-cyan-400">{discoveryPercent}%</span>
+                    {discoveryLogs.length > 0 && (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(discoveryLogs.join('\n'))}
+                        className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[10px] flex items-center gap-1 transition-all border border-white/10 cursor-pointer select-none"
+                        title="Sao chép log"
+                      >
+                        <Copy size={11} />
+                        <span>Sao chép</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="w-full bg-black/50 h-2 rounded-full overflow-hidden p-0.5 border border-white/5">
@@ -285,9 +298,16 @@ export const StoryImportModal: React.FC<StoryImportModalProps> = ({
                 </div>
 
                 {/* LOG TERMINAL BOX */}
-                <div className="max-h-28 overflow-y-auto bg-black/60 rounded-lg border border-white/5 p-2 font-mono text-[11px] space-y-1 text-slate-300 custom-scrollbar">
+                <div 
+                  className="max-h-28 overflow-y-auto bg-black/60 rounded-lg border border-white/5 p-2 font-mono text-[11px] space-y-1 text-slate-300 custom-scrollbar select-text cursor-text"
+                  style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+                >
                   {discoveryLogs.map((log, idx) => (
-                    <div key={idx} className={log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('thành công') ? 'text-emerald-300 font-bold' : 'text-slate-300'}>
+                    <div 
+                      key={idx} 
+                      className={log.includes('❌') ? 'text-rose-400 font-bold' : log.includes('thành công') ? 'text-emerald-300 font-bold' : 'text-slate-300'}
+                      style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
+                    >
                       {log}
                     </div>
                   ))}

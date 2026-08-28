@@ -29,6 +29,10 @@ import { CharacterBible } from './components/story/CharacterBible';
 import { WorldBible } from './components/story/WorldBible';
 import { StoryMemory } from './components/story/StoryMemory';
 import { SceneBoard } from './components/story/SceneBoard';
+import { NovelDashboard } from './components/story/NovelDashboard';
+import { ArcPlanner } from './components/story/ArcPlanner';
+import { CanonExplorer } from './components/story/CanonExplorer';
+import { ChapterTimeline } from './components/story/ChapterTimeline';
 
 import { SourceMediaManager } from './components/dubbing/SourceMediaManager';
 import { VoiceStudio } from './components/dubbing/VoiceStudio';
@@ -496,9 +500,20 @@ export default function App() {
           />
         );
 
+      case 'novel_dashboard':
+        return <NovelDashboard projectDir={selectedProjectDir} />;
+
+      case 'arc_planner':
+        return <ArcPlanner projectDir={selectedProjectDir} />;
+
+      case 'canon_explorer':
+        return <CanonExplorer projectDir={selectedProjectDir} />;
+
       case 'story':
-      case 'chapters':
         return <StoryWorkspace projectDir={selectedProjectDir} />;
+
+      case 'chapters':
+        return <ChapterTimeline projectDir={selectedProjectDir} />;
 
       case 'trends':
         return <TikTokTrendManager projectDir={selectedProjectDir} />;

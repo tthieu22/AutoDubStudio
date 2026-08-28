@@ -19,12 +19,18 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  Flame
+  Flame,
+  Sparkles,
+  Layers,
+  ShieldCheck
 } from 'lucide-react';
 import { PipelineMode } from '../types/pipeline';
 
 export type SidebarTab =
   | 'overview'
+  | 'novel_dashboard'
+  | 'arc_planner'
+  | 'canon_explorer'
   | 'trends'
   | 'source'
   | 'transcript'
@@ -142,7 +148,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const storyItems: Array<{ id: SidebarTab; label: string; icon: React.ReactNode; badge?: string | number; badgeColor?: string }> = [
     { id: 'overview', label: 'Overview', icon: <FolderKanban size={15} /> },
+    { id: 'novel_dashboard', label: 'AI Novel Engine', icon: <Sparkles size={15} className="text-cyan-400" />, badge: 'Qwen 3B', badgeColor: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' },
+    { id: 'arc_planner', label: '20-30 Arcs Plan', icon: <Layers size={15} /> },
     { id: 'story', label: 'Story & Chapters', icon: <BookOpen size={15} /> },
+    { id: 'canon_explorer', label: 'Canon DB & Threads', icon: <ShieldCheck size={15} className="text-emerald-400" /> },
     { id: 'trends', label: 'TikTok Slang Trends', icon: <Flame size={15} className="text-amber-400" /> },
     { id: 'characters', label: 'Character Bible', icon: <Users size={15} /> },
     { id: 'world', label: 'World & Lore', icon: <Globe size={15} /> },

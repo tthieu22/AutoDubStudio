@@ -39,8 +39,32 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharId, setSelectedCharId] = useState<string>('');
 
+  React.useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data && data.characters && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
+
+  const saveCharactersToProject = async (newChars: Character[]) => {
+    setCharacters(newChars);
+    if (projectDir) {
+      try {
+        const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+        json.characters = newChars;
+        await PythonEngineService.writeProjectJson(projectDir, json);
+      } catch (e) {
+        console.error('Failed to save characters to project.json:', e);
+      }
+    }
+  };
+
   const toggleLock = (id: string) => {
-    setCharacters(prev => prev.map(c => c.id === id ? { ...c, locked: !c.locked } : c));
+    const updated = characters.map(c => c.id === id ? { ...c, locked: !c.locked } : c);
+    saveCharactersToProject(updated);
   };
 
   const selectedChar = characters.find(c => c.id === selectedCharId);
@@ -78,10 +102,10 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
               speakingStyle: 'Standard',
               locked: false
             };
-            setCharacters(prev => [...prev, newChar]);
+            saveCharactersToProject([...characters, newChar]);
             setSelectedCharId(newChar.id);
           }}
-          className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+          className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
         >
           <Plus size={14} /> Add Character
         </button>
@@ -112,7 +136,7 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
                 speakingStyle: 'Mạnh mẽ',
                 locked: false
               };
-              setCharacters([newChar]);
+              saveCharactersToProject([...characters, newChar]);
               setSelectedCharId(newChar.id);
             }}
             className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs flex items-center gap-2 shadow-xl shadow-cyan-500/20 transition-all cursor-pointer"

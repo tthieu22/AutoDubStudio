@@ -30,8 +30,22 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const saveEntitiesToProject = async (newEntities: WorldEntity[]) => {
+    setEntities(newEntities);
+    if (projectDir) {
+      try {
+        const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+        json.world_lore = newEntities;
+        await PythonEngineService.writeProjectJson(projectDir, json);
+      } catch (e) {
+        console.error('Failed to save world_lore to project.json:', e);
+      }
+    }
+  };
+
   const toggleLock = (id: string) => {
-    setEntities(prev => prev.map(e => e.id === id ? { ...e, locked: !e.locked } : e));
+    const updated = entities.map(e => e.id === id ? { ...e, locked: !e.locked } : e);
+    saveEntitiesToProject(updated);
   };
 
   const filteredEntities = entities.filter(e => {
@@ -77,7 +91,7 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
               description: 'Lore details...',
               locked: false
             };
-            setEntities(prev => [...prev, newEnt]);
+            saveEntitiesToProject([...entities, newEnt]);
           }}
           className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all"
         >
@@ -135,7 +149,7 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
                   description: 'Chi tiết bối cảnh thế giới quan...',
                   locked: false
                 };
-                setEntities([newEnt]);
+                saveEntitiesToProject([...entities, newEnt]);
               }}
               className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/20 transition-all cursor-pointer"
             >

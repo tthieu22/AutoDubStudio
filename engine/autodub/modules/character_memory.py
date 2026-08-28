@@ -26,3 +26,21 @@ class CharacterEraMemory:
             lines.append(f"- {char_name}: {era_str}{detail_str}")
 
         return "\n".join(lines) + "\n\n"
+
+    @staticmethod
+    def get_character_at_chapter(db, character_id: str, chapter_num: int) -> Optional[Dict[str, Any]]:
+        if db:
+            return db.get_character_state_at_chapter(character_id, chapter_num)
+        return None
+
+    @staticmethod
+    def get_known_information(db, character_id: str, chapter_num: int) -> List[str]:
+        state = CharacterEraMemory.get_character_at_chapter(db, character_id, chapter_num)
+        if state:
+            return state.get("known_information", [])
+        return []
+
+    @staticmethod
+    def update_state_after_chapter(db, state_obj):
+        if db:
+            db.update_character_state(state_obj)

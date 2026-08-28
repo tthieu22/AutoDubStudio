@@ -91,3 +91,36 @@ class StoryMemoryEngine:
 """.strip()
 
         return prompt
+
+    def _get_novel_db(self):
+        db_file = self.project_dir / "story.db"
+        if db_file.exists():
+            from autodub.novel.novel_database import NovelDatabase
+            return NovelDatabase(db_file)
+        return None
+
+    def get_canon_facts(self, chapter_num: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        ndb = self._get_novel_db()
+        if ndb:
+            return ndb.get_canon_facts(self.project.project_id, limit=limit, chapter_num=chapter_num)
+        return []
+
+    def get_open_plot_threads(self) -> List[Dict[str, Any]]:
+        ndb = self._get_novel_db()
+        if ndb:
+            return ndb.get_open_plot_threads(self.project.project_id)
+        return []
+
+    def add_plot_thread(self, title: str, description: str, since_chapter: int):
+        ndb = self._get_novel_db()
+        if ndb:
+            from autodub.novel.novel_models import PlotThread
+            import time
+            ndb.save_plot_thread(PlotThread(
+                id=f"thread_{int(time.time()*1000)}",
+                story_id=self.project.project_id,
+                title=title,
+                status="OPEN",
+                since_chapter=since_chapter,
+                description=description
+            ))

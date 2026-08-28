@@ -53,8 +53,22 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
 
   const [selectedSceneId, setSelectedSceneId] = useState<string>('');
 
+  const saveScenesToProject = async (newScenes: SceneItem[]) => {
+    setScenes(newScenes);
+    if (projectDir) {
+      try {
+        const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+        json.scenes = newScenes;
+        await PythonEngineService.writeProjectJson(projectDir, json);
+      } catch (e) {
+        console.error('Failed to save scenes to project.json:', e);
+      }
+    }
+  };
+
   const updateStatus = (id: string, newStatus: SceneItem['status']) => {
-    setScenes(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
+    const updated = scenes.map(s => s.id === id ? { ...s, status: newStatus } : s);
+    saveScenesToProject(updated);
   };
 
   const duplicateScene = (id: string) => {
@@ -66,11 +80,12 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
       sceneNumber: scenes.length + 1,
       status: 'GENERATED'
     };
-    setScenes(prev => [...prev, dup]);
+    saveScenesToProject([...scenes, dup]);
   };
 
   const deleteScene = (id: string) => {
-    setScenes(prev => prev.filter(s => s.id !== id));
+    const updated = scenes.filter(s => s.id !== id);
+    saveScenesToProject(updated);
   };
 
   const getStatusBadge = (st: SceneItem['status']) => {
@@ -150,7 +165,7 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
                 dialogue: 'Character dialogue...',
                 status: 'GENERATED'
               };
-              setScenes(prev => [...prev, newScene]);
+              saveScenesToProject([...scenes, newScene]);
             }}
             className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all"
           >
@@ -183,7 +198,7 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
                   dialogue: 'Lời thoại nhân vật...',
                   status: 'GENERATED'
                 };
-                setScenes([newScene]);
+                saveScenesToProject([...scenes, newScene]);
               }}
               className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/20 transition-all cursor-pointer"
             >
