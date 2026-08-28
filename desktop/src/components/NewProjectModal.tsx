@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, FolderOpen, Loader2, RefreshCw, Languages, Info } from 'lucide-react';
+import { 
+  Sparkles, FolderOpen, Loader2, RefreshCw, Languages, Info, 
+  ChevronDown, ChevronUp, Video, BookOpen, SlidersHorizontal, Check 
+} from 'lucide-react';
 import { open } from '@tauri-apps/api/dialog';
 
 export interface TranslationStyleOption {
@@ -21,7 +24,14 @@ const TRANSLATION_STYLES: TranslationStyleOption[] = [
 
 interface NewProjectModalProps {
   isCreating: boolean;
-  onCreateProject: (name: string, videoPath: string, style?: string, customStyle?: string, mode?: 'STORY' | 'DUBBING', storyText?: string) => Promise<void>;
+  onCreateProject: (
+    name: string, 
+    videoPath: string, 
+    style?: string, 
+    customStyle?: string, 
+    mode?: 'STORY' | 'DUBBING', 
+    storyText?: string
+  ) => Promise<void>;
 }
 
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
@@ -35,8 +45,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
     const DD = String(now.getDate()).padStart(2, '0');
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    return `Project_${YYYY}-${MM}-${DD}_${hh}-${mm}-${ss}`;
+    return `DuAn_${YYYY}${MM}${DD}_${hh}${mm}`;
   };
 
   const [projectMode, setProjectMode] = useState<'DUBBING' | 'STORY'>('DUBBING');
@@ -45,8 +54,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const [storyText, setStoryText] = useState('');
   const [translationStyle, setTranslationStyle] = useState('general');
   const [customStyleText, setCustomStyleText] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Automatically refresh name on mount
   useEffect(() => {
     setProjectName(generateTimestampName());
   }, []);
@@ -89,272 +98,209 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   };
 
   return (
-    <div style={{ padding: '40px', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '720px', borderRadius: '20px', padding: '36px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+    <div className="h-full w-full flex flex-col items-center justify-center p-4 md:p-8 overflow-y-auto custom-scrollbar select-none bg-[#0b0d10]">
+      <div className="w-full max-w-xl bg-[#111318] border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl shadow-black/80 space-y-6">
         
-        {/* MODE SELECTOR TABS */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+        {/* MODAL HEADER */}
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 text-cyan-400 border border-cyan-500/30 mb-2 shadow-lg shadow-cyan-500/10">
+            <Sparkles size={24} />
+          </div>
+          <h2 className="text-xl md:text-2xl font-extrabold text-white font-['Outfit'] tracking-tight">
+            Tạo Dự Án Mới
+          </h2>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Chọn loại dự án và bắt đầu tự động hóa quy trình lồng tiếng hoặc làm video truyện AI.
+          </p>
+        </div>
+
+        {/* MODE SELECTOR (DUBBING / STORY) */}
+        <div className="grid grid-cols-2 gap-3 p-1 bg-black/40 border border-white/5 rounded-xl">
           <button
             type="button"
             onClick={() => setProjectMode('DUBBING')}
-            style={{
-              padding: '14px',
-              borderRadius: '12px',
-              border: '2px solid',
-              borderColor: projectMode === 'DUBBING' ? '#06b6d4' : 'rgba(255, 255, 255, 0.08)',
-              background: projectMode === 'DUBBING' ? 'rgba(6, 182, 212, 0.12)' : '#0B0D10',
-              color: projectMode === 'DUBBING' ? '#38bdf8' : '#94a3b8',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s ease'
-            }}
+            className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+              projectMode === 'DUBBING'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20 scale-[1.02]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
           >
-            <span style={{ fontSize: '15px', fontWeight: 800 }}>🎬 DỊCH & LỒNG TIẾNG VIDEO</span>
-            <span style={{ fontSize: '11px', opacity: 0.8 }}>Tách audio ➔ STT Whisper ➔ Dịch Qwen AI ➔ Piper TTS ➔ Render</span>
+            <Video size={16} />
+            <span>Dịch & Lồng Tiếng Video</span>
           </button>
 
           <button
             type="button"
             onClick={() => setProjectMode('STORY')}
-            style={{
-              padding: '14px',
-              borderRadius: '12px',
-              border: '2px solid',
-              borderColor: projectMode === 'STORY' ? '#a855f7' : 'rgba(255, 255, 255, 0.08)',
-              background: projectMode === 'STORY' ? 'rgba(168, 85, 247, 0.12)' : '#0B0D10',
-              color: projectMode === 'STORY' ? '#c084fc' : '#94a3b8',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s ease'
-            }}
+            className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2.5 text-xs font-extrabold transition-all cursor-pointer ${
+              projectMode === 'STORY'
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/20 scale-[1.02]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
           >
-            <span style={{ fontSize: '15px', fontWeight: 800 }}>📖 TẠO VIDEO TRUYỆN (STORY)</span>
-            <span style={{ fontSize: '11px', opacity: 0.8 }}>Làm sạch văn bản ➔ Phân cảnh ➔ Tạo ảnh SD 1.5 ➔ Piper TTS ➔ Render</span>
+            <BookOpen size={16} />
+            <span>Tạo Video Truyện AI</span>
           </button>
         </div>
 
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h2 className="gradient-text" style={{ fontSize: '24px', margin: '0 0 6px 0' }}>
-            {projectMode === 'DUBBING' ? 'Tạo Dự Án Lồng Tiếng Video Mới' : 'Tạo Dự Án Phim Truyện AI Mới'}
-          </h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px' }}>
-            {projectMode === 'DUBBING' 
-              ? 'Tự động tách âm thanh, dịch tiếng Việt AI và lồng tiếng Piper TTS chuẩn xác.'
-              : 'Tự động phân tích kịch bản truyện, tạo ảnh Stable Diffusion và tổng hợp giọng đọc AI.'}
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* FORM FIELDS */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* PROJECT NAME */}
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>Tên Dự Án</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+              Tên Dự Án
+            </label>
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={projectName}
                 onChange={e => setProjectName(e.target.value)}
-                placeholder="ví dụ: Video-Review-Game-01"
-                style={{
-                  flexGrow: 1,
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  border: '1px solid var(--border-glass)',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
+                placeholder="ví dụ: Project_2026..."
+                className="flex-1 bg-[#07080a] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono font-semibold"
               />
               <button 
                 type="button" 
-                className="btn-secondary" 
                 onClick={() => setProjectName(generateTimestampName())}
-                title="Tạo tên theo thời gian hiện tại"
-                style={{ padding: '0 16px', gap: '6px' }}
+                title="Đặt tên tự động"
+                className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold flex items-center gap-1.5 border border-white/10 transition-all cursor-pointer"
               >
-                <RefreshCw size={15} /> Tự động đặt tên
+                <RefreshCw size={13} />
+                <span className="hidden sm:inline">Tự Động</span>
               </button>
             </div>
           </div>
 
-
-
-          {/* DUBBING MODE FIELDS */}
+          {/* DUBBING MODE: VIDEO PATH */}
           {projectMode === 'DUBBING' && (
-            <>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>File Video Đầu Vào (MP4 / MKV / AVI)</label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input
-                    type="text"
-                    readOnly
-                    value={videoPath}
-                    placeholder="Chọn tệp video từ máy tính..."
-                    style={{
-                      flexGrow: 1,
-                      background: 'rgba(15, 23, 42, 0.8)',
-                      border: '1px solid var(--border-glass)',
-                      borderRadius: '10px',
-                      padding: '12px 16px',
-                      color: '#fff',
-                      fontSize: '13px'
-                    }}
-                  />
-                  <button type="button" className="btn-secondary" onClick={handleSelectVideoFile}>
-                    <FolderOpen size={16} /> Chọn File
-                  </button>
-                </div>
-              </div>
-
-              {/* TRANSLATION STYLE SELECTION */}
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#cbd5e1' }}>
-                  <Languages size={15} style={{ color: '#38bdf8' }} /> TRANSLATION STYLE (PHONG CÁCH DỊCH THUẬT)
-                </label>
-                <select
-                  value={translationStyle}
-                  onChange={e => setTranslationStyle(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(15, 23, 42, 0.9)',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: '10px',
-                    padding: '12px 16px',
-                    color: '#38bdf8',
-                    fontWeight: 600,
-                    fontSize: '14px',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                File Video Đầu Vào (MP4 / MKV / AVI)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={videoPath}
+                  placeholder="Chọn file video từ máy tính (hoặc để trống làm mẫu)..."
+                  className="flex-1 bg-[#07080a] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 font-mono truncate"
+                />
+                <button 
+                  type="button" 
+                  onClick={handleSelectVideoFile}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-xs font-bold flex items-center gap-1.5 border border-cyan-500/30 transition-all cursor-pointer"
                 >
-                  {TRANSLATION_STYLES.map(style => (
-                    <option key={style.id} value={style.id} style={{ background: '#0f172a', color: '#fff' }}>
-                      {style.name}
-                    </option>
-                  ))}
-                </select>
-
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '8px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                  <Info size={16} style={{ color: '#38bdf8', flexShrink: 0, marginTop: '2px' }} />
-                  <span style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.4' }}>
-                    {selectedStyleObj.description}
-                  </span>
-                </div>
+                  <FolderOpen size={15} />
+                  <span>Chọn File</span>
+                </button>
               </div>
+            </div>
+          )}
 
-              {/* CUSTOM TRANSLATION INSTRUCTIONS */}
-              {translationStyle === 'custom' && (
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#f59e0b' }}>
-                    CUSTOM TRANSLATION INSTRUCTIONS
-                  </label>
-                  <textarea
-                    value={customStyleText}
-                    onChange={e => setCustomStyleText(e.target.value)}
-                    placeholder="Nhập yêu cầu riêng (ví dụ: 'dịch tự nhiên như phim Việt Nam', 'ưu tiên văn phong hài hước', 'giữ xưng hô cổ trang')..."
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid rgba(245, 158, 11, 0.4)',
-                      borderRadius: '10px',
-                      padding: '12px 16px',
-                      color: '#fff',
-                      fontSize: '13px',
-                      outline: 'none',
-                      resize: 'vertical'
-                    }}
-                  />
+          {/* STORY MODE INFO BOX */}
+          {projectMode === 'STORY' && (
+            <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-start gap-3">
+              <Sparkles size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-purple-200 leading-relaxed">
+                <span className="font-bold text-purple-300">Động cơ AI Novel Engine tự động:</span> Ý tưởng, thế giới (World Bible), phân arc (Master Plan) và tự động sáng tác sẽ được AI xây dựng ngay trong workspace sau khi tạo dự án.
+              </div>
+            </div>
+          )}
+
+          {/* TOGGLE ADVANCED SETTINGS */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-2 text-xs text-slate-400 hover:text-cyan-400 font-semibold transition-colors cursor-pointer"
+            >
+              <SlidersHorizontal size={14} />
+              <span>{showAdvanced ? 'Ẩn cấu hình nâng cao' : 'Cấu hình nâng cao (Dịch thuật, AI Model)'}</span>
+              {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
+
+          {/* COLLAPSIBLE ADVANCED SETTINGS PANEL */}
+          {showAdvanced && (
+            <div className="p-4 rounded-xl bg-black/40 border border-white/5 space-y-3.5 text-xs animate-fadeIn">
+              {projectMode === 'DUBBING' ? (
+                <>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Languages size={14} className="text-cyan-400" />
+                      <span>Phong Cách Dịch Thuật (Translation Style)</span>
+                    </label>
+                    <select
+                      value={translationStyle}
+                      onChange={e => setTranslationStyle(e.target.value)}
+                      className="w-full bg-[#07080a] border border-white/10 rounded-lg p-2 text-xs text-cyan-300 font-semibold focus:outline-none"
+                    >
+                      {TRANSLATION_STYLES.map(style => (
+                        <option key={style.id} value={style.id} className="bg-[#0f172a] text-white">
+                          {style.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-400 mt-1 italic">
+                      {selectedStyleObj.description}
+                    </p>
+                  </div>
+
+                  {translationStyle === 'custom' && (
+                    <div>
+                      <label className="block font-bold text-amber-400 mb-1">
+                        Yêu Cầu Dịch Tùy Chỉnh
+                      </label>
+                      <textarea
+                        value={customStyleText}
+                        onChange={e => setCustomStyleText(e.target.value)}
+                        placeholder="Ví dụ: 'Dịch tiếng Việt tự nhiên như phim chiếu rạp, ưu tiên xưng hô thân mật'..."
+                        rows={2}
+                        className="w-full bg-[#07080a] border border-amber-500/30 rounded-lg p-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      🎨 Mô Hình AI Tạo Ảnh
+                    </label>
+                    <select className="w-full bg-[#07080a] border border-white/10 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+                      <option value="runwayml/stable-diffusion-v1-5">SD 1.5 - Realistic Vision v5.1 (GPU Local)</option>
+                      <option value="anything-v5">SD 1.5 - Anything V5 (Phong cách Anime / Truyện Tranh)</option>
+                      <option value="stabilityai/sdxl-turbo">SDXL Turbo (Siêu Tốc 4-Step)</option>
+                      <option value="procedural">Procedural Preview Renderer (Tạo ảnh phác thảo siêu tốc)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      🗣️ Giọng Đọc Piper TTS
+                    </label>
+                    <select className="w-full bg-[#07080a] border border-white/10 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+                      <option value="vi_VN-vais1000-medium">vi_VN-vais1000-medium (Giọng Đọc Tiếng Việt Truyền Cảm - Mặc định)</option>
+                      <option value="vi_VN-vivos-x_low">vi_VN-vivos-x_low (Giọng Đọc Tiếng Việt Siêu Tốc)</option>
+                      <option value="vi_VN-viss-low">vi_VN-viss-low (Giọng Đọc Tiếng Việt Nhẹ & Nhanh)</option>
+                    </select>
+                  </div>
                 </div>
               )}
-            </>
+            </div>
           )}
 
-          {/* STORY MODE FIELDS */}
-          {projectMode === 'STORY' && (
-            <>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#c084fc' }}>
-                  📖 Nội Dung / Kịch Bản Truyện
-                </label>
-                <textarea
-                  value={storyText}
-                  onChange={e => setStoryText(e.target.value)}
-                  rows={4}
-                  placeholder="Dán nội dung chương truyện hoặc kịch bản vào đây (Hoặc dùng Import Truyện từ Web / File sau khi tạo dự án)..."
-                  style={{
-                    width: '100%',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: '10px',
-                    padding: '12px 16px',
-                    color: '#fff',
-                    fontSize: '13px',
-                    outline: 'none',
-                    resize: 'none'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
-                    🎨 Mô Hình AI Tạo Ảnh
-                  </label>
-                  <select
-                    style={{
-                      width: '100%',
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid var(--border-glass)',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      color: '#fff',
-                      fontSize: '12px'
-                    }}
-                  >
-                    <option value="SD 1.5 - Realistic Vision">SD 1.5 - Realistic Vision v5.1</option>
-                    <option value="Anime Anything V5">Anime Anything V5</option>
-                    <option value="SDXL Turbo">SDXL Turbo (4-Step Fast)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#cbd5e1' }}>
-                    🔊 Giọng Đọc TTS
-                  </label>
-                  <select
-                    style={{
-                      width: '100%',
-                      background: 'rgba(15, 23, 42, 0.9)',
-                      border: '1px solid var(--border-glass)',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      color: '#fff',
-                      fontSize: '12px'
-                    }}
-                  >
-                    <option value="vi_VN-vais1000-medium">vi_VN-vais1000-medium (Giọng Nam Chuẩn)</option>
-                    <option value="vi_female_soft">vi_female_soft (Giọng Nữ Nhẹ Nhàng)</option>
-                    <option value="vi_male_hero">vi_male_hero (Giọng Truyện Hero)</option>
-                  </select>
-                </div>
-              </div>
-            </>
-          )}
-
+          {/* SUBMIT BUTTON */}
           <button 
             type="submit" 
-            className="btn-primary" 
             disabled={isCreating}
-            style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '15px', marginTop: '10px' }}
+            className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 shadow-xl transition-all cursor-pointer active:scale-[0.99] disabled:opacity-50 mt-2 ${
+              projectMode === 'DUBBING'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-cyan-500/25'
+                : 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white shadow-purple-500/25'
+            }`}
           >
             {isCreating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} 
-            {isCreating ? 'Đang Khởi Tạo...' : 'BẮT ĐẦU TẠO DỰ ÁN'}
+            <span>{isCreating ? 'Đang Khởi Tạo Dự Án...' : 'TẠO DỰ ÁN NGAY'}</span>
           </button>
         </form>
 

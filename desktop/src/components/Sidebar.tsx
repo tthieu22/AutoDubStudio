@@ -216,36 +216,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <select
-              value={currentProjName}
-              onChange={e => {
-                if (e.target.value === '__NEW__') {
-                  onCreateNewProject?.();
-                } else if (onSelectProject) {
-                  onSelectProject(e.target.value);
-                }
-              }}
-              className="flex-1 bg-[#111318] border border-white/10 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
-            >
-              {projectsList.map(p => {
-                const isStory = p.toLowerCase().includes('story') || p.toLowerCase().includes('truyen');
-                const isAudio = p.toLowerCase().includes('audio') || p.toLowerCase().includes('podcast') || p.toLowerCase().includes('radio');
-                const prefix = isStory ? '📖 [STORY]' : isAudio ? '🎙️ [AUDIO]' : '🎬 [VIDEO]';
-                return (
-                  <option key={p} value={p}>
-                    {prefix} {p}
-                  </option>
-                );
-              })}
-              <option value="__NEW__">+ Create New Project...</option>
-            </select>
+          <div className="flex items-center gap-1.5 min-w-0 w-full">
+            <div className="flex-1 min-w-0">
+              <select
+                value={currentProjName}
+                onChange={e => {
+                  if (e.target.value === '__NEW__') {
+                    onCreateNewProject?.();
+                  } else if (onSelectProject) {
+                    onSelectProject(e.target.value);
+                  }
+                }}
+                className="w-full bg-[#111318] border border-white/10 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 truncate cursor-pointer"
+              >
+                {projectsList.map(p => {
+                  const isStory = p.toLowerCase().includes('story') || p.toLowerCase().includes('truyen');
+                  const isAudio = p.toLowerCase().includes('audio') || p.toLowerCase().includes('podcast') || p.toLowerCase().includes('radio');
+                  const prefix = isStory ? '📖' : isAudio ? '🎙️' : '🎬';
+                  return (
+                    <option key={p} value={p} className="bg-[#111318] text-slate-200">
+                      {prefix} {p}
+                    </option>
+                  );
+                })}
+                <option value="__NEW__" className="bg-[#111318] text-cyan-400 font-bold">+ Tạo dự án mới...</option>
+              </select>
+            </div>
 
             {currentProjName && onDeleteProject && (
               <button
-                onClick={() => onDeleteProject(currentProjName)}
-                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all flex-shrink-0"
-                title="Delete Current Project"
+                onClick={() => {
+                  if (window.confirm(`Bạn có chắc chắn muốn xóa dự án "${currentProjName}" không?`)) {
+                    onDeleteProject(currentProjName);
+                  }
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 transition-all flex-shrink-0 cursor-pointer"
+                title={`Xóa dự án ${currentProjName}`}
               >
                 <Trash2 size={13} />
               </button>

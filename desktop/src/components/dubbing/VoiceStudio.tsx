@@ -132,10 +132,9 @@ export const VoiceStudio: React.FC<VoiceStudioProps> = ({
                   onChange={e => updateSpeaker(spk.speakerId, { voiceModel: e.target.value })}
                   className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:outline-none font-medium"
                 >
-                  <option value="vi_VN-vais1000-medium">vi_VN-vais1000-medium (Giọng Nam Chuẩn)</option>
-                  <option value="vi_female_soft">vi_female_soft (Giọng Nữ Dịu Dàng)</option>
-                  <option value="vi_male_hero">vi_male_hero (Giọng Truyện Hero)</option>
-                  <option value="vi_southern_male">vi_southern_male (Giọng Nam Miền Nam)</option>
+                  <option value="vi_VN-vais1000-medium">vi_VN-vais1000-medium (Giọng Đọc Tiếng Việt Truyền Cảm - Mặc Định)</option>
+                  <option value="vi_VN-vivos-x_low">vi_VN-vivos-x_low (Giọng Đọc Tiếng Việt Siêu Tốc)</option>
+                  <option value="vi_VN-viss-low">vi_VN-viss-low (Giọng Đọc Tiếng Việt Nhẹ & Nhanh)</option>
                 </select>
               </div>
 
