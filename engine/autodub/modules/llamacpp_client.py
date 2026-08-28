@@ -6,6 +6,7 @@ import urllib.request
 import urllib.error
 import socket
 import logging
+from pathlib import Path
 from typing import Tuple, Optional, List, Dict, Any
 from autodub.config import TRANSLATION_MODEL
 from autodub.modules.llamacpp_model_manager import LlamaCppModelManager
@@ -56,33 +57,64 @@ class LlamaCppClient:
             base_url = os.environ.get("LLAMACPP_BASE_URL", os.environ.get("LLAMA_SERVER_URL", os.environ.get("LOCAL_LLM_URL", "")))
         
         if not base_url:
-            # Auto-detect active local LLM server across common ports
-            candidate_urls = [
-                "http://localhost:11434", # Ollama GPU server
-                "http://localhost:8080",  # Native llama.cpp / llama-server.exe
-                "http://localhost:1234",  # LM Studio
-                "http://localhost:5001",  # KoboldCPP
-                "http://localhost:8000",  # vLLM / LocalAI / FastChat
-                "http://localhost:5000"   # Text-Generation-WebUI
-            ]
-            detected_url = None
-            import urllib.request
-            for test_url in candidate_urls:
-                try:
-                    check_endpoint = f"{test_url}/v1/models"
-                    req = urllib.request.Request(check_endpoint, method="GET")
-                    with urllib.request.urlopen(req, timeout=0.5) as resp:
-                        if resp.status in (200, 204):
-                            detected_url = test_url
-                            break
-                except Exception:
-                    pass
-
-            base_url = detected_url or "http://localhost:8080"
+            base_url = self._detect_active_url()
 
         self.base_url = base_url.rstrip("/")
         self.model_manager = LlamaCppModelManager(base_url=self.base_url)
         self.last_metrics: Dict[str, Any] = {}
+
+    def _detect_active_url(self) -> str:
+        """Detects active local LLM server URL (port 11434 Ollama or 8080 llama.cpp)."""
+        candidate_urls = [
+            "http://localhost:11434",
+            "http://localhost:8080",
+            "http://localhost:1234",
+            "http://localhost:8000"
+        ]
+        for test_url in candidate_urls:
+            try:
+                check_endpoint = f"{test_url}/v1/models"
+                req = urllib.request.Request(check_endpoint, method="GET")
+                with urllib.request.urlopen(req, timeout=0.6) as resp:
+                    if resp.status in (200, 204):
+                        return test_url
+            except Exception:
+                pass
+
+        auto_url = self._auto_start_ollama_if_needed()
+        return auto_url or "http://localhost:11434"
+
+    def _auto_start_ollama_if_needed(self) -> Optional[str]:
+        """Auto-spawns Ollama background daemon on port 11434 if no local LLM server is active."""
+        import shutil
+        import subprocess
+        import time
+        import urllib.request
+
+        ollama_bin = shutil.which("ollama") or r"C:\Users\hieut\AppData\Local\Programs\Ollama\ollama.exe"
+        if Path(ollama_bin).exists():
+            try:
+                print(f"[INFO] [AUTO-LAUNCH] 🚀 Đang tự động kích hoạt Ollama GPU Server ({ollama_bin})...", flush=True)
+                subprocess.Popen(
+                    [str(ollama_bin), "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                )
+                time.sleep(2.0)
+                # Verify port 11434 status
+                for _ in range(5):
+                    try:
+                        req = urllib.request.Request("http://localhost:11434/v1/models", method="GET")
+                        with urllib.request.urlopen(req, timeout=1) as resp:
+                            if resp.status in (200, 204):
+                                print("[SUCCESS] [AUTO-LAUNCH] 🟢 Ollama GPU Server (http://localhost:11434) đã sẵn sàng!", flush=True)
+                                return "http://localhost:11434"
+                    except Exception:
+                        time.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"Auto-start Ollama failed: {e}")
+        return None
 
     def ensure_model_loaded(self, timeout: int = 60) -> Tuple[bool, str]:
         """Delegate to LlamaCppModelManager to guarantee llama-server is healthy."""
@@ -131,45 +163,45 @@ class LlamaCppClient:
         top_p = options.get("top_p", 0.9)
         max_tokens = options.get("max_tokens", options.get("num_predict", 1024))
 
-        # Try /v1/chat/completions
-        url = f"{self.base_url}/v1/chat/completions"
+        # Try /v1/chat/completions with auto-retry & keep_alive
         payload = {
             "model": model_name,
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": max_tokens,
-            "stream": False
+            "stream": False,
+            "keep_alive": "24h"
         }
 
         data_bytes = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=data_bytes,
-            headers={"Content-Type": "application/json", "User-Agent": "AutoDubStudio"}
-        )
-
+        res_data = None
         t0 = time.time()
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                if response.status != 200:
-                    raise TranslationFailedError(f"llama.cpp returned HTTP status {response.status}")
-                res_data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.URLError as e:
-            if isinstance(e.reason, socket_timeout_types):
-                raise LlamaCppTimeoutError(f"llama.cpp chat request timed out after {timeout} seconds.")
-            # Fallback to native /completion endpoint if /v1/chat/completions fails
-            return self._fallback_native_completion(messages, options, timeout)
-        except socket_timeout_types:
-            raise LlamaCppTimeoutError(f"llama.cpp chat request timed out after {timeout} seconds.")
-        except Exception as e:
-            if "llama.cpp" in str(e) or "TranslationFailedError" in str(type(e)):
-                raise
-            # Try native completion fallback
+
+        for attempt in range(2):
+            url = f"{self.base_url}/v1/chat/completions"
+            req = urllib.request.Request(
+                url,
+                data=data_bytes,
+                headers={"Content-Type": "application/json", "User-Agent": "AutoDubStudio"}
+            )
             try:
-                return self._fallback_native_completion(messages, options, timeout)
-            except Exception:
-                raise LlamaCppUnavailableError(f"Failed to communicate with llama.cpp server at {self.base_url}: {e}")
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    if response.status != 200:
+                        raise TranslationFailedError(f"llama.cpp returned HTTP status {response.status}")
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    break
+            except Exception as e:
+                logger.warning(f"LLM chat attempt {attempt + 1} failed ({self.base_url}): {e}. Re-detecting active LLM server...")
+                reconnected_url = self._detect_active_url()
+                if reconnected_url:
+                    self.base_url = reconnected_url.rstrip("/")
+                else:
+                    if attempt == 1:
+                        return self._fallback_native_completion(messages, options, timeout)
+
+        if not res_data:
+            return self._fallback_native_completion(messages, options, timeout)
 
         # Extract text response from OpenAI format
         choices = res_data.get("choices", [])

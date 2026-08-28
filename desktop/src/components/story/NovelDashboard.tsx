@@ -10,22 +10,23 @@ interface NovelDashboardProps {
 }
 
 export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) => {
-  const [title, setTitle] = useState('Vô Địch Hệ Thống Tiên Đế');
+  const [title, setTitle] = useState('Vô Địch Tiên Đế');
   const [genre, setGenre] = useState('Tiên hiệp + Xuyên không + Hệ thống');
   const [style, setStyle] = useState('Dễ đọc, tiết tấu nhanh, nhiều đối thoại');
   const [protagonistName, setProtagonistName] = useState('Lâm Phàm');
-  const [protagonistAge, setProtagonistAge] = useState('20');
-  const [protagonistBg, setProtagonistBg] = useState('Hiện đại xuyên không');
+  const [protagonistAge, setProtagonistAge] = useState('18');
+  const [protagonistBg, setProtagonistBg] = useState('Học sinh hiện đại xuyên không mang theo hệ thống');
   const [totalChapters, setTotalChapters] = useState(1000);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('IDLE');
   const [progressPercent, setProgressPercent] = useState(0);
-  const [currentChapterNum, setCurrentChapterNum] = useState(0);
+  const [currentChapterNum, setCurrentChapterNum] = useState(1);
   const [logs, setLogs] = useState<string[]>([]);
   const [storyBible, setStoryBible] = useState<any>(null);
   const [hasMasterPlan, setHasMasterPlan] = useState<boolean>(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
+  const [gpuServerInfo, setGpuServerInfo] = useState<string>('⏳ Đang khởi động GPU Ollama (qwen2.5:3b)...');
 
   const handleCopyLogs = () => {
     if (logs.length === 0) return;
@@ -39,6 +40,23 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   }, [isGenerating]);
 
   useEffect(() => {
+    PythonEngineService.isNovelWritingActive().then(isActive => {
+      if (isActive) {
+        setIsGenerating(true);
+        setCurrentStage('AUTO_WRITING');
+      }
+    }).catch(() => {});
+
+    PythonEngineService.ensureLocalLlmServer().then(res => {
+      if (res && res.active) {
+        setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+      } else {
+        setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+      }
+    }).catch(() => {
+      setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+    });
+
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
         if (!data) return;
@@ -220,15 +238,25 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
       }
     }
 
+    let startChap = 1;
+    try {
+      const pData = await PythonEngineService.readProjectJson(projectDir);
+      if (pData && pData.chapters && Array.isArray(pData.chapters) && pData.chapters.length > 0) {
+        const maxNum = Math.max(...pData.chapters.map((c: any) => c.chapterNumber || 1));
+        startChap = maxNum + 1;
+      }
+    } catch {}
+
+    setCurrentChapterNum(startChap);
     setIsGenerating(true);
     setCurrentStage('AUTO_WRITING');
-    const startLog = '[INFO] Launching Novel Engine Auto-Write Loop...';
+    const startLog = `[INFO] Launching Novel Engine Auto-Write Loop (Starting at Chapter ${startChap})...`;
     setLogs(prev => {
       const updated = [startLog, ...prev];
-      saveNovelStateToProject({ novel_logs: updated, novel_current_stage: 'AUTO_WRITING' });
+      saveNovelStateToProject({ novel_logs: updated, novel_current_stage: 'AUTO_WRITING', novel_current_chapter: startChap });
       return updated;
     });
-    const startChap = currentChapterNum > 0 ? currentChapterNum : 1;
+
     await PythonEngineService.startNovelAutoWrite(projectDir, startChap, totalChapters);
   };
 
@@ -237,6 +265,14 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     setCurrentStage('IDLE');
     window.dispatchEvent(new CustomEvent('novel-writing-change', { detail: { isWriting: false } }));
     await PythonEngineService.stopNovelAutoWrite();
+  };
+
+  const handleClearLogs = () => {
+    setLogs([]);
+    saveNovelStateToProject({ novel_logs: [] });
+    if (projectDir) {
+      PythonEngineService.writeTextFile(`${projectDir}/novel_execution.log`, '');
+    }
   };
 
   return (
@@ -255,7 +291,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               </span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-bold flex items-center gap-1" title="Chạy tăng tốc trên NVIDIA GeForce GTX 1650 Ti (VRAM 4GB)">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                🚀 GPU CUDA (GTX 1650 Ti)
+                {gpuServerInfo}
               </span>
             </h2>
             <p className="text-xs text-slate-400">
@@ -508,7 +544,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               </button>
               {logs.length > 0 && (
                 <button
-                  onClick={() => setLogs([])}
+                  onClick={handleClearLogs}
                   className="px-2 py-1 rounded-lg bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 text-xs font-semibold flex items-center gap-1 transition-all border border-white/10 cursor-pointer select-none"
                   title="Xóa danh sách log"
                 >

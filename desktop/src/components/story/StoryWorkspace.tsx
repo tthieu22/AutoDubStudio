@@ -19,6 +19,12 @@ interface StoryWorkspaceProps {
   projectDir?: string | null;
 }
 
+const formatChapterTitle = (chapNum: number, rawTitle?: string) => {
+  if (!rawTitle) return `Chương ${chapNum}: Hành Trình Tu Tiên Khởi Đầu`;
+  const clean = rawTitle.replace(new RegExp(`^Chương\\s*\\d+[:\\s-]*`, 'i'), '').trim();
+  return `Chương ${chapNum}: ${clean || rawTitle}`;
+};
+
 export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -60,7 +66,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
       jsonObject.chapterNumber = chap.chapterNumber;
       jsonObject.scenesCount = chap.scenesCount;
     }
-    if (copyConfig.includeTitle) jsonObject.title = chap.title;
+    if (copyConfig.includeTitle) jsonObject.title = formatChapterTitle(chap.chapterNumber, chap.title);
     if (copyConfig.includeCharacters) jsonObject.characters = chap.characters;
     if (copyConfig.includeSummary) jsonObject.summary = chap.summary;
     if (copyConfig.includeContent) jsonObject.content = chap.content || '';
@@ -79,7 +85,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
   const handleCopyFormattedText = (chap: Chapter, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const parts: string[] = [];
-    if (copyConfig.includeTitle) parts.push(`Chương ${chap.chapterNumber}: ${chap.title}`);
+    if (copyConfig.includeTitle) parts.push(formatChapterTitle(chap.chapterNumber, chap.title));
     if (copyConfig.includeCharacters && chap.characters?.length) parts.push(`Nhân vật: ${chap.characters.join(', ')}`);
     if (copyConfig.includeSummary) parts.push(`Tóm tắt:\n${chap.summary}`);
     if (copyConfig.includeContent) parts.push(`Nội dung kịch bản:\n${chap.content || '(Chưa có nội dung)'}`);
@@ -95,6 +101,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
       try {
         const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
         json.chapters = sorted;
+        json.novel_current_chapter = sorted.length === 0 ? 1 : Math.max(...sorted.map(c => c.chapterNumber || 1)) + 1;
         await PythonEngineService.writeProjectJson(projectDir, json);
       } catch (e) {
         console.error('Failed to save chapters to project.json:', e);
@@ -120,12 +127,21 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
         try {
           const content = await PythonEngineService.readTextFile(chapFilePath);
           if (content && content.trim().length > 0) {
+            let titleFromContent = `Hành Trình Tu Tiên Khởi Đầu`;
+            const matchTitle = content.match(/^#\s*(?:Chương\s*\d+\s*[:\-—]?\s*)?([^\n]+)/m);
+            if (matchTitle && matchTitle[1]) {
+              titleFromContent = matchTitle[1].trim();
+            }
+
+            const cleanSummaryText = content.replace(/^#+.*$/gm, '').replace(/###.*$/gm, '').replace(/\s+/g, ' ').trim();
+            const summaryStr = (cleanSummaryText.slice(0, 140) || `Hành trình đột phá của Lâm Phàm`) + '...';
+
             const existingIdx = loadedChaps.findIndex(c => c.chapterNumber === i);
             const chapObj: Chapter = {
               id: `chap-${padNum}`,
               chapterNumber: i,
-              title: `Chương ${i}: Hành Trình Tu Tiên Khởi Đầu`,
-              summary: content.slice(0, 120).replace(/\n/g, ' ') + '...',
+              title: titleFromContent,
+              summary: summaryStr,
               characters: ['Lâm Phàm', 'Lý Thanh Vân'],
               scenesCount: 2,
               content: content
@@ -133,8 +149,9 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
             if (existingIdx >= 0) {
               loadedChaps[existingIdx] = {
                 ...loadedChaps[existingIdx],
+                title: loadedChaps[existingIdx].title ? loadedChaps[existingIdx].title.replace(/^Chương\s*\d+\s*[:\-—]?\s*/i, '') : titleFromContent,
                 content: content,
-                summary: loadedChaps[existingIdx].summary || chapObj.summary
+                summary: loadedChaps[existingIdx].summary || summaryStr
               };
             } else {
               loadedChaps.push(chapObj);
@@ -180,10 +197,25 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
     setIsEditing(false);
   };
 
-  const handleDeleteChapter = (id: string) => {
+  const handleDeleteChapter = async (id: string) => {
     const confirmed = window.confirm('Bạn có chắc chắn muốn xóa chương này?');
     if (!confirmed) return;
+    const targetChap = chapters.find(c => c.id === id);
     const updated = chapters.filter(c => c.id !== id).map((c, i) => ({ ...c, chapterNumber: i + 1 }));
+
+    if (projectDir) {
+      if (targetChap) {
+        const padNum = String(targetChap.chapterNumber).padStart(4, '0');
+        await PythonEngineService.writeTextFile(`${projectDir}/chapters/chapter_${padNum}.txt`, '');
+      }
+      if (updated.length === 0) {
+        for (let i = 1; i <= 50; i++) {
+          const padNum = String(i).padStart(4, '0');
+          await PythonEngineService.writeTextFile(`${projectDir}/chapters/chapter_${padNum}.txt`, '');
+        }
+      }
+    }
+
     saveChaptersToProject(updated);
     if (selectedChapId === id) {
       setSelectedChapId('');

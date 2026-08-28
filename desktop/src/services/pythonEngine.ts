@@ -466,6 +466,15 @@ export class PythonEngineService {
     return invoke<void>('stop_novel_auto_write');
   }
 
+  static async isNovelWritingActive(): Promise<boolean> {
+    if (!isTauri()) return false;
+    try {
+      return await invoke<boolean>('is_novel_writing_active');
+    } catch {
+      return false;
+    }
+  }
+
   static async getCanonFacts(projectDir: string, limit: number = 30): Promise<any[]> {
     if (!isTauri()) {
       return [
@@ -494,6 +503,27 @@ export class PythonEngineService {
       return await invoke<string>('read_text_file', { filePath });
     } catch {
       return "";
+    }
+  }
+
+  static async writeTextFile(filePath: string, content: string): Promise<void> {
+    if (!isTauri()) return;
+    try {
+      await invoke<void>('write_text_file', { filePath, content });
+    } catch (e) {
+      console.error('Failed to write text file:', e);
+    }
+  }
+
+  static async ensureLocalLlmServer(): Promise<{ active: boolean; url: string; server: string; model: string }> {
+    if (!isTauri()) {
+      return { active: true, url: "http://localhost:11434", server: "Ollama GPU (Simulation)", model: "qwen2.5:3b" };
+    }
+    try {
+      return await invoke<any>('ensure_local_llm_server');
+    } catch (e) {
+      console.error('ensureLocalLlmServer failed:', e);
+      return { active: false, url: "", server: "Offline", model: "" };
     }
   }
 

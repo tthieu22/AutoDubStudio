@@ -376,13 +376,19 @@ class NovelEngine:
 
         # 3. Creative Engine
         _notify("CREATIVE_ENGINE", f"Step 4/7: Creative Engine building plot twist options for Chapter {chapter_num}...")
-        context_summary = f"Giai đoạn: {arc.get('title')}. Vừa diễn ra: {[s.get('summary_text') for s in recent_summaries]}"
+        arc_title = arc.get("title") if isinstance(arc, dict) else getattr(arc, "title", f"Arc {chapter_num}")
+        clean_summaries = [s.get("summary_text") if isinstance(s, dict) else str(s) for s in recent_summaries]
+        context_summary = f"Giai đoạn: {arc_title}. Vừa diễn ra: {clean_summaries}"
+        
         creative_prompt = CreativeEnginePrompt.build_prompt(chapter_num, chap_plan, context_summary)
         creative_options = self._call_llm_json(creative_prompt, {
             "option_a": {"title": "Phát triển tiêu chuẩn", "description": "Tình tiết diễn tiến tự nhiên"},
             "recommended_option": "option_a"
         })
-        selected_creative = creative_options.get("option_a", {})
+        if isinstance(creative_options, dict):
+            selected_creative = creative_options.get("option_a", {})
+        else:
+            selected_creative = {"title": "Phát triển", "description": str(creative_options)}
 
         # 4. Scene Planner
         _notify("SCENE_PLANNER", f"Step 4/7: Phân chia Chapter {chapter_num} thành các phân cảnh (scenes)...")
@@ -406,8 +412,26 @@ class NovelEngine:
             }
         ])
 
+        if not isinstance(scenes_plan, list):
+            scenes_plan = [scenes_plan]
+
+        sanitized_scenes = []
+        for idx, sc in enumerate(scenes_plan, start=1):
+            if isinstance(sc, dict):
+                sanitized_scenes.append(sc)
+            else:
+                sanitized_scenes.append({
+                    "scene_index": idx,
+                    "goal": str(sc) if sc else f"Diễn biến phân cảnh {idx}",
+                    "emotion": "Căng thẳng",
+                    "conflict": "Xung đột mới",
+                    "ending": "Hồi hộp",
+                    "estimated_words": 700
+                })
+        scenes_plan = sanitized_scenes
+
         # 5. Scene Writing
-        char_ids = chap_plan.get("characters", ["char_001"])
+        char_ids = chap_plan.get("characters", ["char_001"]) if isinstance(chap_plan, dict) else ["char_001"]
         scene_drafts = []
 
         for sc_idx, sc in enumerate(scenes_plan, start=1):
@@ -438,7 +462,12 @@ class NovelEngine:
             "edited_text": full_draft,
             "changes_made": ["Biên tập văn phong tự động"]
         })
-        final_text = editor_res.get("edited_text", full_draft)
+        if isinstance(editor_res, dict):
+            final_text = editor_res.get("edited_text", full_draft)
+        elif isinstance(editor_res, str):
+            final_text = editor_res
+        else:
+            final_text = full_draft
 
         # 7. Canon Validator
         _notify("VALIDATOR", f"Step 7/7: Canon Validator checking continuity & knowledge boundary for Chapter {chapter_num}...")
@@ -450,11 +479,17 @@ class NovelEngine:
         _notify("MEMORY_EXTRACTOR", f"Extracting facts & character state for Chapter {chapter_num} into SQLite Canon DB...")
         extractor_prompt = MemoryExtractorPrompt.build_prompt(chapter_num, final_text)
         memory_extracted = self._call_llm_json(extractor_prompt, {
-            "summary": f"Chương {chapter_num}: {chap_plan.get('goal')}",
+            "summary": f"Chương {chapter_num}: {chap_plan.get('goal') if isinstance(chap_plan, dict) else 'Hoàn thành'}",
             "canon_facts": [{"category": "event", "fact_text": f"Hoàn thành chương {chapter_num}"}],
             "character_changes": [],
             "new_plot_threads": []
         })
+
+        if not isinstance(memory_extracted, dict):
+            memory_extracted = {
+                "summary": f"Chương {chapter_num}: Hoàn thành",
+                "canon_facts": [{"category": "event", "fact_text": f"Hoàn thành chương {chapter_num}"}]
+            }
 
         # Save to DB
         summary_text = memory_extracted.get("summary", f"Chương {chapter_num}")

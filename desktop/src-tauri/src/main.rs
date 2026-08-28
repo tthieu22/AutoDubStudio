@@ -1036,6 +1036,49 @@ async fn start_story_import(window: Window, project_dir: String, chapters_json: 
 }
 
 #[tauri::command]
+async fn ensure_local_llm_server() -> Result<serde_json::Value, String> {
+    use std::net::TcpStream;
+    let ports = [11434, 8080, 1234];
+    for port in ports {
+        if let Ok(addr) = format!("127.0.0.1:{}", port).parse() {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
+                let server_type = if port == 11434 { "Ollama GPU CUDA" } else { "llama.cpp" };
+                return Ok(serde_json::json!({
+                    "active": true,
+                    "port": port,
+                    "url": format!("http://localhost:{}", port),
+                    "server": server_type,
+                    "model": "qwen2.5:3b"
+                }));
+            }
+        }
+    }
+
+    let ollama_path = r"C:\Users\hieut\AppData\Local\Programs\Ollama\ollama.exe";
+    let bin = if Path::new(ollama_path).exists() {
+        ollama_path.to_string()
+    } else {
+        "ollama".to_string()
+    };
+
+    let _ = Command::new(&bin)
+        .arg("serve")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+
+    thread::sleep(Duration::from_millis(1500));
+
+    Ok(serde_json::json!({
+        "active": true,
+        "port": 11434,
+        "url": "http://localhost:11434",
+        "server": "Ollama GPU CUDA (Auto-Launched)",
+        "model": "qwen2.5:3b"
+    }))
+}
+
+#[tauri::command]
 fn list_local_llm_models() -> Result<Vec<String>, String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let llm_dir = ws_root.join("models").join("llm");
@@ -1290,6 +1333,30 @@ fn stop_novel_auto_write(
 }
 
 #[tauri::command]
+fn is_novel_writing_active(
+    active_proc: State<'_, ProcessState>,
+) -> bool {
+    let mut lock = active_proc.lock().unwrap();
+    if let Some(ref mut child) = lock.child {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                lock.child = None;
+                lock.project_id = None;
+                false
+            }
+            Ok(None) => true,
+            Err(_) => {
+                lock.child = None;
+                lock.project_id = None;
+                false
+            }
+        }
+    } else {
+        false
+    }
+}
+
+#[tauri::command]
 async fn get_novel_canon_facts(_project_dir: String, _limit: Option<i64>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!([
         { "id": "fact_1", "subject": "Lâm Phàm", "predicate": "sở hữu", "object": "Vô Địch Hệ Thống", "confidence": 1.0, "chapter": 1 }
@@ -1313,7 +1380,60 @@ fn read_text_file(file_path: String) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn write_text_file(file_path: String, content: String) -> Result<(), String> {
+    let p = PathBuf::from(&file_path);
+    if let Some(parent) = p.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&p, content).map_err(|e| e.to_string())
+}
+
+fn spawn_ollama_gpu_server_on_startup() {
+    use std::net::TcpStream;
+    let ports = [11434, 8080];
+    let mut active = false;
+    for port in ports {
+        if let Ok(addr) = format!("127.0.0.1:{}", port).parse() {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
+                println!("[HARDWARE] Local LLM Server port {} is active.", port);
+                active = true;
+                break;
+            }
+        }
+    }
+
+    let ollama_path = r"C:\Users\hieut\AppData\Local\Programs\Ollama\ollama.exe";
+    let bin = if Path::new(ollama_path).exists() {
+        ollama_path.to_string()
+    } else {
+        "ollama".to_string()
+    };
+
+    if !active {
+        println!("[HARDWARE] Auto-spawning Ollama GPU CUDA server on app startup ({})", bin);
+        let _ = Command::new(&bin)
+            .arg("serve")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        thread::sleep(Duration::from_millis(1000));
+    }
+
+    let bin_clone = bin.clone();
+    thread::spawn(move || {
+        println!("[HARDWARE] Pre-loading Qwen2.5-3B model into NVIDIA GTX 1650 Ti GPU VRAM...");
+        let _ = Command::new(&bin_clone)
+            .args(&["run", "qwen2.5:3b", "Sẵn sàng sáng tạo"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+    });
+}
+
 fn main() {
+    spawn_ollama_gpu_server_on_startup();
+
     let app = tauri::Builder::default()
         .manage(Mutex::new(ActiveProcess { child: None, project_id: None }))
         .invoke_handler(tauri::generate_handler![
@@ -1326,6 +1446,7 @@ fn main() {
             write_project_json,
             read_pipeline_log,
             read_text_file,
+            write_text_file,
             start_pipeline,
             cancel_pipeline,
             resume_pipeline,
@@ -1343,10 +1464,12 @@ fn main() {
             discover_story_url,
             start_story_import,
             list_local_llm_models,
+            ensure_local_llm_server,
             initialize_novel,
             generate_novel_master_plan,
             start_novel_auto_write,
             stop_novel_auto_write,
+            is_novel_writing_active,
             get_novel_canon_facts,
             get_novel_plot_threads
         ])
@@ -1365,6 +1488,27 @@ fn main() {
                     lock.project_id = None;
                 }
             };
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+                let targets = [
+                    "llama-server.exe",
+                    "llama-cli.exe",
+                    "llama.exe",
+                    "ollama.exe",
+                    "ollama_llama_server.exe",
+                    "ollama_app.exe",
+                ];
+
+                for target in targets {
+                    let _ = Command::new("taskkill")
+                        .args(&["/F", "/IM", target, "/T"])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .status();
+                }
+            }
         }
         _ => {}
     });

@@ -6,6 +6,12 @@ interface ChapterTimelineProps {
   projectDir?: string | null;
 }
 
+const formatChapterTitle = (chapNum: number, rawTitle?: string) => {
+  if (!rawTitle) return `Hành Trình Tu Tiên Khởi Đầu`;
+  const clean = rawTitle.replace(new RegExp(`^Chương\\s*\\d+[:\\s-]*`, 'i'), '').trim();
+  return clean || rawTitle;
+};
+
 export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) => {
   const [chapters, setChapters] = useState<any[]>([]);
   const [selectedChap, setSelectedChap] = useState<any>(null);
@@ -44,9 +50,10 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
     }
   }, [projectDir]);
 
-  const filteredChapters = chapters.filter(c =>
-    (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.summary || '').toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredChapters = chapters.filter(c => 
+    String(c.chapterNumber).includes(searchQuery) ||
+    (c.title && c.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (c.summary && c.summary.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -54,15 +61,15 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#111318] p-4 rounded-xl border border-white/5 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
             <Calendar size={18} />
           </div>
           <div>
             <h2 className="text-base font-bold text-white font-['Outfit'] tracking-tight">
-              Chapter Timeline — Tiến Trình Viết 1.000 Chương
+              Chapter Timeline & Canon Validation Log
             </h2>
             <p className="text-xs text-slate-400">
-              Theo dõi danh sách từng chương truyện đã sinh, kiểm tra trạng thái Canon Validator.
+              Lịch sử các chương đã viết kèm trạng thái xác thực Canon Continuity.
             </p>
           </div>
         </div>
@@ -71,10 +78,10 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
           <Search size={14} className="absolute left-3 text-slate-400" />
           <input
             type="text"
+            placeholder="Tìm theo số chương, tiêu đề..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Tìm chương..."
-            className="w-full bg-[#0b0d10] border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
           />
         </div>
       </div>
@@ -111,6 +118,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
               return sortAsc ? numA - numB : numB - numA;
             }).map(c => {
               const isSelected = selectedChap?.id === c.id || selectedChap?.chapterNumber === c.chapterNumber;
+              const formattedTitle = formatChapterTitle(c.chapterNumber, c.title);
               return (
                 <div
                   key={c.id || c.chapterNumber}
@@ -143,7 +151,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
                     </div>
                   </div>
 
-                  <h3 className="text-xs font-bold text-white font-['Outfit'] truncate mb-1">{c.title}</h3>
+                  <h3 className="text-xs font-bold text-white font-['Outfit'] truncate mb-1">Chương {c.chapterNumber}: {formattedTitle}</h3>
                   <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{c.summary}</p>
                 </div>
               );
@@ -158,7 +166,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
               <div className="border-b border-white/5 pb-3 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-mono text-cyan-400">Chương #{selectedChap.chapterNumber}</span>
-                  <h2 className="text-lg font-bold text-white font-['Outfit']">{selectedChap.title}</h2>
+                  <h2 className="text-lg font-bold text-white font-['Outfit']">Chương {selectedChap.chapterNumber}: {formatChapterTitle(selectedChap.chapterNumber, selectedChap.title)}</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
