@@ -41,14 +41,47 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
 
   useEffect(() => {
     if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
+      PythonEngineService.readProjectJson(projectDir).then(async data => {
         if (data && data.chapters && Array.isArray(data.chapters)) {
-          const sorted = [...data.chapters].sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
+          const loadedChaps = [...data.chapters];
+          // Load full content from disk for chapters missing full content
+          for (let i = 0; i < loadedChaps.length; i++) {
+            const c = loadedChaps[i];
+            if (!c.content || c.content.length < 50) {
+              const cNum = c.chapterNumber || (i + 1);
+              const padNum = String(cNum).padStart(4, '0');
+              try {
+                const diskTxt = await PythonEngineService.readTextFile(`${projectDir}/chapters/chapter_${padNum}.txt`);
+                if (diskTxt && diskTxt.trim().length > 0) {
+                  loadedChaps[i] = { ...c, content: diskTxt };
+                }
+              } catch {}
+            }
+          }
+          const sorted = loadedChaps.sort((a, b) => (a.chapterNumber || 0) - (b.chapterNumber || 0));
           setChapters(sorted);
+          if (sorted.length > 0 && !selectedChap) {
+            setSelectedChap(sorted[0]);
+          }
         }
       }).catch(console.error);
     }
   }, [projectDir]);
+
+  const handleSelectChapter = async (c: any) => {
+    setSelectedChap(c);
+    if (projectDir && (!c.content || c.content.length < 50)) {
+      const cNum = c.chapterNumber || 1;
+      const padNum = String(cNum).padStart(4, '0');
+      try {
+        const diskTxt = await PythonEngineService.readTextFile(`${projectDir}/chapters/chapter_${padNum}.txt`);
+        if (diskTxt && diskTxt.trim().length > 0) {
+          setSelectedChap((prev: any) => prev && prev.chapterNumber === cNum ? { ...prev, content: diskTxt } : prev);
+          setChapters(prev => prev.map(item => item.chapterNumber === cNum ? { ...item, content: diskTxt } : item));
+        }
+      } catch {}
+    }
+  };
 
   const filteredChapters = chapters.filter(c => 
     String(c.chapterNumber).includes(searchQuery) ||
@@ -69,7 +102,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
               Chapter Timeline & Canon Validation Log
             </h2>
             <p className="text-xs text-slate-400">
-              Lịch sử các chương đã viết kèm trạng thái xác thực Canon Continuity.
+              Lịch sử các chương đã viết kèm bản thảo chi tiết và trạng thái xác thực Canon Continuity.
             </p>
           </div>
         </div>
@@ -122,7 +155,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
               return (
                 <div
                   key={c.id || c.chapterNumber}
-                  onClick={() => setSelectedChap(c)}
+                  onClick={() => handleSelectChapter(c)}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-cyan-500/10 border-cyan-500/50 shadow-md shadow-cyan-500/10'
@@ -165,7 +198,7 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
             <div className="flex-1 flex flex-col space-y-4 overflow-y-auto custom-scrollbar">
               <div className="border-b border-white/5 pb-3 flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-mono text-cyan-400">Chương #{selectedChap.chapterNumber}</span>
+                  <span className="text-xs font-mono text-cyan-400">Chương #{selectedChap.chapterNumber} • {selectedChap.wordCount ? `${selectedChap.wordCount} từ` : ''}</span>
                   <h2 className="text-lg font-bold text-white font-['Outfit']">Chương {selectedChap.chapterNumber}: {formatChapterTitle(selectedChap.chapterNumber, selectedChap.title)}</h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -210,7 +243,16 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
                 </div>
               </div>
 
-              <div className="bg-black/40 rounded-xl p-4 border border-white/5 flex-1 font-mono text-xs leading-relaxed text-slate-200 whitespace-pre-wrap">
+              {/* SUMMARY BOX */}
+              {selectedChap.summary && (
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 text-xs text-indigo-200 leading-relaxed">
+                  <span className="font-bold text-indigo-300 block mb-1">📌 Tóm Tắt Diễn Biến Chính (Canon Extracted):</span>
+                  {selectedChap.summary}
+                </div>
+              )}
+
+              {/* FULL PROSE CONTENT DISPLAY */}
+              <div className="bg-black/40 rounded-xl p-4 border border-white/5 flex-1 font-sans text-sm leading-relaxed text-slate-200 whitespace-pre-wrap selection:bg-cyan-500/30">
                 {selectedChap.content || selectedChap.summary || 'Đang tải nội dung chương...'}
               </div>
             </div>
@@ -225,3 +267,4 @@ export const ChapterTimeline: React.FC<ChapterTimelineProps> = ({ projectDir }) 
     </div>
   );
 };
+

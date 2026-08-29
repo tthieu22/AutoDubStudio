@@ -1,5 +1,14 @@
 from typing import List, Dict, Any, Optional, Tuple
+from enum import Enum
 from pydantic import BaseModel, Field
+
+
+class InformationState(str, Enum):
+    UNKNOWN = "UNKNOWN"
+    RUMOR = "RUMOR"
+    CLAIM = "CLAIM"
+    EVIDENCE = "EVIDENCE"
+    CONFIRMED = "CONFIRMED"
 
 
 class StoryIdea(BaseModel):
@@ -58,11 +67,17 @@ class CanonFact(BaseModel):
     id: Optional[int] = None
     story_id: str
     chapter_num: int
-    category: str  # "event", "realm_change", "relationship", "reveal", "world_rule"
+    category: str  # "event", "realm_change", "relationship", "reveal", "world_rule", "lore"
     fact_text: str
     source: str = "chapter_content"
     confidence: float = 1.0
     validated: bool = True
+    information_state: InformationState = InformationState.CONFIRMED
+    source_speaker: Optional[str] = None
+    source_excerpt: str = ""
+    confirmed: bool = True
+    source_chapter: Optional[int] = None
+    source_scene: Optional[int] = None
 
 
 class PlotThread(BaseModel):
@@ -109,6 +124,7 @@ class ChapterPlan(BaseModel):
     ending: str
     status: str = "PLANNED"
     scenes: List[ScenePlan] = Field(default_factory=list)
+    information_transitions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class StoryBible(BaseModel):
@@ -134,3 +150,82 @@ class ValidationViolation(BaseModel):
 class ValidationResult(BaseModel):
     passed: bool
     violations: List[ValidationViolation] = Field(default_factory=list)
+
+
+class NarrativeContract(BaseModel):
+    chapter_num: int
+    chapter_goal: List[str] = Field(default_factory=list)
+    required_events: List[str] = Field(default_factory=list)
+    required_information: List[str] = Field(default_factory=list)
+    allowed_characters: List[str] = Field(default_factory=list)
+    allowed_locations: List[str] = Field(default_factory=list)
+    open_threads_to_advance: List[str] = Field(default_factory=list)
+    forbidden_topic_drift: List[str] = Field(default_factory=lambda: [
+        "commercial business subplot",
+        "business partner dispute",
+        "resource trading storyline"
+    ])
+    forbidden_repetitions: List[str] = Field(default_factory=list)
+    information_transitions: List[Dict[str, Any]] = Field(default_factory=list)
+    character_knowledge_boundaries: Dict[str, List[str]] = Field(default_factory=dict)
+    must_not_change: List[str] = Field(default_factory=list)
+    required_state_delta: Dict[str, int] = Field(default_factory=lambda: {
+        "new_events": 1, "new_information": 1, "evidence": 1, "question_advancement": 1
+    })
+    previous_discovery_action: Dict[str, Any] = Field(default_factory=dict)
+    forbidden_action_loops: List[str] = Field(default_factory=list)
+    forbidden_information_objectives: List[str] = Field(default_factory=list)
+
+
+class ProgressLedger(BaseModel):
+    chapter_num: int
+    completed_goals: List[str] = Field(default_factory=list)
+    completed_events: List[str] = Field(default_factory=list)
+    revealed_information: List[str] = Field(default_factory=list)
+    character_state_changes: List[Dict[str, Any]] = Field(default_factory=list)
+    relationship_changes: List[Dict[str, Any]] = Field(default_factory=list)
+    scene_consequences: List[str] = Field(default_factory=list)
+    active_claims: List[str] = Field(default_factory=list)
+    evidence_items: List[str] = Field(default_factory=list)
+    unresolved_questions: List[str] = Field(default_factory=list)
+
+
+class GlobalProgressLedger(BaseModel):
+    completed_events: List[str] = Field(default_factory=list)
+    revealed_information: List[str] = Field(default_factory=list)
+    unresolved_questions: List[str] = Field(default_factory=list)
+    confirmed_facts: List[str] = Field(default_factory=list)
+    active_claims: List[str] = Field(default_factory=list)
+    evidence_items: List[str] = Field(default_factory=list)
+    character_state_changes: List[str] = Field(default_factory=list)
+    relationship_changes: List[str] = Field(default_factory=list)
+    scene_consequences: List[str] = Field(default_factory=list)
+    pending_discoveries: List[Dict[str, Any]] = Field(default_factory=list)
+    last_chapter_end_state: Dict[str, Any] = Field(default_factory=dict)
+    last_completed_chapter: int = 0
+
+
+class NPCCandidate(BaseModel):
+    name: str
+    role_description: str = ""
+    first_seen_chapter: int
+    entity_status: str = "CANDIDATE"  # "CANDIDATE", "RESOLVED"
+    canonical_character_id: Optional[str] = None
+
+
+class CanonCandidate(BaseModel):
+    id: Optional[int] = None
+    story_id: str
+    chapter_num: int
+    category: str  # "event", "realm_change", "relationship", "reveal", "world_rule", "lore"
+    fact_text: str
+    source_excerpt: str = ""
+    source_speaker: Optional[str] = None
+    source_chapter: Optional[int] = None
+    source_scene: Optional[int] = None
+    information_state: InformationState = InformationState.CLAIM
+    confidence: float = 1.0
+    canon_status: str = "PENDING"  # "PENDING", "APPROVED", "REJECTED"
+    confirmed: bool = False
+
+

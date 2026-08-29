@@ -44,12 +44,35 @@ export const SceneBoard: React.FC<SceneBoardProps> = ({ projectDir, onSelectScen
   React.useEffect(() => {
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data && data.scenes && Array.isArray(data.scenes)) {
+        let loadedScenes: SceneItem[] = [];
+        if (data && data.chapters && Array.isArray(data.chapters)) {
+          data.chapters.forEach((chap: any) => {
+            if (chap.scenes && Array.isArray(chap.scenes)) {
+              chap.scenes.forEach((sc: any, idx: number) => {
+                loadedScenes.push({
+                  id: `sc-ch${chap.chapterNumber || 1}-${sc.sceneNumber || idx + 1}`,
+                  sceneNumber: sc.sceneNumber || (idx + 1),
+                  location: `Chương ${chap.chapterNumber || 1}`,
+                  timeOfDay: sc.emotion || 'Audio-First',
+                  emotion: sc.emotion || 'Căng thẳng',
+                  duration: Math.round((sc.text || '').length / 15) || 30,
+                  narration: `[Scene Goal]: ${sc.goal || ''}${sc.issues && sc.issues.length ? ' | Lỗi: ' + sc.issues.join('; ') : ''}`,
+                  dialogue: sc.text || '',
+                  status: sc.passed !== false ? 'APPROVED' : 'REVIEW_REQUIRED'
+                });
+              });
+            }
+          });
+        }
+        if (loadedScenes.length > 0) {
+          setScenes(loadedScenes);
+        } else if (data && data.scenes && Array.isArray(data.scenes)) {
           setScenes(data.scenes);
         }
       }).catch(console.error);
     }
   }, [projectDir]);
+
 
   const [selectedSceneId, setSelectedSceneId] = useState<string>('');
 

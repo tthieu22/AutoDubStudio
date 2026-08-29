@@ -1,22 +1,25 @@
 import sqlite3
 import json
 import logging
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from autodub.novel.novel_models import (
-    StoryIdea, Character, CharacterState, CanonFact, PlotThread, ArcPlan, ChapterPlan
+    StoryIdea, Character, CharacterState, CanonFact, PlotThread, ArcPlan, ChapterPlan,
+    InformationState, GlobalProgressLedger, CanonCandidate
 )
 
 logger = logging.getLogger(__name__)
 
 
 class NovelDatabase:
-    """SQLite Canon Database Manager for AI Novel Engine."""
+    """SQLite Canon Database Manager for AI Novel Engine V2.3."""
 
     def __init__(self, db_path: Union[str, Path]):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_sqlite()
+        self._migrate_database()
 
     def get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path), timeout=30.0)
@@ -182,7 +185,7 @@ class NovelDatabase:
             )
             """)
 
-            # Canon Facts
+            # Canon Facts V2.3
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS canon_facts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,7 +195,51 @@ class NovelDatabase:
                 fact_text TEXT,
                 source TEXT,
                 confidence REAL,
-                validated INTEGER DEFAULT 1
+                validated INTEGER DEFAULT 1,
+                information_state TEXT DEFAULT 'CONFIRMED',
+                source_speaker TEXT,
+                source_excerpt TEXT DEFAULT '',
+                confirmed INTEGER DEFAULT 1,
+                source_chapter INTEGER,
+                source_scene INTEGER
+            )
+            """)
+
+            # Canon Candidates V2.3
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS canon_candidates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                story_id TEXT,
+                chapter_num INTEGER,
+                category TEXT,
+                fact_text TEXT,
+                source_excerpt TEXT DEFAULT '',
+                source_speaker TEXT,
+                source_chapter INTEGER,
+                source_scene INTEGER,
+                information_state TEXT DEFAULT 'CLAIM',
+                confidence REAL DEFAULT 1.0,
+                canon_status TEXT DEFAULT 'PENDING',
+                confirmed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+
+            # Global Progress Ledger Table V2.3
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS global_progress_ledger (
+                story_id TEXT PRIMARY KEY,
+                completed_events_json TEXT,
+                revealed_info_json TEXT,
+                unresolved_questions_json TEXT,
+                confirmed_facts_json TEXT,
+                active_claims_json TEXT,
+                evidence_items_json TEXT,
+                character_changes_json TEXT,
+                relationship_changes_json TEXT,
+                scene_consequences_json TEXT,
+                last_completed_chapter INTEGER DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """)
 
@@ -244,6 +291,57 @@ class NovelDatabase:
         finally:
             conn.close()
 
+    def _migrate_database(self):
+        """Backward compatible schema migration for V2.3."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # 1. Migrate canon_facts
+            cursor.execute("PRAGMA table_info(canon_facts)")
+            cols = [row["name"] for row in cursor.fetchall()]
+
+            if "information_state" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN information_state TEXT DEFAULT 'CONFIRMED'")
+            if "source_speaker" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN source_speaker TEXT")
+            if "confirmed" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN confirmed INTEGER DEFAULT 1")
+            if "source_chapter" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN source_chapter INTEGER")
+            if "source_scene" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN source_scene INTEGER")
+            if "source_excerpt" not in cols:
+                cursor.execute("ALTER TABLE canon_facts ADD COLUMN source_excerpt TEXT DEFAULT ''")
+
+            # 2. Migrate canon_candidates if missing columns
+            cursor.execute("PRAGMA table_info(canon_candidates)")
+            c_cols = [row["name"] for row in cursor.fetchall()]
+            if c_cols:
+                if "information_state" not in c_cols:
+                    cursor.execute("ALTER TABLE canon_candidates ADD COLUMN information_state TEXT DEFAULT 'CLAIM'")
+                if "source_speaker" not in c_cols:
+                    cursor.execute("ALTER TABLE canon_candidates ADD COLUMN source_speaker TEXT")
+                if "source_chapter" not in c_cols:
+                    cursor.execute("ALTER TABLE canon_candidates ADD COLUMN source_chapter INTEGER")
+                if "source_scene" not in c_cols:
+                    cursor.execute("ALTER TABLE canon_candidates ADD COLUMN source_scene INTEGER")
+                if "confirmed" not in c_cols:
+                    cursor.execute("ALTER TABLE canon_candidates ADD COLUMN confirmed INTEGER DEFAULT 0")
+
+            # 3. Migrate global_progress_ledger if missing columns
+            cursor.execute("PRAGMA table_info(global_progress_ledger)")
+            g_cols = [row["name"] for row in cursor.fetchall()]
+            if g_cols:
+                if "pending_discoveries_json" not in g_cols:
+                    cursor.execute("ALTER TABLE global_progress_ledger ADD COLUMN pending_discoveries_json TEXT DEFAULT '[]'")
+                if "last_chapter_end_state_json" not in g_cols:
+                    cursor.execute("ALTER TABLE global_progress_ledger ADD COLUMN last_chapter_end_state_json TEXT DEFAULT '{}'")
+
+            conn.commit()
+        finally:
+            conn.close()
+
     # ── Story Operations ──────────────────────────────────────────
     def create_story(self, story_id: str, idea: StoryIdea):
         conn = self.get_connection()
@@ -256,19 +354,202 @@ class NovelDatabase:
         finally:
             conn.close()
 
-    # ── Canon Facts ───────────────────────────────────────────────
-    def insert_canon_fact(self, fact: CanonFact) -> int:
+    # ── Global Progress Ledger V2.3 ─────────────────────────────────
+    def get_global_progress_ledger(self, story_id: str) -> GlobalProgressLedger:
         conn = self.get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO canon_facts (story_id, chapter_num, category, fact_text, source, confidence, validated) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (fact.story_id, fact.chapter_num, fact.category, fact.fact_text, fact.source, fact.confidence, 1 if fact.validated else 0)
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+            row = conn.execute("SELECT * FROM global_progress_ledger WHERE story_id = ?", (story_id,)).fetchone()
+            if row:
+                d = dict(row)
+                return GlobalProgressLedger(
+                    completed_events=json.loads(d.get("completed_events_json") or "[]"),
+                    revealed_information=json.loads(d.get("revealed_info_json") or "[]"),
+                    unresolved_questions=json.loads(d.get("unresolved_questions_json") or "[]"),
+                    confirmed_facts=json.loads(d.get("confirmed_facts_json") or "[]"),
+                    active_claims=json.loads(d.get("active_claims_json") or "[]"),
+                    evidence_items=json.loads(d.get("evidence_items_json") or "[]"),
+                    character_state_changes=json.loads(d.get("character_changes_json") or "[]"),
+                    relationship_changes=json.loads(d.get("relationship_changes_json") or "[]"),
+                    scene_consequences=json.loads(d.get("scene_consequences_json") or "[]"),
+                    pending_discoveries=json.loads(d.get("pending_discoveries_json") or "[]"),
+                    last_chapter_end_state=json.loads(d.get("last_chapter_end_state_json") or "{}"),
+                    last_completed_chapter=d.get("last_completed_chapter", 0)
+                )
+            return GlobalProgressLedger()
         finally:
             conn.close()
+
+    def save_progress_ledger(self, story_id: str, ledger: GlobalProgressLedger, conn: Optional[sqlite3.Connection] = None):
+        own_conn = conn is None
+        db = conn or self.get_connection()
+        try:
+            db.execute("""
+            INSERT OR REPLACE INTO global_progress_ledger (
+                story_id, completed_events_json, revealed_info_json, unresolved_questions_json,
+                confirmed_facts_json, active_claims_json, evidence_items_json,
+                character_changes_json, relationship_changes_json, scene_consequences_json,
+                pending_discoveries_json, last_chapter_end_state_json,
+                last_completed_chapter
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                story_id,
+                json.dumps(ledger.completed_events, ensure_ascii=False),
+                json.dumps(ledger.revealed_information, ensure_ascii=False),
+                json.dumps(ledger.unresolved_questions, ensure_ascii=False),
+                json.dumps(ledger.confirmed_facts, ensure_ascii=False),
+                json.dumps(ledger.active_claims, ensure_ascii=False),
+                json.dumps(ledger.evidence_items, ensure_ascii=False),
+                json.dumps(ledger.character_state_changes, ensure_ascii=False),
+                json.dumps(ledger.relationship_changes, ensure_ascii=False),
+                json.dumps(ledger.scene_consequences, ensure_ascii=False),
+                json.dumps(ledger.pending_discoveries, ensure_ascii=False),
+                json.dumps(ledger.last_chapter_end_state, ensure_ascii=False),
+                ledger.last_completed_chapter
+            ))
+            if own_conn:
+                db.commit()
+        finally:
+            if own_conn:
+                db.close()
+
+    def resolve_and_save_npc_candidates(self, story_id: str, chapter_num: int, raw_npcs: List[Dict[str, Any]], conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
+        own_conn = conn is None
+        db = conn or self.get_connection()
+        resolved = []
+        try:
+            rows = db.execute("SELECT * FROM characters WHERE story_id = ?", (story_id,)).fetchall()
+            existing_chars = [dict(r) for r in rows]
+
+            for raw in raw_npcs:
+                name = raw.get("name", "").strip() if isinstance(raw, dict) else str(raw).strip()
+                if not name or len(name) < 2 or name.lower() in ("lâm phàm", "char_001"):
+                    continue
+
+                role = raw.get("role_description", "") if isinstance(raw, dict) else ""
+                matched_char_id = None
+
+                for ec in existing_chars:
+                    e_name = ec.get("name", "").strip()
+                    if name.lower() == e_name.lower() or (len(e_name) >= 3 and (e_name.lower() in name.lower() or name.lower() in e_name.lower())):
+                        matched_char_id = ec["id"]
+                        break
+
+                if matched_char_id:
+                    resolved.append({
+                        "id": matched_char_id,
+                        "name": name,
+                        "status": "MERGED_EXISTING"
+                    })
+                else:
+                    new_id = f"char_npc_{int(time.time()*1000)}_{len(existing_chars)+1}"
+                    db.execute(
+                        "INSERT INTO characters (id, story_id, name, personality_json, goal, realm, location, known_info_json, secrets_json, locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            new_id, story_id, name,
+                            json.dumps({"role": role}, ensure_ascii=False),
+                            role, "Chưa rõ", "Thanh Vân Tông",
+                            json.dumps([], ensure_ascii=False),
+                            json.dumps([], ensure_ascii=False),
+                            0
+                        )
+                    )
+                    db.execute(
+                        "INSERT INTO character_states (character_id, chapter_num, realm, location, relationships_json, known_info_json, secrets_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            new_id, chapter_num, "Chưa rõ", "Thanh Vân Tông",
+                            json.dumps({}, ensure_ascii=False),
+                            json.dumps([f"Xuất hiện tại chapter {chapter_num}"], ensure_ascii=False),
+                            json.dumps([], ensure_ascii=False)
+                        )
+                    )
+                    existing_chars.append({"id": new_id, "name": name})
+                    resolved.append({
+                        "id": new_id,
+                        "name": name,
+                        "status": "CREATED_NEW"
+                    })
+            if own_conn:
+                db.commit()
+            return resolved
+        finally:
+            if own_conn:
+                db.close()
+
+    def get_confirmed_facts(self, story_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM canon_facts WHERE story_id = ? AND (information_state = 'CONFIRMED' OR confirmed = 1) ORDER BY chapter_num DESC LIMIT ?",
+                (story_id, limit)
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_active_claims(self, story_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM canon_facts WHERE story_id = ? AND information_state = 'CLAIM' ORDER BY chapter_num DESC LIMIT ?",
+                (story_id, limit)
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_unresolved_questions(self, story_id: str) -> List[str]:
+        ledger = self.get_global_progress_ledger(story_id)
+        return ledger.unresolved_questions
+
+    def get_recent_completed_events(self, story_id: str, limit: int = 20) -> List[str]:
+        ledger = self.get_global_progress_ledger(story_id)
+        return ledger.completed_events[-limit:]
+
+    def save_canon_candidate(self, cand: CanonCandidate, conn: Optional[sqlite3.Connection] = None) -> int:
+        own_conn = conn is None
+        db = conn or self.get_connection()
+        try:
+            cursor = db.cursor()
+            cursor.execute("""
+            INSERT INTO canon_candidates (
+                story_id, chapter_num, category, fact_text, source_excerpt, source_speaker,
+                source_chapter, source_scene, information_state, confidence, canon_status, confirmed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                cand.story_id, cand.chapter_num, cand.category, cand.fact_text,
+                cand.source_excerpt, cand.source_speaker, cand.source_chapter, cand.source_scene,
+                cand.information_state.value if isinstance(cand.information_state, InformationState) else str(cand.information_state),
+                cand.confidence, cand.canon_status, 1 if cand.confirmed else 0
+            ))
+            if own_conn:
+                db.commit()
+            return cursor.lastrowid or 0
+        finally:
+            if own_conn:
+                db.close()
+
+    # ── Canon Facts ───────────────────────────────────────────────
+    def insert_canon_fact(self, fact: CanonFact, conn: Optional[sqlite3.Connection] = None) -> int:
+        own_conn = conn is None
+        db = conn or self.get_connection()
+        try:
+            cursor = db.cursor()
+            inf_state = fact.information_state.value if isinstance(fact.information_state, InformationState) else str(fact.information_state)
+            is_confirmed = 1 if (inf_state == "CONFIRMED" or fact.confirmed) else 0
+            cursor.execute(
+                "INSERT INTO canon_facts (story_id, chapter_num, category, fact_text, source, confidence, validated, information_state, source_speaker, source_excerpt, confirmed, source_chapter, source_scene) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    fact.story_id, fact.chapter_num, fact.category, fact.fact_text, fact.source,
+                    fact.confidence, 1 if fact.validated else 0, inf_state, fact.source_speaker,
+                    fact.source_excerpt, is_confirmed, fact.source_chapter, fact.source_scene
+                )
+            )
+            if own_conn:
+                db.commit()
+            return cursor.lastrowid or 0
+        finally:
+            if own_conn:
+                db.close()
 
     def get_canon_facts(self, story_id: str, limit: int = 50, chapter_num: Optional[int] = None) -> List[Dict[str, Any]]:
         conn = self.get_connection()
@@ -326,6 +607,14 @@ class NovelDatabase:
                 )
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def get_characters(self, story_id: str) -> List[Dict[str, Any]]:
+        conn = self.get_connection()
+        try:
+            rows = conn.execute("SELECT * FROM characters WHERE story_id = ?", (story_id,)).fetchall()
+            return [dict(r) for r in rows]
         finally:
             conn.close()
 
@@ -469,5 +758,89 @@ class NovelDatabase:
                     if r["id"] not in existing_ids and len(results) < limit:
                         results.append(dict(r))
             return results
+        finally:
+            conn.close()
+
+    # ── Atomic Step 7 Memory Transaction V2.3 ─────────────────────
+    def commit_step_7_memory_transaction(
+        self,
+        story_id: str,
+        chapter_num: int,
+        validated_candidates: List[CanonCandidate],
+        global_ledger: GlobalProgressLedger,
+        summary_text: str,
+        key_events: List[str],
+        char_ids: List[str],
+        new_threads: List[Dict[str, Any]],
+        char_changes: List[Dict[str, Any]]
+    ):
+        conn = self.get_connection()
+        try:
+            conn.execute("BEGIN TRANSACTION")
+
+            # 1. Save chapter summary
+            conn.execute(
+                "INSERT OR REPLACE INTO chapter_summaries (story_id, chapter_num, summary_text, key_events_json, characters_present_json) VALUES (?, ?, ?, ?, ?)",
+                (
+                    story_id, chapter_num, summary_text,
+                    json.dumps(key_events, ensure_ascii=False),
+                    json.dumps(char_ids, ensure_ascii=False)
+                )
+            )
+
+            # 2. Save candidates and approved canon facts
+            for cand in validated_candidates:
+                self.save_canon_candidate(cand, conn=conn)
+                if cand.canon_status == "APPROVED":
+                    inf_state = cand.information_state.value if isinstance(cand.information_state, InformationState) else str(cand.information_state)
+                    fact_confirmed = (inf_state == "CONFIRMED" and cand.confirmed)
+                    self.insert_canon_fact(CanonFact(
+                        story_id=story_id,
+                        chapter_num=chapter_num,
+                        category=cand.category,
+                        fact_text=cand.fact_text,
+                        confidence=cand.confidence,
+                        information_state=cand.information_state,
+                        source_speaker=cand.source_speaker,
+                        source_excerpt=cand.source_excerpt,
+                        confirmed=fact_confirmed,
+                        source_chapter=chapter_num,
+                        source_scene=cand.source_scene
+                    ), conn=conn)
+
+            # 3. Save plot threads
+            for thread in new_threads:
+                conn.execute(
+                    "INSERT OR REPLACE INTO plot_threads (id, story_id, title, status, since_chapter, resolved_chapter, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        thread.get("id") or f"thread_{int(time.time()*1000)}",
+                        story_id, thread.get("title", "Tuyến truyện mới"),
+                        "OPEN", chapter_num, None, thread.get("description", "")
+                    )
+                )
+
+            # 4. Save character state changes
+            for c_change in char_changes:
+                cid = c_change.get("character_id", "char_001")
+                conn.execute(
+                    "INSERT INTO character_states (character_id, chapter_num, realm, location, relationships_json, known_info_json, secrets_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        cid, chapter_num, c_change.get("realm", "Luyện Khí"), c_change.get("location", "Thanh Vân Tông"),
+                        json.dumps({}, ensure_ascii=False),
+                        json.dumps(c_change.get("new_known_info", []), ensure_ascii=False),
+                        json.dumps([], ensure_ascii=False)
+                    )
+                )
+
+            # 5. Save GlobalProgressLedger
+            global_ledger.last_completed_chapter = max(global_ledger.last_completed_chapter, chapter_num)
+            self.save_progress_ledger(story_id, global_ledger, conn=conn)
+
+            conn.commit()
+            logger.info(f"Step 7: Atomic Memory Transaction committed successfully for Chapter {chapter_num}.")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Step 7: Memory transaction failed for Chapter {chapter_num}, ROLLBACK executed: {e}")
+            raise RuntimeError(f"MEMORY_TRANSACTION_FAILED: {e}")
         finally:
             conn.close()

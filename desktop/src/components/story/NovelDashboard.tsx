@@ -24,6 +24,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   const [currentChapterNum, setCurrentChapterNum] = useState(1);
   const [logs, setLogs] = useState<string[]>([]);
   const [storyBible, setStoryBible] = useState<any>(null);
+  const [globalProgress, setGlobalProgress] = useState<any>(null);
   const [hasMasterPlan, setHasMasterPlan] = useState<boolean>(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
   const [gpuServerInfo, setGpuServerInfo] = useState<string>('⏳ Đang khởi động GPU Ollama (qwen2.5:3b)...');
@@ -60,6 +61,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     if (projectDir) {
       PythonEngineService.readProjectJson(projectDir).then(data => {
         if (!data) return;
+        if (data.global_progress) {
+          setGlobalProgress(data.global_progress);
+        }
         if (data.novel_idea) {
           setTitle(data.novel_idea.title || title);
           setGenre(data.novel_idea.genre || genre);
@@ -75,6 +79,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         }
         if (data.story_bible) {
           setStoryBible(data.story_bible);
+          if (!data.global_progress && data.story_bible.global_progress) {
+            setGlobalProgress(data.story_bible.global_progress);
+          }
         }
         if (data.arc_plans && Array.isArray(data.arc_plans) && data.arc_plans.length > 0) {
           setHasMasterPlan(true);
@@ -287,7 +294,10 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
             <h2 className="text-base font-bold text-white font-['Outfit'] tracking-tight flex items-center gap-2">
               AI Novel Engine — Động Cơ Tự Viết Truyện Dài 500-1.000 Chương
               <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold">
-                Qwen2.5-3B Local
+                Qwen2.5-3B Audio-First
+              </span>
+              <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-bold">
+                Audio Drama / TTS Ready
               </span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-bold flex items-center gap-1" title="Chạy tăng tốc trên NVIDIA GeForce GTX 1650 Ti (VRAM 4GB)">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -295,7 +305,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Nhập ý tưởng + phong cách → AI tự xây thế giới → tự lập kế hoạch → tự viết → kiểm tra Canon continuity.
+              Nhập ý tưởng → AI xây thế giới → lập 5-8 Scenes Audio/Chapter → AI viết văn phong thoại tự nhiên → Post-Extraction Canon DB.
             </p>
           </div>
         </div>
@@ -320,16 +330,66 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         </div>
       </div>
 
+      {/* GLOBAL STORY PROGRESS PANEL V2.3 */}
+      <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 shadow-md space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-white font-['Outfit'] flex items-center gap-2 uppercase tracking-wider">
+            <Layers size={14} className="text-cyan-400" /> Global Story Progress (Cross-Chapter State V2.3)
+          </h3>
+          <span className="text-[10px] text-slate-400 font-mono">
+            State Machine: UNKNOWN → RUMOR → CLAIM → EVIDENCE → CONFIRMED
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+          <div className="bg-black/40 p-2.5 rounded-lg border border-white/5 text-center">
+            <span className="text-[10px] text-slate-400 block font-semibold uppercase">Completed Events</span>
+            <span className="text-sm font-extrabold text-cyan-400 font-mono">
+              {(globalProgress?.completed_events || storyBible?.global_progress?.completed_events)?.length || 0}
+            </span>
+          </div>
+          <div className="bg-black/40 p-2.5 rounded-lg border border-emerald-500/20 text-center">
+            <span className="text-[10px] text-emerald-400 block font-semibold uppercase">Confirmed Facts</span>
+            <span className="text-sm font-extrabold text-emerald-400 font-mono">
+              {(globalProgress?.confirmed_facts || storyBible?.global_progress?.confirmed_facts)?.length || 0}
+            </span>
+          </div>
+          <div className="bg-black/40 p-2.5 rounded-lg border border-amber-500/20 text-center">
+            <span className="text-[10px] text-amber-400 block font-semibold uppercase">Active Claims</span>
+            <span className="text-sm font-extrabold text-amber-400 font-mono">
+              {(globalProgress?.active_claims || storyBible?.global_progress?.active_claims)?.length || 0}
+            </span>
+          </div>
+          <div className="bg-black/40 p-2.5 rounded-lg border border-indigo-500/20 text-center">
+            <span className="text-[10px] text-indigo-400 block font-semibold uppercase">Evidence Items</span>
+            <span className="text-sm font-extrabold text-indigo-400 font-mono">
+              {(globalProgress?.evidence_items || storyBible?.global_progress?.evidence_items)?.length || 0}
+            </span>
+          </div>
+          <div className="bg-black/40 p-2.5 rounded-lg border border-rose-500/20 text-center">
+            <span className="text-[10px] text-rose-400 block font-semibold uppercase">Unresolved Questions</span>
+            <span className="text-sm font-extrabold text-rose-400 font-mono">
+              {(globalProgress?.unresolved_questions || storyBible?.global_progress?.unresolved_questions)?.length || 0}
+            </span>
+          </div>
+          <div className="bg-black/40 p-2.5 rounded-lg border border-white/5 text-center">
+            <span className="text-[10px] text-slate-400 block font-semibold uppercase">Last Chapter</span>
+            <span className="text-sm font-extrabold text-white font-mono">
+              {globalProgress?.last_completed_chapter || currentChapterNum}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* PIPELINE STAGES VISUALIZER */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 bg-[#111318] p-3 rounded-xl border border-white/5 text-xs">
         {[
-          { id: 1, label: '1. IDEA', desc: 'Ý Tưởng Truyện', icon: Sparkles },
-          { id: 2, label: '2. STORY BIBLE', desc: 'Hồ Sơ Thế Giới', icon: BookOpen },
-          { id: 3, label: '3. MASTER PLAN', desc: '20-30 Arcs Plan', icon: Layers },
-          { id: 4, label: '4. SCENE PLAN', desc: 'Lập 3-5 Scenes', icon: Sliders },
-          { id: 5, label: '5. AI WRITER', desc: 'Qwen 3B Viết', icon: Cpu },
-          { id: 6, label: '6. EDITOR', desc: 'Biên Tập Văn Phong', icon: FileText },
-          { id: 7, label: '7. CANON DB', desc: 'Xác Nhận Facts', icon: ShieldCheck }
+          { id: 1, label: '1. RETRIEVAL', desc: 'Truy Xuất Canon Context', icon: Sparkles },
+          { id: 2, label: '2. CONTRACT', desc: 'Narrative Contract & Plan', icon: Sliders },
+          { id: 3, label: '3. EXECUTION', desc: 'Scene Writer & Validator', icon: Cpu },
+          { id: 4, label: '4. ASSEMBLER', desc: 'Hợp Nhất Bản Thảo', icon: FileText },
+          { id: 5, label: '5. VALIDATOR', desc: 'Progression & Stagnation', icon: ShieldCheck },
+          { id: 6, label: '6. EXTRACTOR', desc: 'Trích Xuất Metadata', icon: BookOpen },
+          { id: 7, label: '7. MEMORY', desc: 'Canon Candidates & DB', icon: Layers }
         ].map((st) => {
           let status: 'COMPLETED' | 'ACTIVE' | 'PENDING' = 'PENDING';
 
@@ -340,53 +400,33 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
           if (st.id === 1) {
             status = hasBible || currentStage !== 'IDLE' ? 'COMPLETED' : 'ACTIVE';
           } else if (st.id === 2) {
-            if (isInitializingBible) status = 'ACTIVE';
+            if (isInitializingBible || currentStage === 'CHAPTER_PLANNER') status = 'ACTIVE';
             else if (hasBible) status = 'COMPLETED';
             else status = 'PENDING';
           } else if (st.id === 3) {
-            if (isGeneratingMasterPlan) status = 'ACTIVE';
-            else if (hasBible && hasMasterPlan) status = 'COMPLETED';
+            if (isGeneratingMasterPlan || ['SCENE_PLANNER', 'CHAPTER_PLANNER'].includes(currentStage)) status = 'ACTIVE';
+            else if (['SCENE_EXECUTION', 'WRITER', 'WRITING_SCENE', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
             else status = 'PENDING';
           } else if (st.id === 4) {
-            if (!hasBible || !hasMasterPlan || isInitializingBible || isGeneratingMasterPlan) {
-              status = 'PENDING';
-            } else if (['CHAPTER_PLANNER', 'CREATIVE_ENGINE', 'SCENE_PLANNER', 'AUTO_WRITING'].includes(currentStage) || currentStage.startsWith('WRITING_CHAPTER')) {
-              status = 'ACTIVE';
-            } else if (['WRITER', 'WRITING_SCENE', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) {
-              status = 'COMPLETED';
-            } else {
-              status = 'PENDING';
-            }
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
+            else if (['SCENE_EXECUTION', 'WRITER', 'WRITING_SCENE'].includes(currentStage)) status = 'ACTIVE';
+            else if (['CHAPTER_ASSEMBLER', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
+            else status = 'PENDING';
           } else if (st.id === 5) {
-            if (!hasBible || !hasMasterPlan || isInitializingBible || isGeneratingMasterPlan) {
-              status = 'PENDING';
-            } else if (['WRITER', 'WRITING_SCENE'].includes(currentStage)) {
-              status = 'ACTIVE';
-            } else if (['EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) {
-              status = 'COMPLETED';
-            } else {
-              status = 'PENDING';
-            }
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
+            else if (['CHAPTER_ASSEMBLER', 'EDITOR'].includes(currentStage)) status = 'ACTIVE';
+            else if (['FINAL_VALIDATOR', 'VALIDATOR', 'PROGRESSION_VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
+            else status = 'PENDING';
           } else if (st.id === 6) {
-            if (!hasBible || !hasMasterPlan || isInitializingBible || isGeneratingMasterPlan) {
-              status = 'PENDING';
-            } else if (currentStage === 'EDITOR') {
-              status = 'ACTIVE';
-            } else if (['VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) {
-              status = 'COMPLETED';
-            } else {
-              status = 'PENDING';
-            }
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
+            else if (['FINAL_VALIDATOR', 'VALIDATOR', 'PROGRESSION_VALIDATOR'].includes(currentStage)) status = 'ACTIVE';
+            else if (['METADATA_EXTRACTOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
+            else status = 'PENDING';
           } else if (st.id === 7) {
-            if (!hasBible || !hasMasterPlan || isInitializingBible || isGeneratingMasterPlan) {
-              status = 'PENDING';
-            } else if (['VALIDATOR', 'MEMORY_EXTRACTOR'].includes(currentStage)) {
-              status = 'ACTIVE';
-            } else if (currentStage === 'COMPLETED') {
-              status = 'COMPLETED';
-            } else {
-              status = 'PENDING';
-            }
+            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
+            else if (['METADATA_EXTRACTOR', 'MEMORY_EXTRACTOR', 'MEMORY_UPDATE'].includes(currentStage)) status = 'ACTIVE';
+            else if (currentStage === 'COMPLETED') status = 'COMPLETED';
+            else status = 'PENDING';
           }
 
           const isActive = status === 'ACTIVE';
