@@ -39,8 +39,8 @@ BỐI CẢNH CÁC CHƯƠNG VỪA QUA:
 {recent_str}
 
 QUY TẮC BẮT BUỘC & CẤM LẶP LẠI (ANTI-STAGNATION):
-1. CẤM đặt tiêu đề hoặc mục tiêu có cụm từ lặp lại của các chương trước (CẤM dùng lại cụm từ 'tiếp tục tìm hiểu về nguồn gốc của Thanh Vân Quả').
-2. Chương {chapter_num} PHẢI có sự kiện/địa điểm/hành động HOÀN TOÀN MỚI (Ví dụ: Khám phá Tàng Kinh Các tầng 2, tiến vào Hắc Phong Cốc săn Ma Thú, đối đầu đệ tử Chấp Pháp Đường, giải mã cổ văn bí ẩn).
+1. CẤM đặt tiêu đề hoặc mục tiêu có cụm từ lặp lại của các chương trước.
+2. Chương {chapter_num} PHẢI có sự kiện/địa điểm/hành động HOÀN TOÀN MỚI (Ví dụ: Khai phá vị trí mới, thu thập bằng chứng/tài liệu quan trọng, đối đầu trở ngại mới, giải mã bí mật bối cảnh).
 3. Đảm bảo 'goal' chứa một mục tiêu động mang tính hành động cụ thể, tạo ra Narrative Delta rõ ràng so với các chương trước.
 
 YÊU CẦU ĐẦU RA (Trả về JSON Object duy nhất):

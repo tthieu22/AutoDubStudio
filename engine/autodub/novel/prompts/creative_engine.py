@@ -23,12 +23,12 @@ YÊU CẦU ĐẦU RA (Trả về JSON Object):
     "impact": "Tác động đến nhân vật..."
   }},
   "option_b": {{
-    "title": "Phương án B — Phát hiện bí mật thượng cổ",
+    "title": "Phương án B — Khám phá bí mật quan trọng mới",
     "description": "Tình tiết diễn ra...",
     "impact": "Tác động đến nhân vật..."
   }},
   "option_c": {{
-    "title": "Phương án C — Nhiệm vụ hệ thống bất thường",
+    "title": "Phương án C — Sự cố / Bước ngoặt bất ngờ",
     "description": "Tình tiết diễn ra...",
     "impact": "Tác động đến nhân vật..."
   }},

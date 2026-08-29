@@ -57,9 +57,9 @@ Mục tiêu duy nhất của Scene là làm câu chuyện TIẾN LÊN.
 5. UNKNOWN = CHƯA RÕ.
 
 ⚠️ QUY TẮC BẮT BUỘC VỀ CLAIM:
-- Nếu một NPC phát biểu X (ví dụ: "Thanh Vân Quả đến từ Tiên Giới"), đó chỉ là CLAIM.
-- Nhân vật chính (Lâm Phàm) chỉ được phép: nghi ngờ, suy ngẫm, tìm bằng chứng.
-- NARRATOR VÀ NHÂN VẬT CẤM TỰ YẾU BIẾN CLAIM THÀNH CONFIRMED TRUTH ("Lâm Phàm chắc chắn rằng...", "Sự thật chính là...").
+- Nếu một NPC phát biểu X (ví dụ: một tuyên bố chưa được kiểm chứng), đó chỉ là CLAIM.
+- Nhân vật chính chỉ được phép: nghi ngờ, suy ngẫm, tìm bằng chứng.
+- NARRATOR VÀ NHÂN VẬT CẤM TỰ YẾU BIẾN CLAIM THÀNH CONFIRMED TRUTH ("Nhân vật chắc chắn rằng...", "Sự thật chính là...").
 
 ---
 
@@ -105,9 +105,8 @@ Scene BẮT BUỘC kết thúc bằng: thông tin mới, quyết định, hành 
 
 ---
 
-## RULE 7 — XIANXIA TONE, PRONOUNS & ANTI-DUPLICATION
-- Xưng hô Tiên Hiệp chuẩn: Bắt buộc dùng xưng hô 'hắn', 'y', 'tông chủ', 'đệ tử', 'tiền bối', 'vãn bối', 'bản tông'.
-- CẤM XƯNG HÔ HIỆN ĐẠI: Tuyệt đối CẤM xưng 'tôi - bạn', CẤM hành vi hiện đại như 'đưa tay ra bắt tay' với Tông chủ.
+## RULE 7 — GENRE-APPROPRIATE PRONOUNS & ANTI-DUPLICATION
+- Xưng hô & Văn phong: PHẢI dùng xưng hô và văn phong CHUẨN XÁC THEO THỂ LOẠI VÀ BỐI CẢNH DỰ ÁN (Hiện đại/Sci-Fi/Trinh thám dùng xưng hô hiện đại phù hợp bối cảnh; Tiên hiệp/Cổ đại dùng xưng hô cổ trang tương ứng).
 - CẤM LẶP ĐOẠN VĂN: Tuyệt đối CẤM lặp lại nguyên văn hoặc diễn đạt cùng một đoạn văn 2 lần trong cùng phân cảnh.
 
 ---
