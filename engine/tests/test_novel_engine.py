@@ -12,7 +12,7 @@ from autodub.novel.novel_engine import NovelEngine
 class MockLlamaClient:
     def generate(self, prompt: str, timeout: int = 120) -> str:
         if "STORY DIRECTOR" in prompt:
-            return '{"premise": "Test premise", "cultivation_system": [{"rank":1, "name":"Luyện Khí"}], "characters": [{"id":"char_001", "name":"Lâm Phàm", "realm":"Luyện Khí"}]}'
+            return '{"premise": "Test premise", "world": {"continent_name": "Test Continent", "locations": ["Loc 1"]}, "progression_system": {"type": "cultivation", "ranks": [{"rank":1, "name":"Sơ Cấp"}]}, "cultivation_system": [{"rank":1, "name":"Sơ Cấp"}], "characters": [{"id":"char_001", "name":"Lâm Phàm", "realm":"Sơ Cấp"}], "rules": ["Rule 1"]}'
         elif "MASTER PLANNER" in prompt:
             return '[{"arc_num": 1, "title": "Arc 1", "start_chapter": 1, "end_chapter": 50, "goal": "Goal 1"}]'
         elif "CHAPTER PLANNER" in prompt:
@@ -22,9 +22,9 @@ class MockLlamaClient:
         elif "SCENE PLANNER" in prompt:
             return '[{"scene_index": 1, "goal": "Gặp yêu thú", "emotion": "Căng thẳng", "conflict": "Chiến đấu", "ending": "Đánh thắng"}]'
         elif "NOVEL WRITER" in prompt:
-            return 'Lâm Phàm đối mặt với yêu thú trong hang động linh khí...'
+            return 'Lâm Phàm sải bước tiến vào hang động linh khí đậm đặc, đối mặt với con yêu thú dữ tợn và dùng kiếm trảm sát nó để giải mã bí mật cổ thư.'
         elif "NOVEL EDITOR" in prompt:
-            return '{"edited_text": "Lâm Phàm đi vào hang động linh khí đậm đặc và đối mặt với yêu thú dữ tợn."}'
+            return '{"edited_text": "Lâm Phàm sải bước tiến vào hang động linh khí đậm đặc, đối mặt với con yêu thú dữ tợn và dùng kiếm trảm sát nó để giải mã bí mật cổ thư."}'
         elif "MEMORY EXTRACTOR" in prompt:
             return '{"summary": "Lâm Phàm chiến đấu yêu thú", "canon_facts": [{"category": "event", "fact_text": "Lâm Phàm đánh bại yêu thú hang động"}]}'
         return '{}'

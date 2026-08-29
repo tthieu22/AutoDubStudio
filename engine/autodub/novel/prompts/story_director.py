@@ -5,56 +5,68 @@ from autodub.novel.novel_models import StoryIdea
 class StoryDirectorPrompt:
     @staticmethod
     def build_prompt(idea: StoryIdea) -> str:
+        p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
+        p_bg = idea.protagonist.get("background", "Bối cảnh ban đầu") if isinstance(idea.protagonist, dict) else "Bối cảnh ban đầu"
+
         return f"""
-=== VAI TRÒ: STORY DIRECTOR (GIÁM ĐỐC SÁNG TẠO NỘI DUNG) ===
-Nhiệm vụ của bạn là nhận ý tưởng thô và lập BỘ HỒ SƠ THẾ GIỚI & QUY TẮC TRUYỆN (STORY BIBLE) hoàn chỉnh, nhất quán cho một bộ truyện dài {idea.total_chapters} chương.
+=== VAI TRÒ: STORY DIRECTOR (GIÁM ĐỐC SÁNG TẠO NỘI DUNG TRUYỆN MỚI) ===
+Nhiệm vụ: Dựa trên Ý TƯỞNG CỦA NGHỆ SĨ, hãy sáng tạo BỘ HỒ SƠ THẾ GIỚI & QUY TẮC TRUYỆN (STORY BIBLE) hoàn toàn mới, độc đáo, 100% phù hợp với thể loại và bối cảnh.
 
-THÔNG TIN ĐẦU VÀO:
-- Tên truyện đề xuất: {idea.title}
+THÔNG TIN ĐẦU VÀO TỪ NGƯỜI DÙNG:
+- Tên truyện: {idea.title}
 - Thể loại: {idea.genre}
-- Phong cách văn phong: {idea.style}
-- Nhân vật chính: {idea.protagonist}
-- Yêu cầu đặc biệt: {", ".join(idea.requirements)}
+- Phong cách: {idea.style}
+- Nhân vật chính: {p_name} ({p_bg})
+- Yêu cầu đặc biệt: {", ".join(idea.requirements) if idea.requirements else "Sáng tạo độc đáo"}
 
-YÊU CẦU ĐẦU RA (Trả về kết quả dưới dạng duy nhất 1 JSON Object):
+⚠️ QUY TẮC SÁNG TẠO BẮT BUỘC (CRITICAL MANDATE):
+1. Hệ thống tiến trình sức mạnh/cấp độ (`progression_system`) PHẢI được thiết kế CHUẨN THEO THỂ LOẠI '{idea.genre}':
+   - Thể loại Tiên Hiệp/Huyền Huyễn: type='cultivation', ranks=['Khởi Đầu', 'Đột Phá', ...]
+   - Thể loại Sci-Fi/Vũ Trụ: type='technology', ranks=['Rank D-Kỹ Sư', 'Rank C-Chuyên Viên', ...]
+   - Thể loại Game/Dị Năng: type='level', ranks=['F-Rank', 'E-Rank', 'D-Rank', ...]
+   - Thể loại Trinh Thám: type='investigation', ranks=['Tập Sự', 'Thám Tử', 'Điều Tra Viên Cao Cấp', ...]
+2. CẤM dùng các tên mặc định generic cũ. Hãy sáng tạo tên Tông môn/Thế lực/Tập đoàn/Đại lục/Địa danh HOÀN TOÀN MỚI mang nét đặc trưng của thể loại '{idea.genre}'.
+3. Nhân vật chính BẮT BUỘC là: '{p_name}'.
+
+YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object):
 {{
-  "premise": "Tóm tắt cốt truyện chủ đạo",
+  "premise": "Tóm tắt cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
   "world": {{
-    "continent_name": "Tên đại lục/thế giới",
-    "factions": ["Tông môn 1", "Gia tộc 2"],
-    "locations": ["Thanh Vân Tông", "Bí Cảnh Tinh Hà"]
+    "continent_name": "Tên thế giới / đại lục / hành tinh chính",
+    "factions": ["Thế lực 1", "Thế lực 2"],
+    "locations": ["Địa danh khởi đầu", "Bí cảnh/Vùng nguy hiểm"]
+  }},
+  "progression_system": {{
+    "type": "cultivation / technology / level / investigation",
+    "ranks": [
+      {{"rank": 1, "name": "Cấp độ 1 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 1"}},
+      {{"rank": 2, "name": "Cấp độ 2 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 2"}},
+      {{"rank": 3, "name": "Cấp độ 3 đỉnh cao", "description": "Mô tả sức mạnh đỉnh cao"}}
+    ]
   }},
   "cultivation_system": [
-    {{"rank": 1, "name": "Luyện Khí", "description": "Tích tụ linh khí vào đan điền"}},
-    {{"rank": 2, "name": "Trúc Cơ", "description": "Đúc kết Linh Đài"}},
-    {{"rank": 3, "name": "Kim Đan", "description": "Ngưng tụ Kim Đan"}},
-    {{"rank": 4, "name": "Nguyên Anh", "description": "Phá Đan thành Anh"}},
-    {{"rank": 5, "name": "Hóa Thần", "description": "Thần thức rời khỏi xác"}},
-    {{"rank": 6, "name": "Luyện Hư", "description": "Dung hợp hư không"}},
-    {{"rank": 7, "name": "Hợp Thể", "description": "Thân tâm hợp nhất"}},
-    {{"rank": 8, "name": "Đại Thừa", "description": "Tiên thể viên mãn"}},
-    {{"rank": 9, "name": "Độ Kiếp", "description": "Vượt Lôi Kiếp"}},
-    {{"rank": 10, "name": "Tiên Nhân", "description": "Tiến vào Tiên Giới"}}
+    {{"rank": 1, "name": "Cấp độ 1 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 1"}},
+    {{"rank": 2, "name": "Cấp độ 2 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 2"}},
+    {{"rank": 3, "name": "Cấp độ 3 đỉnh cao", "description": "Mô tả sức mạnh đỉnh cao"}}
   ],
   "characters": [
     {{
       "id": "char_001",
-      "name": "{idea.protagonist.get('name', 'Lâm Phàm')}",
-      "personality": ["Thận trọng", "Thông minh", "Quyết đoán"],
-      "goal": "Trở thành Tiên Đế",
-      "realm": "Luyện Khí",
-      "location": "Thanh Vân Tông",
-      "known_information": ["Là người hiện đại xuyên không"],
-      "secrets": ["Sở hữu Hệ Thống Tiên Nhân"]
+      "name": "{p_name}",
+      "personality": ["Tính cách 1", "Tính cách 2"],
+      "goal": "Mục tiêu lớn nhất của {p_name}",
+      "realm": "Cấp độ khởi đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": ["{p_bg}"],
+      "secrets": ["Bí mật lớn nhất / Hệ thống / Kim thủ chỉ"]
     }}
   ],
   "rules": [
-    "Cảnh giới là cố định, không được nhảy cảnh giới",
-    "Nhân vật không thể biết thông tin mà mình chưa được nghe/thấy"
+    "Cấp độ tuân thủ nghiêm ngặt theo quy tắc thế giới",
+    "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc"
   ],
   "terminology": {{
-    "Linh Khí": "Năng lượng thiên địa",
-    "Bí Cảnh": "Không gian độc lập do cao thủ thượng cổ để lại"
+    "Thuật ngữ 1": "Mô tả thuật ngữ đặc trưng của thể loại"
   }}
 }}
 """

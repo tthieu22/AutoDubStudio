@@ -39,14 +39,8 @@ interface CharacterBibleProps {
   onSelectCharacter?: (char: Character) => void;
 }
 
-const DEFAULT_CHARACTERS: Character[] = [
-  { id: "char_001", name: "Lâm Phàm", alias: "Đệ Tử Ngoại Môn", gender: "Nam", age: "20", personality: "Thận trọng, quyết đoán, hài hước", appearance: "Mục tiêu: Đột phá Tiên Đế Cảnh", clothing: "Cảnh giới: Luyện Khí Tầng 1 • Vị trí: Thanh Vân Tông", voice: "vi_male_hero", speakingStyle: "Trang trọng", locked: true },
-  { id: "char_002", name: "Lý Thanh Vân", alias: "Thanh Vân Chưởng Môn", gender: "Nam", age: "120", personality: "Uy nghiêm, yêu thương đệ tử", appearance: "Mục tiêu: Bảo vệ Thanh Vân Tông", clothing: "Cảnh giới: Nguyên Anh Kỳ • Vị trí: Thanh Vân Tông Main Hall", voice: "vi_male_elder", speakingStyle: "Trầm ấm, uy nghi", locked: true },
-  { id: "char_003", name: "Tô Tuyết Diệc", alias: "Tông Môn Đại Tỷ", gender: "Nữ", age: "22", personality: "Lạnh lùng bên ngoài, ấm áp bên trong", appearance: "Mục tiêu: Đột phá Trúc Cơ Kỳ", clothing: "Cảnh giới: Trúc Cơ Tầng 3 • Vị trí: Tuyết Phong", voice: "vi_female_hero", speakingStyle: "Thanh tao, lạnh lùng", locked: true }
-];
-
 export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSelectCharacter }) => {
-  const [characters, setCharacters] = useState<Character[]>(DEFAULT_CHARACTERS);
+  const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharId, setSelectedCharId] = useState<string>('');
   const [copiedCharId, setCopiedCharId] = useState<string | null>(null);
   const [copiedType, setCopiedType] = useState<'text' | 'json' | null>(null);
@@ -70,14 +64,37 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
 
   React.useEffect(() => {
     if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
+      PythonEngineService.readProjectJson(projectDir).then(async data => {
         if (data && data.characters && Array.isArray(data.characters) && data.characters.length > 0) {
           setCharacters(data.characters);
         } else {
-          setCharacters(DEFAULT_CHARACTERS);
+          try {
+            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+            if (rawBible) {
+              const bible = JSON.parse(rawBible);
+              if (bible.characters && Array.isArray(bible.characters) && bible.characters.length > 0) {
+                const formatted = bible.characters.map((c: any, idx: number) => ({
+                  id: c.id || `char_${String(idx + 1).padStart(3, '0')}`,
+                  name: c.name || "Nhân vật",
+                  alias: c.realm || "Khởi Đầu",
+                  gender: c.gender || "Nam",
+                  age: String(c.age || "20"),
+                  personality: Array.isArray(c.personality) ? c.personality.join(", ") : String(c.personality || "Quyết đoán"),
+                  appearance: `Mục tiêu: ${c.goal || "Khám phá thế giới"}`,
+                  clothing: `Cảnh giới: ${c.realm || "Khởi Đầu"} • Vị trí: ${c.location || "Vùng Khởi Đầu"}`,
+                  voice: "vi_male_hero",
+                  speakingStyle: "Trang trọng",
+                  locked: true
+                }));
+                setCharacters(formatted);
+                return;
+              }
+            }
+          } catch (e) {}
+          setCharacters([]);
         }
       }).catch(() => {
-        setCharacters(DEFAULT_CHARACTERS);
+        setCharacters([]);
       });
     }
   }, [projectDir]);

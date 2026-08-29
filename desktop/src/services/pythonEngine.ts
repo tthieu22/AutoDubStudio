@@ -424,19 +424,26 @@ export class PythonEngineService {
   // ── AI Novel Engine APIs ─────────────────────────────────────────
   static async initializeNovel(projectDir: string, storyIdea: any): Promise<any> {
     if (!isTauri()) {
+      const pName = storyIdea.protagonist?.name || "Nhân vật chính";
+      const pGenre = storyIdea.genre || "Hành động viễn tưởng";
       return {
-        premise: `Bộ truyện ${storyIdea.title || 'Tu Tiên Vô Địch'}`,
+        premise: `Bộ truyện ${pGenre}: ${storyIdea.title || 'Hành Trình Mới'}. Hành trình sáng nghiệp của ${pName}.`,
+        progression_system: {
+          type: pGenre.toLowerCase().includes('trinh thám') ? 'investigation' : 'level',
+          ranks: [
+            { rank: 1, name: "Cấp 1 - Khởi Đầu", description: "Bắt đầu hành trình" },
+            { rank: 2, name: "Cấp 2 - Tiến Bổn", description: "Phát triển kỹ năng" },
+            { rank: 3, name: "Cấp 3 - Đỉnh Phong", description: "Làm chủ lĩnh vực" }
+          ]
+        },
         cultivation_system: [
-          { rank: 1, name: "Luyện Khí", description: "Tích tụ linh khí" },
-          { rank: 2, name: "Trúc Cơ", description: "Đúc kết Linh Đài" },
-          { rank: 3, name: "Kim Đan", description: "Ngưng tụ Kim Đan" },
-          { rank: 4, name: "Nguyên Anh", description: "Phá Đan thành Anh" },
-          { rank: 5, name: "Hóa Thần", description: "Thần thức xuất khiếu" }
+          { rank: 1, name: "Cấp 1 - Khởi Đầu", description: "Bắt đầu hành trình" },
+          { rank: 2, name: "Cấp 2 - Tiến Bổn", description: "Phát triển kỹ năng" }
         ],
         characters: [
-          { id: "char_001", name: storyIdea.protagonist?.name || "Lâm Phàm", realm: "Luyện Khí Tầng 1", location: "Thanh Vân Tông" }
+          { id: "char_001", name: pName, realm: "Cấp 1 - Khởi Đầu", location: "Vùng đất khởi đầu" }
         ],
-        rules: ["Cảnh giới cố định", "Nhân vật không biết trước tương lai"]
+        rules: ["Cấp độ cố định theo quy tắc thế giới", "Nhân vật không biết trước tương lai"]
       };
     }
     return invoke<any>('initialize_novel', { projectDir, idea: storyIdea });
@@ -445,9 +452,8 @@ export class PythonEngineService {
   static async generateNovelMasterPlan(projectDir: string): Promise<any[]> {
     if (!isTauri()) {
       return [
-        { arc_num: 1, title: "Arc 01 — Xuyên Không & Thanh Vân Tông", start_chapter: 1, end_chapter: 40, goal: "Gia nhập宗 môn", conflict: "Đối thủ ghen ghét", status: "PLANNED" },
-        { arc_num: 2, title: "Arc 02 — Bí Cảnh Tinh Hà & Đột Phá Trúc Cơ", start_chapter: 41, end_chapter: 80, goal: "Đoạt Tinh Hà Quả", conflict: "Ma Tông vây phục", status: "PLANNED" },
-        { arc_num: 3, title: "Arc 03 — Đại Chiến Tu Tiên Giới", start_chapter: 81, end_chapter: 150, goal: "Quyết chiến Ma Tông", conflict: "Tông môn tồn vong", status: "PLANNED" }
+        { arc_num: 1, title: "Arc 01 — Khởi Đầu & Thử Thách", start_chapter: 1, end_chapter: 40, goal: "Thiết lập nền móng", conflict: "Đối thủ ghen ghét", status: "PLANNED" },
+        { arc_num: 2, title: "Arc 02 — Vùng Đất Mới & Đột Phá", start_chapter: 41, end_chapter: 80, goal: "Đạt được bước ngoặt lớn", conflict: "Tổ chức bí ẩn vây phục", status: "PLANNED" }
       ];
     }
     return invoke<any[]>('generate_novel_master_plan', { projectDir });
@@ -478,8 +484,8 @@ export class PythonEngineService {
   static async getCanonFacts(projectDir: string, limit: number = 30): Promise<any[]> {
     if (!isTauri()) {
       return [
-        { id: 1, chapter_num: 1, category: "realm_change", fact_text: "Lâm Phàm xuyên không đến Thanh Vân Tông, cảnh giới Luyện Khí Tầng 1", confidence: 1.0 },
-        { id: 2, chapter_num: 10, category: "reveal", fact_text: "Phát hiện Thanh Vân Quả có chứa tinh linh khí cổ đại", confidence: 0.95 }
+        { id: 1, chapter_num: 1, category: "progression", fact_text: "Nhân vật chính chính thức bắt đầu hành trình tại thế giới mới.", confidence: 1.0 },
+        { id: 2, chapter_num: 10, category: "reveal", fact_text: "Khám phá ra tài liệu bí mật tiết lộ nguồn gốc thế giới.", confidence: 0.95 }
       ];
     }
     return invoke<any[]>('get_novel_canon_facts', { projectDir, limit });
@@ -488,8 +494,8 @@ export class PythonEngineService {
   static async getPlotThreads(projectDir: string): Promise<any[]> {
     if (!isTauri()) {
       return [
-        { id: "thread_1", title: "Sư phụ Lý Thanh Vân mất tích", status: "OPEN", since_chapter: 5, description: "Sư phụ đi tìm linh dược bí cảnh chưa trở về" },
-        { id: "thread_2", title: "Nguồn gốc thật của Hệ Thống", status: "PARTIAL", since_chapter: 15, description: "Hệ thống phát phát tín hiệu Tiên Giới" }
+        { id: "thread_1", title: "Tài liệu bí mật bị mất tích", status: "OPEN", since_chapter: 5, description: "Manh mối dẫn đến tổ chức bí ẩn chưa được giải mã" },
+        { id: "thread_2", title: "Nguồn gốc năng lượng cổ đại", status: "PARTIAL", since_chapter: 15, description: "Phát hiện tín hiệu lạ từ vùng đất mới" }
       ];
     }
     return invoke<any[]>('get_novel_plot_threads', { projectDir });

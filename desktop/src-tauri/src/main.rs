@@ -1116,15 +1116,25 @@ async fn initialize_novel(window: Window, project_dir: String, idea: serde_json:
     let python_path = find_python_path();
     let p_path = PathBuf::from(&project_dir);
 
+    let title_str = idea.get("title").and_then(|v| v.as_str()).unwrap_or("Hành Trình Mới").to_string();
+    let genre_str = idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Hành động viễn tưởng").to_string();
+    let style_str = idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc, tiết tấu nhanh").to_string();
+    let chapters_str = idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000).to_string();
+
+    let p_name = idea.get("protagonist").and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("Nhân vật chính").to_string();
+    let p_bg = idea.get("protagonist").and_then(|p| p.get("background")).and_then(|v| v.as_str()).unwrap_or("Bối cảnh ban đầu").to_string();
+
     let mut cmd = Command::new(&python_path);
     cmd.current_dir(ws_root.join("engine"))
         .args(&[
             "-m", "autodub.cli", "novel", "init",
             "--project", &p_path.to_string_lossy(),
-            "--title", idea.get("title").and_then(|v| v.as_str()).unwrap_or("Vô Địch Tiên Đế"),
-            "--genre", idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Tiên hiệp + Xuyên không"),
-            "--style", idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc, tiết tấu nhanh"),
-            "--chapters", &idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000).to_string(),
+            "--title", &title_str,
+            "--genre", &genre_str,
+            "--style", &style_str,
+            "--protagonist-name", &p_name,
+            "--protagonist-bg", &p_bg,
+            "--chapters", &chapters_str,
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1234,9 +1244,9 @@ async fn generate_novel_master_plan(window: Window, project_dir: String) -> Resu
                 }
             }
         }
-        Ok(serde_json::json!([{ "arc_num": 1, "title": "Arc 01 — Xuyên Không & Thanh Vân Tông", "start_chapter": 1, "end_chapter": 40, "goal": "Gia nhập tông môn", "conflict": "Tranh chấp đệ tử", "major_reveal": "Bí mật hệ thống" }]))
+        Err("Master plan generation output not found in project.json".to_string())
     } else {
-        Err("Failed to generate novel master plan".to_string())
+        Err("Failed to generate novel master plan. LLM generation failed or was stopped.".to_string())
     }
 }
 
@@ -1359,14 +1369,14 @@ fn is_novel_writing_active(
 #[tauri::command]
 async fn get_novel_canon_facts(_project_dir: String, _limit: Option<i64>) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!([
-        { "id": "fact_1", "subject": "Lâm Phàm", "predicate": "sở hữu", "object": "Vô Địch Hệ Thống", "confidence": 1.0, "chapter": 1 }
+        { "id": "fact_1", "subject": "Nhân vật chính", "predicate": "bắt đầu", "object": "Hành trình mới", "confidence": 1.0, "chapter": 1 }
     ]))
 }
 
 #[tauri::command]
 async fn get_novel_plot_threads(_project_dir: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!([
-        { "id": "thread_1", "title": "Sư phụ Lý Thanh Vân mất tích", "status": "OPEN", "since_chapter": 5, "description": "Sư phụ đi tìm bí cảnh chưa về" }
+        { "id": "thread_1", "title": "Tài liệu bí mật bị mất tích", "status": "OPEN", "since_chapter": 5, "description": "Manh mối dẫn đến vùng đất mới chưa được giải mã" }
     ]))
 }
 

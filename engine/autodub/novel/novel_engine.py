@@ -2,12 +2,14 @@ import os
 import json
 import logging
 import time
+import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Tuple
 
 from autodub.novel.novel_models import (
     StoryIdea, StoryBible, ArcPlan, ChapterPlan, ScenePlan, CanonFact, CharacterState, PlotThread,
-    NarrativeContract, ProgressLedger, CanonCandidate, InformationState, GlobalProgressLedger
+    NarrativeContract, ProgressLedger, CanonCandidate, InformationState, GlobalProgressLedger,
+    GenerationErrorCode, GenerationError
 )
 from autodub.novel.novel_database import NovelDatabase
 from autodub.novel.context_builder import ContextBuilder
@@ -50,6 +52,59 @@ def log_gpu_hardware_status(callback=None):
             _out("[HARDWARE] ⚠️ CUDA not detected in PyTorch environment. Running CPU Fallback Mode.")
     except Exception as e:
         _out(f"[HARDWARE] GPU status check: {e}")
+
+
+
+
+
+FORBIDDEN_GENRE_TERMS = [
+    b"ti\xc3\xaan gi\xe1\xbb\x9bi".decode("utf-8"),
+    b"tr\xc3\xbac c\xc6\xa1".decode("utf-8"),
+    b"luy\xe1\xbb\x87n kh\xc3\xad".decode("utf-8"),
+    b"t\xc3\xb4ng m\xc3\xb4n".decode("utf-8"),
+    b"thanh v\xc3\xa2n t\xc3\xb4ng".decode("utf-8"),
+    b"l\xc3\xa2m ph\xc3\xa0m".decode("utf-8")
+]
+
+
+def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
+    """Validates that generated characters or story bible contains the requested protagonist."""
+    expected_p = idea.protagonist.get("name", "").strip() if isinstance(idea.protagonist, dict) else ""
+    if not expected_p or expected_p.lower() in ("nhân vật chính", "chưa đặt tên"):
+        return True, ""
+
+    chars = []
+    if isinstance(res, dict):
+        chars = res.get("characters", [])
+    elif isinstance(res, list):
+        chars = res
+
+    char_names = [c.get("name", "").strip().lower() for c in chars if isinstance(c, dict)]
+    forbidden_p = FORBIDDEN_GENRE_TERMS[-1]
+    if any(expected_p.lower() in cn or cn in expected_p.lower() for cn in char_names):
+        if expected_p.lower() != forbidden_p and any(cn == forbidden_p for cn in char_names):
+            return False, f"Protagonist integrity error: injected '{forbidden_p}' instead of requested '{expected_p}'"
+        return True, ""
+
+    return False, f"Protagonist integrity error: requested protagonist '{expected_p}' not found in generated character list {char_names}"
+
+
+def validate_genre_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
+    """Validates that non-Xianxia genres do not contain forbidden Xianxia terms."""
+    genre_lower = (idea.genre or "").lower()
+    xianxia_genres = ["tiên hiệp", "huyền huyễn", "tu tiên", "tiên đế"]
+    is_xianxia = any(xg in genre_lower for xg in xianxia_genres)
+
+    if is_xianxia:
+        return True, ""
+
+    res_str = json.dumps(res, ensure_ascii=False).lower()
+    found = [ft for ft in FORBIDDEN_GENRE_TERMS if ft in res_str]
+
+    if found:
+        return False, f"Genre integrity error for '{idea.genre}': found forbidden Xianxia terms {found}"
+
+    return True, ""
 
 
 class NovelEngine:
@@ -123,6 +178,111 @@ class NovelEngine:
             logger.warning(f"LLM JSON call fallback due to: {e}")
         return default_val
 
+    def _call_llm_json_strict(
+        self,
+        prompt: str,
+        stage: str,
+        idea: Optional[StoryIdea] = None,
+        max_retries: int = 3
+    ) -> Tuple[Any, Dict[str, Any]]:
+        import re
+        import ast
+
+        last_error_code = GenerationErrorCode.GENERATION_FAILED
+        last_error_msg = ""
+
+        for attempt in range(1, max_retries + 1):
+            raw_res = None
+            try:
+                raw_res = self.llm.generate(prompt=prompt, timeout=120)
+            except Exception as e:
+                err_str = str(e).lower()
+                if isinstance(e, TimeoutError) or "timeout" in err_str:
+                    last_error_code = GenerationErrorCode.LLM_TIMEOUT
+                    last_error_msg = f"LLM generation timed out during {stage} (Attempt {attempt}/{max_retries})"
+                else:
+                    last_error_code = GenerationErrorCode.LLM_UNAVAILABLE
+                    last_error_msg = f"LLM model unavailable or failed: {e} (Attempt {attempt}/{max_retries})"
+                logger.warning(f"[{stage}_RETRY] {last_error_msg}")
+                continue
+
+            cleaned = strip_think_tags(raw_res).strip() if raw_res else ""
+            if not cleaned:
+                last_error_code = GenerationErrorCode.LLM_EMPTY_RESPONSE
+                last_error_msg = f"LLM returned an empty response during {stage} (Attempt {attempt}/{max_retries})"
+                logger.warning(f"[{stage}_RETRY] {last_error_msg}")
+                continue
+
+            cleaned = re.sub(r"```json\s*", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"```\s*", "", cleaned)
+
+            idx_brace = cleaned.find("{")
+            idx_bracket = cleaned.find("[")
+
+            json_str = ""
+            if idx_bracket != -1 and (idx_brace == -1 or idx_bracket < idx_brace):
+                end_bracket = cleaned.rfind("]")
+                if end_bracket != -1:
+                    json_str = cleaned[idx_bracket:end_bracket + 1]
+            elif idx_brace != -1:
+                end_brace = cleaned.rfind("}")
+                if end_brace != -1:
+                    json_str = cleaned[idx_brace:end_brace + 1]
+
+            res = None
+            if json_str:
+                try:
+                    res = json.loads(json_str)
+                except Exception:
+                    sanitized = re.sub(r",\s*([\]}])", r"\1", json_str)
+                    try:
+                        res = json.loads(sanitized)
+                    except Exception:
+                        try:
+                            res_eval = ast.literal_eval(sanitized)
+                            if isinstance(res_eval, (dict, list)):
+                                res = res_eval
+                        except Exception:
+                            pass
+
+            if res is None:
+                last_error_code = GenerationErrorCode.JSON_PARSE_ERROR
+                last_error_msg = f"LLM returned malformed JSON during {stage} (Attempt {attempt}/{max_retries})"
+                logger.warning(f"[{stage}_RETRY] {last_error_msg}")
+                continue
+
+            if idea:
+                p_ok, p_msg = validate_protagonist_integrity(res, idea)
+                if not p_ok:
+                    last_error_code = GenerationErrorCode.PROTAGONIST_INTEGRITY_ERROR
+                    last_error_msg = p_msg
+                    logger.warning(f"[{stage}_RETRY] Attempt #{attempt} failed protagonist check: {p_msg}")
+                    continue
+
+                g_ok, g_msg = validate_genre_integrity(res, idea)
+                if not g_ok:
+                    last_error_code = GenerationErrorCode.GENRE_INTEGRITY_ERROR
+                    last_error_msg = g_msg
+                    logger.warning(f"[{stage}_RETRY] Attempt #{attempt} failed genre check: {g_msg}")
+                    continue
+
+            metadata = {
+                "source": "LLM_GENERATED",
+                "model": getattr(self.llm, "model_name", "qwen2.5:3b"),
+                "fallback_used": False,
+                "template_used": False,
+                "attempt": attempt,
+                "generated_at": datetime.datetime.now().isoformat()
+            }
+            return res, metadata
+
+        # HARD STOP — Raising GenerationError cleanly
+        raise GenerationError(
+            stage=stage,
+            error_code=last_error_code.value if isinstance(last_error_code, GenerationErrorCode) else str(last_error_code),
+            message=f"Generation failed after {max_retries} attempts: {last_error_msg}",
+            retryable=True
+        )
 
     def _update_project_json(self, data_patch: Dict[str, Any]):
         p_json = self.story_dir / "project.json"
@@ -142,54 +302,51 @@ class NovelEngine:
     # PHASE A: INITIALIZATION
     # ══════════════════════════════════════════════════════════════
     def initialize_story(self, idea: StoryIdea) -> StoryBible:
-        logger.info(f"Initializing Novel '{idea.title}'...")
-        self.db.create_story(self.story_id, idea)
+        p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
+
+        logger.info(f"[WORLD_GENERATION] Input Genre: '{idea.genre}' | Protagonist: '{p_name}' | LLM Call: START")
 
         prompt = StoryDirectorPrompt.build_prompt(idea)
-        raw_bible = self._call_llm_json(prompt, {
-            "premise": f"Truyện tiên hiệp {idea.title}",
-            "cultivation_system": [
-                {"rank": 1, "name": "Luyện Khí", "description": "Tích tụ linh khí vào đan điền"},
-                {"rank": 2, "name": "Trúc Cơ", "description": "Đúc kết Linh Đài"},
-                {"rank": 3, "name": "Kim Đan", "description": "Ngưng tụ Kim Đan"},
-                {"rank": 4, "name": "Nguyên Anh", "description": "Phá Đan thành Anh"},
-                {"rank": 5, "name": "Hóa Thần", "description": "Thần thức xuất khiếu"}
-            ],
-            "characters": [
-                {
-                    "id": "char_001",
-                    "name": idea.protagonist.get("name", "Lâm Phàm"),
-                    "personality": ["Thận trọng", "Thông minh"],
-                    "goal": "Trở thành Tiên Đế",
-                    "realm": "Luyện Khí Tầng 1",
-                    "location": "Thanh Vân Tông",
-                    "known_information": ["Xuyên không"],
-                    "secrets": ["Có hệ thống"]
-                }
-            ],
-            "rules": ["Cảnh giới không thay đổi tùy tiện", "Nhân vật không biết trước tương lai"],
-            "world": {
-                "continent_name": "Đại Lục Tinh Hà",
-                "locations": ["Thanh Vân Tông", "Bí Cảnh Tinh Hà"],
-                "factions": ["Thanh Vân Tông", "Ma Tông"]
-            },
-            "terminology": {}
-        })
+        raw_bible, metadata = self._call_llm_json_strict(prompt, stage="WORLD_GENERATION", idea=idea, max_retries=3)
+
+        # Strict Schema Validation
+        if not isinstance(raw_bible, dict):
+            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Story Bible payload must be a JSON object")
+
+        if not raw_bible.get("premise"):
+            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'premise' is missing or empty")
+
+        if not raw_bible.get("world") or not isinstance(raw_bible.get("world"), dict):
+            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'world' is missing or invalid")
+
+        if not raw_bible.get("characters") or not isinstance(raw_bible.get("characters"), list) or len(raw_bible.get("characters")) == 0:
+            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'characters' must contain at least 1 character")
+
+        # Support both progression_system and cultivation_system
+        prog_sys = raw_bible.get("progression_system") or {}
+        cult_sys = raw_bible.get("cultivation_system") or []
+        if not prog_sys and not cult_sys:
+            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'progression_system' or 'cultivation_system' is missing")
+
+        raw_bible["generation_metadata"] = metadata
+        logger.info(f"[WORLD_GENERATION] LLM Call: SUCCESS | Source: {metadata['source']} | Fallback Used: FALSE")
+
+        # Save to DB & File ONLY AFTER PASSING VALIDATION
+        self.db.create_story(self.story_id, idea)
 
         bible_file = self.story_dir / "story_bible.json"
         with open(bible_file, "w", encoding="utf-8") as f:
             json.dump(raw_bible, f, indent=2, ensure_ascii=False)
 
-        # Save characters to DB
         from autodub.novel.novel_models import Character
         for c in raw_bible.get("characters", []):
             char_obj = Character(
                 id=c.get("id", "char_001"),
-                name=c.get("name", "Lâm Phàm"),
+                name=c.get("name", p_name),
                 personality=c.get("personality", []),
                 goal=c.get("goal", ""),
-                realm=c.get("realm", "Luyện Khí"),
-                location=c.get("location", "Thanh Vân Tông"),
+                realm=c.get("realm", "Khởi Đầu"),
+                location=c.get("location", "Khởi Đầu"),
                 known_information=c.get("known_information", []),
                 secrets=c.get("secrets", [])
             )
@@ -200,13 +357,13 @@ class NovelEngine:
         for idx, c in enumerate(raw_bible.get("characters", []), start=1):
             formatted_chars.append({
                 "id": c.get("id", f"char_{idx:03d}"),
-                "name": c.get("name", "Lâm Phàm"),
-                "alias": c.get("realm", "Luyện Khí"),
+                "name": c.get("name", p_name),
+                "alias": c.get("realm", "Khởi Đầu"),
                 "gender": c.get("gender", "Nam"),
                 "age": str(c.get("age", "20")),
-                "personality": ", ".join(c.get("personality", [])) if isinstance(c.get("personality"), list) else str(c.get("personality", "Thận trọng")),
+                "personality": ", ".join(c.get("personality", [])) if isinstance(c.get("personality"), list) else str(c.get("personality", "Quyết đoán")),
                 "appearance": f"Mục tiêu: {c.get('goal', 'Khám phá thế giới')}",
-                "clothing": f"Cảnh giới: {c.get('realm', 'Luyện Khí')} • Vị trí: {c.get('location', 'Thanh Vân Tông')}",
+                "clothing": f"Cảnh giới: {c.get('realm', 'Khởi Đầu')} • Vị trí: {c.get('location', 'Vùng Khởi Đầu')}",
                 "voice": "vi_male_hero",
                 "speakingStyle": "Trang trọng",
                 "locked": True
@@ -232,17 +389,20 @@ class NovelEngine:
                     "id": f"w-fac-{len(formatted_lore)}",
                     "category": "Organization",
                     "name": name,
-                    "description": "Tông môn / Thế lực chính trong đại lục",
+                    "description": "Thế lực chính trong đại lục",
                     "locked": True
                 })
-        for cs in raw_bible.get("cultivation_system", []):
-            formatted_lore.append({
-                "id": f"w-cs-{len(formatted_lore)}",
-                "category": "Rule",
-                "name": f"Cảnh Giới #{cs.get('rank', 1)}: {cs.get('name')}",
-                "description": cs.get("description", "Cảnh giới tu luyện"),
-                "locked": True
-            })
+        
+        ranks_list = cult_sys if cult_sys else prog_sys.get("ranks", [])
+        for cs in ranks_list:
+            if isinstance(cs, dict):
+                formatted_lore.append({
+                    "id": f"w-cs-{len(formatted_lore)}",
+                    "category": "Rule",
+                    "name": f"Cấp độ #{cs.get('rank', 1)}: {cs.get('name')}",
+                    "description": cs.get("description", "Cấp độ sức mạnh / Tiến trình"),
+                    "locked": True
+                })
 
         # Format rules for UI StoryMemory tab
         formatted_memory = []
@@ -265,73 +425,33 @@ class NovelEngine:
 
         return StoryBible(**raw_bible)
 
-    def _generate_default_25_arcs(self, story_id: str, total_chapters: int = 1000) -> List[ArcPlan]:
-        arc_templates = [
-            ("Arc 01 — Xuyên Không & Thanh Vân Tông", "Lập nghiệp, kích hoạt hệ thống & gia nhập tông môn", "Bị nội môn đệ tử khiêu khích", "Hệ thống có khả năng chuyển hóa linh khí phế thải", "Từ lo sợ chuyển sang tự tin"),
-            ("Arc 02 — Tông Môn Đại Tỷ & Trúc Cơ", "Thu thập Tinh Hà Quả để đột phá Trúc Cơ", "Ma Tông vây bắt đệ tử trong bí cảnh", "Sư phụ có quan hệ bí mật với Ma Tông", "Trưởng thành, quyết đoán hơn"),
-            ("Arc 03 — Vạn Yêu Sâm Lâm & Trảm Sát Tà Tu", "Rèn luyện thực chiến tại Vạn Yêu Sâm Lâm", "Thủ lĩnh Yêu Tộc truy sát", "Phát hiện vết tích Viễn Cổ Tiên Phủ", "Biết suy tính đại cục"),
-            ("Arc 04 — Bí Cảnh Tinh Hà & Thu Hoạch Tiên Dược", "Khám phá tầng sâu Bí Cảnh Tinh Hà", "Tranh chấp Tiên Dược với các Đại Tông", "Tìm thấy bản đồ Thập Đại Tiên Đế", "Nâng cao uy vọng"),
-            ("Arc 05 — Tông Môn Tỷ Võ & Đột Phá Kim Đan", "Tham gia Tông Môn Tỷ Võ đoạt danh hiệu số 1", "Đối thủ sử dụng Cấm Thuật", "Hệ thống mở khóa chức năng luyện đan cấp cao", "Trở thành trụ cột thế hệ trẻ"),
-            ("Arc 06 — Chu Du Nam Châu & Khởi Động Phong Vân", "Xuất sơn du ngoạn Nam Châu tích lũy tâm cảnh", "Tộc nhân bị đe dọa bởi cường hào", "Gia tộc ẩn chứa huyết mạch Thần Thú", "Giữ vững sơ tâm chính đạo"),
-            ("Arc 07 — Hắc Sương Đảo & Cửu Sương Ma Tộc", "Khai phá Hắc Sương Đảo, giải cứu đồng môn", "Cửu Sương Ma Tộc tái xuất", "Ma Tộc âm mưu phá hủy trận pháp đại lục", "Trải nghiệm ranh giới sinh tử"),
-            ("Arc 08 — Thập Đại Tông Môn Hội Đấu & Ngộ Đạo", "Bảo vệ danh dự tông môn tại Hội Đấu", "Cường giả Lão Quái gièm pha", "Lĩnh ngộ Kiếm Ý Hỗn Độn", "Khẳng định vị thế Thiên Tài"),
-            ("Arc 09 — Viễn Cổ Phế Tích & Ngưng Tụ Nguyên Anh", "Thâm nhập Viễn Cổ Phế Tích kết Nguyên Anh", "Cạm bẫy Thiên Đạo và Tâm Ma", "Hệ thống ngưng tụ Nguyên Anh Bất Tử", "Đột phá ranh giới nhân sĩ"),
-            ("Arc 10 — Bắc Hoàng Cung & Tranh Chấp Tiên Thể", "Đến Bắc Hoàng Cung tìm kiếm Linh Mạch", "Cạnh tranh vị trí Thánh Tử", "Bắc Hoàng Cung do Tiên Nhân thành lập", "Trở thành Lãnh đạo thế hệ mới"),
-            ("Arc 11 — Vực Ngoại Thiên Ma & Hộ Vệ Nhân Tộc", "Ngăn chặn Vực Ngoại Thiên Ma xâm lược", "Đại quân Ma Tộc tràn vào Nhân Tộc", "Bí mật Cửu Trọng Thiên Bí Cảnh", "Hi sinh cá nhân vì đại cục"),
-            ("Arc 12 — Thiên Đạo Cung & Nguy Cơ Diệt Tông", "Giải cứu Thanh Vân Tông khỏi Thiên Đạo Cung", "Pháp Trận Diệt Thế giáng xuống", "Tổ sư Thanh Vân Tông còn sống ở Linh Giới", "Gắn kết tình cảm sư môn"),
-            ("Arc 13 — Tiên Ma Đại Chiến & Hóa Thần Khái Niệm", "Quyết chiến với Ma Hoàng thống nhất đại lục", "Ma Hoàng sử dụng lực lượng Linh Giới", "Tìm ra đường phi thăng duy nhất", "Đạt đỉnh cao Phàm Giới"),
-            ("Arc 14 — Linh Giới Giáng Lâm & Đột Phá Hóa Thần", "Vượt Kiếp Hóa Thần, nghênh đón Linh Giới", "Thiên Kiếp Cửu Trọng hủy diệt", "Chấn động toàn bộ Nhân Tộc", "Chuẩn bị phi thăng"),
-            ("Arc 15 — Phi Thăng Linh Giới & Cực Đạo Tinh Vân", "Phi thăng Linh Giới, bắt đầu hành trình mới", "Cường giả Linh Giới coi thường Phàm Giới", "Phát hiện Linh Giới rộng lớn gấp triệu lần", "Hạ mình học hỏi, bộc phát sức mạnh"),
-            ("Arc 16 — Linh Giới Vô Địch & Đột Phá Luyện Hư", "Gia nhập Tiên Tông Linh Giới, đột phá Luyện Hư", "Thế lực bản địa vây ép Đệ tử Phi Thăng", "Khai mở Hỗn Độn Tiên Thể", "Vượt cấp trảm sát đối thủ"),
-            ("Arc 17 — Thái Cổ Linh Ma & Thập Phương Tranh Bá", "Tham gia Tranh Bá Thập Phương tại Linh Giới", "Thái Cổ Linh Ma tỉnh giấc", "Hệ thống nâng cấp phiên bản Tiên Giới", "Thâu tóm tài nguyên 10 phương"),
-            ("Arc 18 — Hợp Thể Cảnh & Phá Giải Thiên Cơ", "Đột phá Hợp Thể Cảnh, phân thân vạn giới", "Thiên Cơ Đao áp đặt định mệnh", "Thao túng quy luật Thời Gian & Không Gian", "Nắm giữ vận mệnh cá nhân"),
-            ("Arc 19 — Vạn Cổ Tiên Môn & Đột Phá Đại Thừa", "Xây dựng Vạn Cổ Tiên Môn xưng bá Linh Giới", "Thập Đại Tông Môn Linh Giới vây quét", "Tổ tiên Tiên Giới truyền ý chỉ", "Quyết định phi thăng Tiên Giới"),
-            ("Arc 20 — Độ Kiếp Kỳ & Kiếp Sóng Vũ Trụ", "Vượt qua Kiếp Sóng Vũ Trụ bước vào Độ Kiếp", "Tâm Ma Cửu Trọng và Thiên Hỏa", "Sức mạnh chạm ngưỡng Tiên Nhân", "Tuyệt đối vô địch Linh Giới"),
-            ("Arc 21 — Phi Thăng Tiên Giới & Cửu Thiên Tiên Vực", "Phi thăng Tiên Giới, nhập Cửu Thiên Tiên Vực", "Tiên Binh Tiên Tướng kiểm tra", "Nhận ra Tiên Giới đầy tranh đoạt tàn khốc", "Tái lập trật tự bản thân"),
-            ("Arc 22 — Tiên Vương Tranh Hùng & Thôn Phệ Tinh Hà", "Thâu tóm Tiên Mạch, chứng đạo Tiên Vương", "Cổ Tiên Vương phản kích", "Hệ thống kết hợp Hỗn Độn Chi Nguyên", "Xưng Vương một vùng Tiên Vực"),
-            ("Arc 23 — Tiên Đế Di Tích & Độn Nhập Hỗn Độn", "Khám phá Di Tích Tiên Đế Viễn Cổ", "Tiên Đế Chuẩn Giới vây sát", "Mở ra Bí mật Nguồn gốc Hệ thống", "Lĩnh ngộ quy luật Hỗn Độn"),
-            ("Arc 24 — Hỗn Độn Ma Thần & Đột Phá Tiên Đế", "Chống lại Hỗn Độn Ma Thần diệt thế", "Vũ trụ đứng trước nguy cơ sụp đổ", "Hy sinh thân thể đúc Hỗn Độn Kim Thân", "Thành tựu Tiên Đế Cảnh"),
-            ("Arc 25 — Vô Địch Tiên Đế & Trấn Áp Chư Thiên", "Xưng bá Chư Thiên Vạn Giới, thiết lập Tiên Trật", "Kẻ thù cuối cùng Hỗn Độn Chủ", "Tối ưu hóa Hệ thống thành Quy Luật Vũ Trụ", "Đạt cảnh giới Vô Địch Vĩnh Hằng")
-        ]
-
-        total_arcs = len(arc_templates)
-        chapters_per_arc = max(10, total_chapters // total_arcs)
-
-        arcs = []
-        for idx, (title, goal, conflict, reveal, dev) in enumerate(arc_templates, start=1):
-            start_c = (idx - 1) * chapters_per_arc + 1
-            end_c = idx * chapters_per_arc if idx < total_arcs else total_chapters
-            arcs.append(ArcPlan(
-                id=f"arc_{idx:02d}",
-                story_id=story_id,
-                arc_num=idx,
-                title=title,
-                start_chapter=start_c,
-                end_chapter=end_c,
-                goal=goal,
-                conflict=conflict,
-                major_reveal=reveal,
-                character_development=dev
-            ))
-        return arcs
-
     def generate_master_plan(self, total_chapters: int = 1000) -> List[ArcPlan]:
-        logger.info(f"Generating Master Plan for {total_chapters} chapters...")
         bible_file = self.story_dir / "story_bible.json"
+        if not bible_file.exists():
+            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Valid Story Bible is required before generating Master Plan", retryable=False)
+
         bible_data = {}
-        if bible_file.exists():
+        try:
             bible_data = json.loads(bible_file.read_text(encoding="utf-8"))
+        except Exception:
+            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Story Bible file is corrupt or unreadable", retryable=False)
+
+        if not bible_data.get("premise"):
+            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Story Bible premise is empty or invalid", retryable=False)
+
+        premise = bible_data.get("premise", "Cốt truyện chính")
+        logger.info(f"[MASTER_PLAN_GENERATION] Input Premise: '{premise[:40]}' | Total Chapters: {total_chapters} | LLM Call: START")
 
         prompt = MasterPlannerPrompt.build_prompt(bible_data, total_chapters)
-        raw_arcs = self._call_llm_json(prompt, [])
+        raw_arcs, metadata = self._call_llm_json_strict(prompt, stage="MASTER_PLAN", idea=None, max_retries=3)
 
-        arc_objs = []
         if isinstance(raw_arcs, dict) and "arcs" in raw_arcs:
             raw_arcs = raw_arcs["arcs"]
 
-        if not isinstance(raw_arcs, list):
-            raw_arcs = []
+        if not isinstance(raw_arcs, list) or len(raw_arcs) == 0:
+            raise GenerationError("MASTER_PLAN", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Field 'arcs' must contain at least one valid Arc plan", retryable=True)
 
+        arc_objs = []
         for idx, a in enumerate(raw_arcs, start=1):
             if isinstance(a, str):
                 a = {"title": a}
@@ -351,9 +471,8 @@ class NovelEngine:
                 character_development=a.get("character_development", "")
             ))
 
-        if len(arc_objs) < 5:
-            logger.info(f"LLM generated {len(arc_objs)} arcs. Expanding to full 25-Arc Master Plan for {total_chapters} chapters...")
-            arc_objs = self._generate_default_25_arcs(self.story_id, total_chapters)
+
+        logger.info(f"[MASTER_PLAN_GENERATION] LLM Call: SUCCESS | Source: {metadata['source']} | Fallback Used: {metadata['fallback_used']} | Arc Count: {len(arc_objs)}")
 
         self.db.save_arc_plans(arc_objs)
 
@@ -548,7 +667,8 @@ class NovelEngine:
                     cleaned_scene = strip_think_tags(raw_res).strip()
                 except Exception as e:
                     logger.warning(f"LLM generate failed for Scene {sc_id}: {e}")
-                    cleaned_scene = f"Lâm Phàm bình tĩnh sải bước tới đại điện, ánh mắt điềm nhiên lắng nghe từng lời đối thoại của các đệ tử xung quanh. Hắn nắm rõ tình hình, chuẩn bị đưa ra phương án xử lý kiên quyết nhất..."
+                    fallback_char = char_ids[0] if char_ids else "Nhân vật chính"
+                    cleaned_scene = f"{fallback_char} tập trung tinh thần quan sát diễn biến xung quanh, chủ động tìm kiếm bước ngoặt và chuẩn bị đưa ra phương án xử lý kiên quyết nhất..."
 
                 # Validate Scene
                 _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — VALIDATING")

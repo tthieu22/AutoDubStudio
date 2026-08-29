@@ -15,25 +15,37 @@ interface StoryMemoryProps {
   projectDir?: string | null;
 }
 
-const DEFAULT_MEMORIES: MemoryItem[] = [
-  { id: "mem-1", category: "World", content: "Cảnh giới tu luyện cố định: Luyện Khí -> Trúc Cơ -> Kim Đan -> Nguyên Anh -> Hóa Thần", importance: "HIGH", confidence: 1.0, locked: true },
-  { id: "mem-2", category: "World", content: "Nhân vật trong truyện không thể biết trước tương lai hoặc bí mật của Hệ Thống", importance: "HIGH", confidence: 1.0, locked: true },
-  { id: "mem-3", category: "Important Event", content: "Hệ thống có khả năng chuyển hóa linh khí phế thải và Tiên Dược đặc biệt", importance: "HIGH", confidence: 0.95, locked: true }
-];
-
 export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
-  const [memories, setMemories] = useState<MemoryItem[]>(DEFAULT_MEMORIES);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
 
   React.useEffect(() => {
     if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
+      PythonEngineService.readProjectJson(projectDir).then(async data => {
         if (data && data.story_memory && Array.isArray(data.story_memory) && data.story_memory.length > 0) {
           setMemories(data.story_memory);
         } else {
-          setMemories(DEFAULT_MEMORIES);
+          try {
+            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+            if (rawBible) {
+              const bible = JSON.parse(rawBible);
+              if (bible.rules && Array.isArray(bible.rules) && bible.rules.length > 0) {
+                const formatted = bible.rules.map((r: string, idx: number) => ({
+                  id: `mem-${idx}`,
+                  category: "World",
+                  content: r,
+                  importance: "HIGH",
+                  confidence: 1.0,
+                  locked: true
+                }));
+                setMemories(formatted);
+                return;
+              }
+            }
+          } catch (e) {}
+          setMemories([]);
         }
       }).catch(() => {
-        setMemories(DEFAULT_MEMORIES);
+        setMemories([]);
       });
     }
   }, [projectDir]);

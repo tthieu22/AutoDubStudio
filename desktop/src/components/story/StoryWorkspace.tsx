@@ -127,14 +127,14 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
         try {
           const content = await PythonEngineService.readTextFile(chapFilePath);
           if (content && content.trim().length > 0) {
-            let titleFromContent = `Hành Trình Tu Tiên Khởi Đầu`;
+            let titleFromContent = `Chương ${i}`;
             const matchTitle = content.match(/^#\s*(?:Chương\s*\d+\s*[:\-—]?\s*)?([^\n]+)/m);
             if (matchTitle && matchTitle[1]) {
               titleFromContent = matchTitle[1].trim();
             }
 
             const cleanSummaryText = content.replace(/^#+.*$/gm, '').replace(/###.*$/gm, '').replace(/\s+/g, ' ').trim();
-            const summaryStr = (cleanSummaryText.slice(0, 140) || `Hành trình đột phá của Lâm Phàm`) + '...';
+            const summaryStr = (cleanSummaryText.slice(0, 140) || `Tóm tắt nội dung chương mới`) + '...';
 
             const existingIdx = loadedChaps.findIndex(c => c.chapterNumber === i);
             const chapObj: Chapter = {
@@ -142,7 +142,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
               chapterNumber: i,
               title: titleFromContent,
               summary: summaryStr,
-              characters: ['Lâm Phàm', 'Lý Thanh Vân'],
+              characters: ['Nhân vật chính'],
               scenesCount: 2,
               content: content
             };

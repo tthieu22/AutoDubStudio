@@ -53,9 +53,11 @@ def main():
     novel_sp = subparsers.add_parser("novel", help="AI Novel Engine commands")
     novel_sp.add_argument("action", choices=["init", "plan", "write", "status"], help="Novel action")
     novel_sp.add_argument("--project", default="stories/novel_001", help="Story project directory path")
-    novel_sp.add_argument("--title", default="Vô Địch Tiên Đế", help="Novel title")
-    novel_sp.add_argument("--genre", default="Tiên hiệp + Xuyên không", help="Novel genre")
+    novel_sp.add_argument("--title", default="Hành Trình Mới", help="Novel title")
+    novel_sp.add_argument("--genre", default="Hành động viễn tưởng", help="Novel genre")
     novel_sp.add_argument("--style", default="Dễ đọc, tiết tấu nhanh", help="Novel style")
+    novel_sp.add_argument("--protagonist-name", default=None, help="Protagonist name")
+    novel_sp.add_argument("--protagonist-bg", default=None, help="Protagonist background")
     novel_sp.add_argument("--chapters", type=int, default=1000, help="Total chapters")
     novel_sp.add_argument("--start", type=int, default=1, help="Start chapter number")
     novel_sp.add_argument("--end", type=int, default=100, help="End chapter number")
@@ -438,34 +440,62 @@ def main():
             return
 
         elif args.command == "novel":
+            import sys
             from autodub.novel.novel_engine import NovelEngine
-            from autodub.novel.novel_models import StoryIdea
+            from autodub.novel.novel_models import StoryIdea, GenerationError
             p_dir = Path(args.project)
             engine = NovelEngine(p_dir, story_id=p_dir.name)
 
-            if args.action == "init":
-                print(f"[INFO] === BƯỚC 1/7: AI STORY DIRECTOR KHỞI TẠO THẾ GIỚI ===", flush=True)
-                print(f"[INFO] Tên truyện: {args.title} | Thể loại: {args.genre} | Phong cách: {args.style}", flush=True)
-                print(f"[INFO] Đang gọi LLM (Qwen2.5-3B Local) tạo Cảnh giới tu tiên, Tông môn & Nhân vật...", flush=True)
-                idea = StoryIdea(title=args.title, genre=args.genre, style=args.style, total_chapters=args.chapters)
-                bible = engine.initialize_story(idea)
-                print(f"[SUCCESS] Đã tạo xong Story Bible & Hồ sơ thế giới thành công cho '{args.title}'!", flush=True)
+            try:
+                if args.action == "init":
+                    print(f"[INFO] === BƯỚC 1/7: AI STORY DIRECTOR KHỞI TẠO THẾ GIỚI ===", flush=True)
+                    print(f"[INFO] Tên truyện: {args.title} | Thể loại: {args.genre} | Phong cách: {args.style}", flush=True)
+                    print(f"[INFO] Đang gọi LLM (Qwen2.5-3B Local) sáng tạo Hồ sơ thế giới & Cảnh giới...", flush=True)
+                    
+                    protagonist_data = {}
+                    if getattr(args, "protagonist_name", None):
+                        protagonist_data["name"] = args.protagonist_name
+                    if getattr(args, "protagonist_bg", None):
+                        protagonist_data["background"] = args.protagonist_bg
 
-            elif args.action == "plan":
-                print(f"[INFO] === BƯỚC 2-3/7: MASTER PLANNER TẠO 25 ARCS KỊCH BẢN ===", flush=True)
-                print(f"[INFO] Đang phân bổ 25 Arcs liên hoàn trải dài {args.chapters} chương...", flush=True)
-                arcs = engine.generate_master_plan(args.chapters)
-                print(f"[SUCCESS] Đã tạo xong Master Plan với {len(arcs)} Arcs kịch bản chi tiết!", flush=True)
+                    idea = StoryIdea(
+                        title=args.title,
+                        genre=args.genre,
+                        style=args.style,
+                        total_chapters=args.chapters,
+                        protagonist=protagonist_data if protagonist_data else {"name": "Nhân vật chính"}
+                    )
+                    bible = engine.initialize_story(idea)
+                    print(f"[SUCCESS] Đã tạo xong Story Bible & Hồ sơ thế giới thành công cho '{args.title}'!", flush=True)
 
-            elif args.action == "write":
-                def _cli_cb(evt):
-                    print(json.dumps(evt, ensure_ascii=False), flush=True)
-                engine.run_auto(start_chapter=args.start, end_chapter=args.end, progress_callback=_cli_cb)
+                elif args.action == "plan":
+                    print(f"[INFO] === BƯỚC 2-3/7: MASTER PLANNER TẠO ARCS KỊCH BẢN ===", flush=True)
+                    print(f"[INFO] Đang phân bổ Arcs liên hoàn trải dài {args.chapters} chương...", flush=True)
+                    arcs = engine.generate_master_plan(args.chapters)
+                    print(f"[SUCCESS] Đã tạo xong Master Plan với {len(arcs)} Arcs kịch bản chi tiết!", flush=True)
 
-            elif args.action == "status":
-                facts = engine.db.get_canon_facts(p_dir.name, limit=10)
-                threads = engine.db.get_open_plot_threads(p_dir.name)
-                print(json.dumps({"project": p_dir.name, "canonFactsCount": len(facts), "openThreadsCount": len(threads)}, indent=2, ensure_ascii=False))
+                elif args.action == "write":
+                    def _cli_cb(evt):
+                        print(json.dumps(evt, ensure_ascii=False), flush=True)
+                    engine.run_auto(start_chapter=args.start, end_chapter=args.end, progress_callback=_cli_cb)
+
+                elif args.action == "status":
+                    facts = engine.db.get_canon_facts(p_dir.name, limit=10)
+                    threads = engine.db.get_open_plot_threads(p_dir.name)
+                    print(json.dumps({"project": p_dir.name, "canonFactsCount": len(facts), "openThreadsCount": len(threads)}, indent=2, ensure_ascii=False))
+            except GenerationError as ge:
+                print(json.dumps(ge.to_dict(), ensure_ascii=False), flush=True)
+                sys.exit(1)
+            except Exception as e:
+                err_payload = {
+                    "success": False,
+                    "stage": "NOVEL_ENGINE",
+                    "error_code": "GENERATION_FAILED",
+                    "message": str(e),
+                    "retryable": True
+                }
+                print(json.dumps(err_payload, ensure_ascii=False), flush=True)
+                sys.exit(1)
             return
 
 

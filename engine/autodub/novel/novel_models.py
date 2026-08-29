@@ -127,9 +127,51 @@ class ChapterPlan(BaseModel):
     information_transitions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class GenerationErrorCode(str, Enum):
+    LLM_TIMEOUT = "LLM_TIMEOUT"
+    LLM_UNAVAILABLE = "LLM_UNAVAILABLE"
+    LLM_EMPTY_RESPONSE = "LLM_EMPTY_RESPONSE"
+    JSON_PARSE_ERROR = "JSON_PARSE_ERROR"
+    SCHEMA_VALIDATION_ERROR = "SCHEMA_VALIDATION_ERROR"
+    DEPENDENCY_NOT_READY = "DEPENDENCY_NOT_READY"
+    PROTAGONIST_INTEGRITY_ERROR = "PROTAGONIST_INTEGRITY_ERROR"
+    GENRE_INTEGRITY_ERROR = "GENRE_INTEGRITY_ERROR"
+    GENERATION_FAILED = "GENERATION_FAILED"
+
+
+class GenerationError(Exception):
+    def __init__(self, stage: str, error_code: str, message: str, retryable: bool = True):
+        self.stage = stage
+        self.error_code = error_code
+        self.message = message
+        self.retryable = retryable
+        super().__init__(f"[{stage}] {error_code}: {message}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "stage": self.stage,
+            "error_code": self.error_code,
+            "message": self.message,
+            "retryable": self.retryable
+        }
+
+
+import datetime
+
+
+class GenerationMetadata(BaseModel):
+    source: str = "LLM_GENERATED"  # "LLM_GENERATED", "USER_PROVIDED"
+    model: str = "qwen2.5:3b"
+    fallback_used: bool = False
+    template_used: bool = False
+    generated_at: str = Field(default_factory=lambda: datetime.datetime.now().isoformat())
+
+
 class StoryBible(BaseModel):
     premise: str = ""
     world: Dict[str, Any] = Field(default_factory=dict)
+    progression_system: Dict[str, Any] = Field(default_factory=dict)
     cultivation_system: List[Dict[str, Any]] = Field(default_factory=list)
     power_system: Dict[str, Any] = Field(default_factory=dict)
     characters: List[Dict[str, Any]] = Field(default_factory=list)
@@ -138,6 +180,7 @@ class StoryBible(BaseModel):
     items: List[Dict[str, Any]] = Field(default_factory=list)
     rules: List[str] = Field(default_factory=list)
     terminology: Dict[str, str] = Field(default_factory=dict)
+    generation_metadata: Optional[Dict[str, Any]] = Field(default_factory=lambda: GenerationMetadata().model_dump())
 
 
 class ValidationViolation(BaseModel):

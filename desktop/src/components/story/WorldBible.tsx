@@ -14,30 +14,59 @@ interface WorldBibleProps {
   projectDir?: string | null;
 }
 
-const DEFAULT_WORLD_ENTITIES: WorldEntity[] = [
-  { id: "w-cs-1", category: "Rule", name: "Cảnh Giới #1: Luyện Khí Kỳ", description: "Tích tụ linh khí vào đan điền, cảm ứng thiên địa linh khí", locked: true },
-  { id: "w-cs-2", category: "Rule", name: "Cảnh Giới #2: Trúc Cơ Kỳ", description: "Đúc kết Linh Đài, hình thành chân nguyên nội lực", locked: true },
-  { id: "w-cs-3", category: "Rule", name: "Cảnh Giới #3: Kim Đan Kỳ", description: "Ngưng tụ Kim Đan, phi hành bằng tiên kiếm", locked: true },
-  { id: "w-cs-4", category: "Rule", name: "Cảnh Giới #4: Nguyên Anh Kỳ", description: "Phá Đan thành Anh, thọ nguyên ngàn năm", locked: true },
-  { id: "w-cs-5", category: "Rule", name: "Cảnh Giới #5: Hóa Thần Kỳ", description: "Thần thức xuất khiếu, uy áp vạn dặm Phàm Giới", locked: true },
-  { id: "w-loc-1", category: "Location", name: "Thanh Vân Tông", description: "Tông môn tu tiên cổ xưa đứng đầu Nam Châu", locked: true },
-  { id: "w-loc-2", category: "Location", name: "Vạn Yêu Sâm Lâm", description: "Khu rừng rậm hoang dã cư ngụ vô số Yêu Tộc viễn cổ", locked: true },
-  { id: "w-fac-1", category: "Organization", name: "Cửu Sương Ma Tộc", description: "Thế lực ma đạo vạn năm tích tụ tà khí", locked: true }
-];
-
 export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
-  const [entities, setEntities] = useState<WorldEntity[]>(DEFAULT_WORLD_ENTITIES);
+  const [entities, setEntities] = useState<WorldEntity[]>([]);
 
   React.useEffect(() => {
     if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
+      PythonEngineService.readProjectJson(projectDir).then(async data => {
         if (data && data.world_lore && Array.isArray(data.world_lore) && data.world_lore.length > 0) {
           setEntities(data.world_lore);
         } else {
-          setEntities(DEFAULT_WORLD_ENTITIES);
+          try {
+            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+            if (rawBible) {
+              const bible = JSON.parse(rawBible);
+              const formatted: WorldEntity[] = [];
+              const worldInfo = bible.world || {};
+              (worldInfo.locations || []).forEach((loc: any, idx: number) => {
+                formatted.push({
+                  id: `w-loc-${idx}`,
+                  category: 'Location',
+                  name: typeof loc === 'string' ? loc : (loc.name || 'Địa Danh'),
+                  description: typeof loc === 'string' ? `Địa danh thuộc ${worldInfo.continent_name || 'bối cảnh'}` : (loc.description || ''),
+                  locked: true
+                });
+              });
+              (worldInfo.factions || []).forEach((fac: any, idx: number) => {
+                formatted.push({
+                  id: `w-fac-${idx}`,
+                  category: 'Organization',
+                  name: typeof fac === 'string' ? fac : (fac.name || 'Thế Lực'),
+                  description: 'Thế lực chính trong thế giới',
+                  locked: true
+                });
+              });
+              const ranks = bible.cultivation_system || (bible.progression_system?.ranks || []);
+              ranks.forEach((cs: any, idx: number) => {
+                formatted.push({
+                  id: `w-cs-${idx}`,
+                  category: 'Rule',
+                  name: `Cảnh Giới #${cs.rank || idx + 1}: ${cs.name}`,
+                  description: cs.description || 'Cấp độ sức mạnh',
+                  locked: true
+                });
+              });
+              if (formatted.length > 0) {
+                setEntities(formatted);
+                return;
+              }
+            }
+          } catch (e) {}
+          setEntities([]);
         }
       }).catch(() => {
-        setEntities(DEFAULT_WORLD_ENTITIES);
+        setEntities([]);
       });
     }
   }, [projectDir]);

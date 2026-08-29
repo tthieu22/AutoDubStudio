@@ -10,12 +10,12 @@ interface NovelDashboardProps {
 }
 
 export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) => {
-  const [title, setTitle] = useState('Vô Địch Tiên Đế');
-  const [genre, setGenre] = useState('Tiên hiệp + Xuyên không + Hệ thống');
-  const [style, setStyle] = useState('Dễ đọc, tiết tấu nhanh, nhiều đối thoại');
-  const [protagonistName, setProtagonistName] = useState('Lâm Phàm');
-  const [protagonistAge, setProtagonistAge] = useState('18');
-  const [protagonistBg, setProtagonistBg] = useState('Học sinh hiện đại xuyên không mang theo hệ thống');
+  const [title, setTitle] = useState('Vũ Trụ Chi Vương');
+  const [genre, setGenre] = useState('Khoa học viễn tưởng');
+  const [style, setStyle] = useState('Tiết tấu nhanh, cuốn hút, giàu hình ảnh');
+  const [protagonistName, setProtagonistName] = useState('Alex Chen');
+  const [protagonistAge, setProtagonistAge] = useState('24');
+  const [protagonistBg, setProtagonistBg] = useState('Kỹ sư cơ khí không gian tại trạm nghiên cứu');
   const [totalChapters, setTotalChapters] = useState(1000);
 
   const [isGenerating, setIsGenerating] = useState(false);
