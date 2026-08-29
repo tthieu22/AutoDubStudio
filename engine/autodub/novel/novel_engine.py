@@ -32,79 +32,12 @@ from autodub.modules.llamacpp_client import LlamaCppClient, strip_think_tags
 logger = logging.getLogger(__name__)
 
 
-def log_gpu_hardware_status(callback=None):
-    def _out(msg):
-        logger.info(msg)
-        print(f"[INFO] {msg}", flush=True)
-        if callback:
-            callback({"event": "novel_sub_stage", "step": "HARDWARE", "message": msg})
-
-    _out("=== [HARDWARE ACCELERATION CHECK] ===")
-    try:
-        import torch
-        if torch.cuda.is_available():
-            dev_name = torch.cuda.get_device_name(0)
-            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            _out(f"[HARDWARE] 🚀 GPU Device Detected: {dev_name} ({vram_gb:.1f} GB VRAM)")
-            _out("[HARDWARE] ⚡ PyTorch CUDA Acceleration: ACTIVE (Device 0)")
-            _out("[HARDWARE] 🎯 Local LLM Offload: -ngl 99 (100% GPU VRAM Accelerated)")
-        else:
-            _out("[HARDWARE] ⚠️ CUDA not detected in PyTorch environment. Running CPU Fallback Mode.")
-    except Exception as e:
-        _out(f"[HARDWARE] GPU status check: {e}")
-
-
-
-
-
-FORBIDDEN_GENRE_TERMS = [
-    b"ti\xc3\xaan gi\xe1\xbb\x9bi".decode("utf-8"),
-    b"tr\xc3\xbac c\xc6\xa1".decode("utf-8"),
-    b"luy\xe1\xbb\x87n kh\xc3\xad".decode("utf-8"),
-    b"t\xc3\xb4ng m\xc3\xb4n".decode("utf-8"),
-    b"thanh v\xc3\xa2n t\xc3\xb4ng".decode("utf-8"),
-    b"l\xc3\xa2m ph\xc3\xa0m".decode("utf-8")
-]
-
-
-def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
-    """Validates that generated characters or story bible contains the requested protagonist."""
-    expected_p = idea.protagonist.get("name", "").strip() if isinstance(idea.protagonist, dict) else ""
-    if not expected_p or expected_p.lower() in ("nhân vật chính", "chưa đặt tên"):
-        return True, ""
-
-    chars = []
-    if isinstance(res, dict):
-        chars = res.get("characters", [])
-    elif isinstance(res, list):
-        chars = res
-
-    char_names = [c.get("name", "").strip().lower() for c in chars if isinstance(c, dict)]
-    forbidden_p = FORBIDDEN_GENRE_TERMS[-1]
-    if any(expected_p.lower() in cn or cn in expected_p.lower() for cn in char_names):
-        if expected_p.lower() != forbidden_p and any(cn == forbidden_p for cn in char_names):
-            return False, f"Protagonist integrity error: injected '{forbidden_p}' instead of requested '{expected_p}'"
-        return True, ""
-
-    return False, f"Protagonist integrity error: requested protagonist '{expected_p}' not found in generated character list {char_names}"
-
-
-def validate_genre_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
-    """Validates that non-Xianxia genres do not contain forbidden Xianxia terms."""
-    genre_lower = (idea.genre or "").lower()
-    xianxia_genres = ["tiên hiệp", "huyền huyễn", "tu tiên", "tiên đế"]
-    is_xianxia = any(xg in genre_lower for xg in xianxia_genres)
-
-    if is_xianxia:
-        return True, ""
-
-    res_str = json.dumps(res, ensure_ascii=False).lower()
-    found = [ft for ft in FORBIDDEN_GENRE_TERMS if ft in res_str]
-
-    if found:
-        return False, f"Genre integrity error for '{idea.genre}': found forbidden Xianxia terms {found}"
-
-    return True, ""
+from autodub.novel.novel_validators import (
+    log_gpu_hardware_status,
+    FORBIDDEN_GENRE_TERMS,
+    validate_protagonist_integrity,
+    validate_genre_integrity
+)
 
 
 class NovelEngine:
@@ -213,37 +146,7 @@ class NovelEngine:
                 logger.warning(f"[{stage}_RETRY] {last_error_msg}")
                 continue
 
-            cleaned = re.sub(r"```json\s*", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"```\s*", "", cleaned)
-
-            idx_brace = cleaned.find("{")
-            idx_bracket = cleaned.find("[")
-
-            json_str = ""
-            if idx_bracket != -1 and (idx_brace == -1 or idx_bracket < idx_brace):
-                end_bracket = cleaned.rfind("]")
-                if end_bracket != -1:
-                    json_str = cleaned[idx_bracket:end_bracket + 1]
-            elif idx_brace != -1:
-                end_brace = cleaned.rfind("}")
-                if end_brace != -1:
-                    json_str = cleaned[idx_brace:end_brace + 1]
-
-            res = None
-            if json_str:
-                try:
-                    res = json.loads(json_str)
-                except Exception:
-                    sanitized = re.sub(r",\s*([\]}])", r"\1", json_str)
-                    try:
-                        res = json.loads(sanitized)
-                    except Exception:
-                        try:
-                            res_eval = ast.literal_eval(sanitized)
-                            if isinstance(res_eval, (dict, list)):
-                                res = res_eval
-                        except Exception:
-                            pass
+            res = self._extract_json_multi_strategy(cleaned)
 
             if res is None:
                 last_error_code = GenerationErrorCode.JSON_PARSE_ERROR
@@ -276,13 +179,95 @@ class NovelEngine:
             }
             return res, metadata
 
-        # HARD STOP — Raising GenerationError cleanly
+        # HARD STOP — Raising GenerationError cleanly if pure LLM response fails after max_retries
         raise GenerationError(
             stage=stage,
             error_code=last_error_code.value if isinstance(last_error_code, GenerationErrorCode) else str(last_error_code),
             message=f"Generation failed after {max_retries} attempts: {last_error_msg}",
             retryable=True
         )
+
+    def _extract_json_multi_strategy(self, text: str) -> Any:
+        import re
+        import ast
+
+        if not text or not text.strip():
+            return None
+
+        cleaned = text.strip()
+        cleaned = re.sub(r"```json\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"```\s*", "", cleaned)
+
+        def sanitize(s: str) -> str:
+            s = re.sub(r",\s*([\]}])", r"\1", s)
+            s = re.sub(r"[\r\n]+", " ", s)
+            return s
+
+        # Strategy 1: Direct JSON parse
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+
+        try:
+            return json.loads(sanitize(cleaned))
+        except Exception:
+            pass
+
+        first_brace = cleaned.find("{")
+        first_bracket = cleaned.find("[")
+
+        # Strategy 2: If top-level structure starts with { (dict payload)
+        if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+            last_brace = cleaned.rfind("}")
+            if last_brace != -1:
+                candidate = cleaned[first_brace:last_brace + 1]
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    try:
+                        return json.loads(sanitize(candidate))
+                    except Exception:
+                        try:
+                            res_eval = ast.literal_eval(sanitize(candidate))
+                            if isinstance(res_eval, dict):
+                                return res_eval
+                        except Exception:
+                            pass
+
+        # Strategy 3: If top-level structure starts with [ (array payload)
+        if first_bracket != -1 and (first_brace == -1 or first_bracket < first_brace):
+            last_bracket = cleaned.rfind("]")
+            if last_bracket != -1:
+                candidate = cleaned[first_bracket:last_bracket + 1]
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    try:
+                        return json.loads(sanitize(candidate))
+                    except Exception:
+                        try:
+                            res_eval = ast.literal_eval(sanitize(candidate))
+                            if isinstance(res_eval, list):
+                                return res_eval
+                        except Exception:
+                            pass
+
+            # Truncated array repair
+            dict_blocks = re.findall(r'(\{[\s\S]*?\})', cleaned)
+            valid_items = []
+            for d in dict_blocks:
+                try:
+                    valid_items.append(json.loads(d))
+                except Exception:
+                    try:
+                        valid_items.append(json.loads(sanitize(d)))
+                    except Exception:
+                        pass
+            if valid_items:
+                return valid_items
+
+        return None
 
     def _update_project_json(self, data_patch: Dict[str, Any]):
         p_json = self.story_dir / "project.json"

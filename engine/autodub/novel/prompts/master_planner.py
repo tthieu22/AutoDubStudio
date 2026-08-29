@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 class MasterPlannerPrompt:
     @staticmethod
     def build_prompt(story_bible: Dict[str, Any], total_chapters: int = 1000) -> str:
-        arcs_count = max(5, min(30, total_chapters // 40))
+        arcs_count = max(4, min(8, total_chapters // 100))
         premise = story_bible.get('premise', 'Cốt truyện chính')
         prog_ranks = []
         prog_sys = story_bible.get('progression_system', {})
@@ -13,26 +13,28 @@ class MasterPlannerPrompt:
         if not prog_ranks:
             prog_ranks = [c.get('name') for c in story_bible.get('cultivation_system', []) if isinstance(c, dict) and c.get('name')]
         
-        return f"""
-=== VAI TRÒ: MASTER PLANNER (KIẾN TRÚC SƯ KỊCH BẢN TỔNG THỂ) ===
+        chaps_per_arc = max(10, total_chapters // arcs_count)
+
+        return f"""=== VAI TRÒ: MASTER PLANNER (KIẾN TRÚC SƯ KỊCH BẢN TỔNG THỂ) ===
 Hãy chia bộ truyện dài {total_chapters} chương thành {arcs_count} Arc (Quyển/Tuyến truyện chính).
 
-THÔNG TIN BẢN BỒ NỀN MÓNG (STORY BIBLE):
+THÔNG TIN BẢN ĐỒ NỀN MÓNG (STORY BIBLE):
 - Tóm tắt cốt truyện: {premise}
 - Hệ thống sức mạnh / Cấp độ: {", ".join(prog_ranks) if prog_ranks else "Theo tiến trình câu chuyện"}
 - Quy tắc thế giới: {story_bible.get('rules', [])}
 
 ⚠️ QUY TẮC BẮT BUỘC:
 1. Mỗi Arc đại diện cho 1 giai đoạn phát triển cốt truyện chính, có Mục tiêu (Goal), Xung đột (Conflict), Tiết lộ lớn (Major Reveal), và Sự phát triển nhân vật (Character Development).
-2. Tựa đề Arc và nội dung Arc PHẢI bám sát Tiền đề '{premise}' và Hệ thống sức mạnh của bộ truyện này. CẤM copy các tên Arc không liên quan.
+2. Tựa đề Arc và nội dung Arc PHẢI bám sát Tiền đề '{premise}'.
+3. ĐẦU RA PHẢI LÀ MỘT MẢNG JSON THUẦN TÚY (RAW JSON ARRAY), KHÔNG CÓ BẤT KỲ VĂN BẢN LỜI DẪN NÀO BÊN NGOÀI MẢNG JSON.
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất JSON Array các Arc Plan):
+MẪU ĐẦU RA YÊU CẦU:
 [
   {{
     "arc_num": 1,
-    "title": "Arc 01 — [Tựa đề Arc khởi đầu phù hợp với bối cảnh]",
+    "title": "Arc 01 — Khởi Đầu Vận Mệnh",
     "start_chapter": 1,
-    "end_chapter": 40,
+    "end_chapter": {chaps_per_arc},
     "goal": "Mục tiêu chính trong Arc 1",
     "conflict": "Xung đột chính trong Arc 1",
     "major_reveal": "Bí mật hoặc phát hiện quan trọng trong Arc 1",
@@ -40,13 +42,12 @@ YÊU CẦU ĐẦU RA (Trả về duy nhất JSON Array các Arc Plan):
   }},
   {{
     "arc_num": 2,
-    "title": "Arc 02 — [Tựa đề Arc tiếp theo phù hợp với bối cảnh]",
-    "start_chapter": 41,
-    "end_chapter": 80,
+    "title": "Arc 02 — Vươn Tầm Sức Mạnh",
+    "start_chapter": {chaps_per_arc + 1},
+    "end_chapter": {chaps_per_arc * 2},
     "goal": "Mục tiêu chính trong Arc 2",
     "conflict": "Xung đột chính trong Arc 2",
     "major_reveal": "Bí mật hoặc phát hiện quan trọng trong Arc 2",
     "character_development": "Sự trưởng thành của nhân vật chính"
   }}
-]
-"""
+]"""

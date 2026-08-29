@@ -30,7 +30,7 @@ class TestNovelPrompts(unittest.TestCase):
         self.assertIn("SCENE PLANNER", p5)
 
         p6 = NovelWriterPrompt.build_prompt(501, 1, {"goal": "Goal"}, "Full context")
-        self.assertIn("NOVEL WRITER", p6)
+        self.assertIn("SCENE WRITING CONTRACT", p6)
 
         p7 = NovelEditorPrompt.build_prompt(501, "Draft text")
         self.assertIn("NOVEL EDITOR", p7)
