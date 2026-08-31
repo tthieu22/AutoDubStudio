@@ -35,11 +35,11 @@ export interface ChapterItem {
 }
 
 const NARRATION_STYLES = [
-  { id: 'meme', name: '🤣 TikTok Meme & Hài Hước 2026', desc: 'Bắt trend TikTok (Tuyệt đối điện ảnh, Server gốc, Thu thập dữ liệu xã hội...)' },
-  { id: 'ancient', name: '🎭 Cổ Trang & Tiên Hiệp (Trùng Sinh)', desc: 'Trùng sinh nghịch thiên cải mệnh, văn phong hoa mỹ kiếm hiệp.' },
-  { id: 'emotional', name: '😢 U Buồn & Chữa Lành (Chill Lofi)', desc: 'Giọng kể da diết, chữa lành tâm hồn, lắng đọng cảm xúc.' },
-  { id: 'dramatic', name: '⚡ Review Phim Kịch Tính (Hook 3s)', desc: 'Hook 3 giây đầu, pha lật kèo kinh hoàng, tiết tấu dồn dập.' },
-  { id: 'summary', name: '🌟 Tóm Tắt Nhanh (3 Phút Short)', desc: 'Tóm tắt súc tích cao trào chính cho Video Short/Reels.' }
+  { id: 'meme', name: 'TikTok Meme & Hài Hước', desc: 'Bắt trend TikTok (Tuyệt đối điện ảnh, Server gốc, Thu thập dữ liệu xã hội...)' },
+  { id: 'ancient', name: 'Cổ Trang & Tiên Hiệp (Trùng Sinh)', desc: 'Trùng sinh nghịch thiên cải mệnh, văn phong hoa mỹ kiếm hiệp.' },
+  { id: 'emotional', name: 'U Buồn & Chữa Lành (Chill Lofi)', desc: 'Giọng kể da diết, chữa lành tâm hồn, lắng đọng cảm xúc.' },
+  { id: 'dramatic', name: 'Review Phim Kịch Tính (Hook 3s)', desc: 'Hook 3 giây đầu, pha lật kèo kinh hoàng, tiết tấu dồn dập.' },
+  { id: 'summary', name: 'Tóm Tắt Nhanh (3 Phút Short)', desc: 'Tóm tắt súc tích cao trào chính cho Video Short/Reels.' }
 ];
 
 export const StoryImportModal: React.FC<StoryImportModalProps> = ({

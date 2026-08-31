@@ -53,8 +53,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               marginBottom: '14px'
             }}
           >
-            <option value="NVENC">🚀 NVIDIA NVENC (Tăng tốc phần cứng bằng Card đồ họa GPU - Khuyên Dùng)</option>
-            <option value="CPU">💻 CPU Software (Mã hóa bằng vi xử lý CPU - Chạy trên mọi máy)</option>
+            <option value="NVENC">NVIDIA NVENC (Tăng tốc phần cứng bằng Card đồ họa GPU - Khuyên Dùng)</option>
+            <option value="CPU">CPU Software (Mã hóa bằng vi xử lý CPU - Chạy trên mọi máy)</option>
           </select>
 
           {/* Detailed visual explanation box */}
@@ -62,22 +62,20 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             {settings.encoder === 'NVENC' ? (
               <div>
                 <div style={{ fontWeight: 700, color: '#38bdf8', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Zap size={14} /> Chế độ Card Đồ Họa NVIDIA NVENC (Khuyên Dùng Cho Máy Có Card Rời NVIDIA):
+                  Chế độ Card Đồ Họa NVIDIA NVENC (Khuyên Dùng Cho Máy Có Card Rời NVIDIA):
                 </div>
-                <ul style={{ margin: 0, paddingLeft: '18px', color: '#cbd5e1' }}>
-                  <li><strong>Tốc độ Render cực nhanh:</strong> Tốc độ xuất video gấp <strong>10x - 14x lần thời gian thực</strong> (Render video 10 phút chỉ mất khoảng ~45 giây).</li>
-                  <li><strong>Tối ưu tài nguyên:</strong> Sử dụng nhân mã hóa NVENC độc lập trên GPU NVIDIA GeForce GTX 1650 Ti, giúp máy mượt mà, không bị giật lag hay quá nhiệt CPU.</li>
-                </ul>
+                <div style={{ color: 'var(--text-muted)' }}>
+                  Sử dụng bộ mã hóa phần cứng tích hợp trực tiếp trên GPU NVIDIA. Giảm 90% tải CPU, render video siêu nhanh, xem mượt mà không giật giật.
+                </div>
               </div>
             ) : (
               <div>
                 <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Cpu size={14} /> Chế độ Mã Hóa Bằng Vi Xử Lý CPU (Software Encoding):
+                  Chế độ Vi Xử Lý CPU (Software Encoder x264):
                 </div>
-                <ul style={{ margin: 0, paddingLeft: '18px', color: '#cbd5e1' }}>
-                  <li><strong>Độ tương thích cao:</strong> Đảm bảo render thành công trên mọi dòng máy tính không trang bị card đồ họa rời NVIDIA.</li>
-                  <li><strong>Lưu ý:</strong> Tốc độ render sẽ chậm hơn (gấp 1x - 2x thời gian thực) và CPU sẽ hoạt động công suất tối đa trong lúc xuất video.</li>
-                </ul>
+                <div style={{ color: 'var(--text-muted)' }}>
+                  Sử dụng vi xử lý CPU để mã hóa video. Tương thích tuyệt đối trên 100% thiết bị nhưng sẽ làm tăng tải CPU khi xuất video.
+                </div>
               </div>
             )}
           </div>

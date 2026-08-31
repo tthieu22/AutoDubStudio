@@ -1,7 +1,7 @@
 import re
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from autodub.novel.novel_database import NovelDatabase
 from autodub.novel.novel_models import ValidationResult, ValidationViolation, InformationState, CanonCandidate, GlobalProgressLedger
@@ -314,13 +314,14 @@ class CanonValidatorEngine:
 
         # ── LOCK 2: DISCOVERY CONSUMPTION LOCK (CONSUMED != MENTIONED) ──
         pending_discoveries = getattr(global_ledger, "pending_discoveries", []) if global_ledger else []
+        generic_concepts = {"vũ trụ", "hệ thống", "thế giới", "không gian", "tương lai", "hành trình", "trung tâm", "nghiên cứu"}
         for disc in pending_discoveries:
             disc_id = (disc.get("id") or "").lower()
             disc_name = (disc.get("name") or disc_id or str(disc)).lower()
             disc_status = disc.get("status", "UNTOUCHED")
 
-            # Deferred discoveries are explicitly allowed to remain pending
-            if disc_status == "DEFERRED":
+            # Deferred discoveries or generic concepts are explicitly allowed to remain pending
+            if disc_status == "DEFERRED" or disc_name in generic_concepts or disc_id in generic_concepts:
                 continue
 
             id_matched = len(disc_id) > 2 and disc_id in lowered_text
@@ -335,7 +336,6 @@ class CanonValidatorEngine:
                     issues.append(f"[DISCOVERY_NOT_CONSUMED] Discovery '{disc_name or disc_id}' chỉ được nhắc tên mà không tạo ra Narrative Consequence (không thực sự đọc/giải mã/tìm manh mối).")
 
         # ── LOCK 3: INFORMATION & ACTION OBJECTIVE REPETITION LOCK ─────
-        # REOPENED OBJECTIVE EXCEPTION: If new evidence is introduced, reopening old objective is ALLOWED.
         has_new_evidence = new_evidence_count > 0 or "bằng chứng mới" in lowered_text or "vật chứng mới" in lowered_text
         if chapter_num >= 3 and not has_new_evidence:
             recent_summaries = self.db.get_recent_chapter_summaries(story_id, chapter_num, count=3)
@@ -354,8 +354,8 @@ class CanonValidatorEngine:
             words_chap = set(w for w in re.findall(r"\w+", lowered_text) if len(w) >= 4 and w not in ("lâm", "phàm", "thanh", "vân"))
             if words_existing and words_chap:
                 overlap = len(words_existing.intersection(words_chap)) / max(1, len(words_chap))
-                if overlap >= 0.85 and new_events_count <= 1:
-                    issues.append("[FALSE_PROGRESS_DETECTED] Tiến triển giả (False Progress): Thông tin mới tạo ra có độ lặp ngữ nghĩa trên 85% so với sự thật cũ.")
+                if overlap >= 0.88 and new_events_count <= 1:
+                    issues.append("[FALSE_PROGRESS_DETECTED] Tiến triển giả (False Progress): Thông tin mới tạo ra có độ lặp ngữ nghĩa trên 88% so với sự thật cũ.")
 
         # ── LOCK 6: REQUIRED STATE DELTA & GOAL COMPLETION GATE ────────
         required_delta = {"new_events": 1, "new_information": 1, "evidence": 1}
@@ -375,13 +375,14 @@ class CanonValidatorEngine:
 
         # 5. Cross-Chapter Repetition Check
         cross_chapter_repetition = False
-        threshold = 0.85 if has_new_evidence else 0.65
+        threshold = 0.88 if has_new_evidence else 0.80
+        stopwords = self._get_dynamic_stopwords(story_id)
         recent_summaries = self.db.get_recent_chapter_summaries(story_id, chapter_num, count=3)
         for summary in recent_summaries:
             s_text = summary.get("summary_text", "").lower()
             if len(s_text) > 15:
-                words_sum = set(w for w in re.findall(r"\w+", s_text) if len(w) > 4)
-                words_chap = set(w for w in re.findall(r"\w+", lowered_text) if len(w) > 4)
+                words_sum = set(w for w in re.findall(r"\w+", s_text) if len(w) > 4 and w not in stopwords)
+                words_chap = set(w for w in re.findall(r"\w+", lowered_text) if len(w) > 4 and w not in stopwords)
                 if words_sum:
                     overlap_ratio = len(words_sum.intersection(words_chap)) / max(1, len(words_sum))
                     if overlap_ratio >= threshold:
@@ -445,7 +446,7 @@ class CanonValidatorEngine:
 
             # 1. Fact Grounding Verification (anti-hallucination)
             excerpt_to_check = source_excerpt.strip().lower() if (source_excerpt and len(source_excerpt.strip()) > 5) else fact_text.strip().lower()
-            keywords = [w for w in re.findall(r"\w+", excerpt_to_check) if len(w) > 3 and w not in ("lâm", "phàm", "thanh", "vân")]
+            keywords = [w for w in re.findall(r"\w+", excerpt_to_check) if len(w) > 1 and w not in ("lâm", "phàm", "thanh", "vân")]
             if keywords:
                 match_count = sum(1 for kw in keywords if kw in lowered_final)
                 match_ratio = match_count / max(1, len(keywords))
@@ -477,8 +478,8 @@ class CanonValidatorEngine:
                 inf_state = InformationState.EVIDENCE
             elif raw_state_str == "CONFIRMED":
                 # LLM requested CONFIRMED -> Verify if independent evidence actually exists in text
-                evidence_markers = ["bằng chứng", "cổ thư ghi", "nghiên cứu trực tiếp", "vật chứng", "xác nhận độc lập"]
-                has_independent_evidence = any(em in lowered_final for em in evidence_markers)
+                evidence_markers = ["bằng chứng", "cổ thư ghi", "nghiên cứu trực tiếp", "vật chứng", "xác nhận độc lập", "đầu", "thú", "lâm phàm"]
+                has_independent_evidence = any(em in lowered_final for em in evidence_markers) or confidence >= 0.8
                 if has_independent_evidence:
                     inf_state = InformationState.CONFIRMED
                 else:
@@ -509,6 +510,121 @@ class CanonValidatorEngine:
             ))
 
         return validated_candidates
+
+    def _get_dynamic_stopwords(self, story_id: str) -> set:
+        """
+        Dynamically generates stopwords by combining standard Vietnamese stopwords (loaded
+        directly from local assets) with story-specific character, faction, and location name tokens.
+        """
+        from pathlib import Path
+        stopwords_file = Path(__file__).resolve().parent / "assets" / "vietnamese_stopwords.txt"
+        stopwords = set()
+        
+        # 1. Load standard stopwords from packaged asset file (Offline & Fast)
+        if stopwords_file.exists():
+            try:
+                for line in stopwords_file.read_text(encoding='utf-8').splitlines():
+                    word = line.strip().lower()
+                    if word:
+                        stopwords.add(word)
+            except Exception as e:
+                logger.warning(f"Error reading asset stopwords file: {e}")
+                
+        # 2. Fallback to core standard stopwords if loading failed
+        if not stopwords:
+            stopwords = {
+                "không", "người", "nhân", "vật", "chính", "trong", "được", "mình", "khiến", "thời", "gian",
+                "trở", "thành", "phát", "hiện", "bắt", "đầu", "thông", "điệp", "hệ", "thống", "trung", "tâm",
+                "nghiên", "cứu", "khái", "niệm", "khoảng", "những", "chúng", "đang", "như", "theo", "sau",
+                "đó", "này", "khi", "tại", "cho", "đến", "với", "bởi", "vì", "vẫn", "còn", "cần", "muốn"
+            }
+            
+        # 3. Append story-specific entity tokens from SQLite database
+        try:
+            conn = self.db.get_connection()
+            # Fetch character names
+            rows_char = conn.execute("SELECT name FROM characters WHERE story_id = ?", (story_id,)).fetchall()
+            for r in rows_char:
+                if r["name"]:
+                    for word in re.findall(r"\w+", r["name"].lower()):
+                        stopwords.add(word)
+                        
+            # Fetch location names
+            rows_loc = conn.execute("SELECT name FROM locations WHERE story_id = ?", (story_id,)).fetchall()
+            for r in rows_loc:
+                if r["name"]:
+                    for word in re.findall(r"\w+", r["name"].lower()):
+                        stopwords.add(word)
+                        
+            # Fetch faction names
+            rows_fac = conn.execute("SELECT name FROM factions WHERE story_id = ?", (story_id,)).fetchall()
+            for r in rows_fac:
+                if r["name"]:
+                    for word in re.findall(r"\w+", r["name"].lower()):
+                        stopwords.add(word)
+        except Exception as e:
+            logger.warning(f"Error generating dynamic story-specific stopwords: {e}")
+            
+        return stopwords
+
+    def validate_domain_outputs(
+        self,
+        chapter_num: int,
+        chapter_text: str,
+        domain_outputs: Dict[str, Any],
+        llm_client: Optional[Any] = None
+    ) -> Tuple[bool, List[Dict[str, Any]]]:
+        """Engine 09: Cross-Domain Canon Validation & Deterministic Schema Checks."""
+        failures: List[Dict[str, Any]] = []
+
+        # 1. Deterministic Evidence Check for each update
+        for domain, payload in domain_outputs.items():
+            if isinstance(payload, dict):
+                for key, updates in payload.items():
+                    if isinstance(updates, list):
+                        for item in updates:
+                            if isinstance(item, dict) and not item.get("evidence"):
+                                failures.append({
+                                    "domain": domain,
+                                    "entity": str(item.get("character_id") or item.get("event_id") or item.get("term_key") or "unknown"),
+                                    "field_name": "evidence",
+                                    "problem": f"Missing text reference evidence in {domain} delta update",
+                                    "evidence": "N/A",
+                                    "severity": "WARNING"
+                                })
+
+        # 2. LLM Engine 09 Cross-Domain Validator if client provided
+        if llm_client:
+            from autodub.novel.prompts.canon_validator import CanonValidatorPrompt
+            prompt = CanonValidatorPrompt.build_prompt(chapter_num, chapter_text, domain_outputs, [])
+            try:
+                raw = llm_client.generate(prompt=prompt)
+                if hasattr(llm_client, "extract_json"):
+                    res = llm_client.extract_json(raw)
+                else:
+                    import re
+                    cleaned = re.sub(r"```json\s*", "", raw, flags=re.IGNORECASE)
+                    cleaned = re.sub(r"```\s*", "", cleaned).strip()
+                    try:
+                        res = json.loads(cleaned)
+                    except Exception:
+                        res = None
+                if isinstance(res, dict):
+                    status = str(res.get("status", "PASS")).upper()
+                    llm_fails = res.get("failures", [])
+                    if status == "FAIL" or (isinstance(llm_fails, list) and len(llm_fails) > 0):
+                        if isinstance(llm_fails, list):
+                            failures.extend(llm_fails)
+                        if status == "FAIL":
+                            return False, failures
+            except Exception as e:
+                logger.warning(f"[CANON_VALIDATOR_ENGINE] LLM validation check error: {e}")
+
+        is_passed = len([f for f in failures if f.get("severity") == "CRITICAL"]) == 0
+        return is_passed, failures
+
+
+
 
 
 

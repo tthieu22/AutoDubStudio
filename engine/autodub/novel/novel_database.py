@@ -26,6 +26,10 @@ class NovelDatabase:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def close(self):
+        """Closes database resources safely."""
+        pass
+
     def _execute_write(self, query: str, params: tuple = ()) -> int:
         conn = self.get_connection()
         try:
@@ -346,10 +350,21 @@ class NovelDatabase:
     def create_story(self, story_id: str, idea: StoryIdea):
         conn = self.get_connection()
         try:
-            conn.execute(
+            cursor = conn.cursor()
+            cursor.execute(
                 "INSERT OR REPLACE INTO stories (id, title, genre, style, total_chapters, status) VALUES (?, ?, ?, ?, ?, ?)",
                 (story_id, idea.title, idea.genre, idea.style, idea.total_chapters, "INITIALIZED")
             )
+            # Atomic wipe of old story data when re-creating/re-initializing story
+            cursor.execute("DELETE FROM character_states WHERE character_id IN (SELECT id FROM characters WHERE story_id = ?)", (story_id,))
+            cursor.execute("DELETE FROM characters WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM story_bible WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM arc_plans WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM chapter_plans WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM canon_facts WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM canon_candidates WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM plot_threads WHERE story_id = ?", (story_id,))
+            cursor.execute("DELETE FROM global_progress_ledger WHERE story_id = ?", (story_id,))
             conn.commit()
         finally:
             conn.close()
@@ -447,7 +462,7 @@ class NovelDatabase:
                         (
                             new_id, story_id, name,
                             json.dumps({"role": role}, ensure_ascii=False),
-                            role, "Chưa rõ", "Thanh Vân Tông",
+                            role, "Chưa rõ", "Vùng Khởi Đầu",
                             json.dumps([], ensure_ascii=False),
                             json.dumps([], ensure_ascii=False),
                             0
@@ -456,7 +471,7 @@ class NovelDatabase:
                     db.execute(
                         "INSERT INTO character_states (character_id, chapter_num, realm, location, relationships_json, known_info_json, secrets_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
-                            new_id, chapter_num, "Chưa rõ", "Thanh Vân Tông",
+                            new_id, chapter_num, "Chưa rõ", "Vùng Khởi Đầu",
                             json.dumps({}, ensure_ascii=False),
                             json.dumps([f"Xuất hiện tại chapter {chapter_num}"], ensure_ascii=False),
                             json.dumps([], ensure_ascii=False)
@@ -474,6 +489,19 @@ class NovelDatabase:
         finally:
             if own_conn:
                 db.close()
+
+    def get_protagonist_name(self, story_id: str) -> Optional[str]:
+        conn = self.get_connection()
+        try:
+            row = conn.execute(
+                "SELECT name FROM characters WHERE story_id = ? ORDER BY id ASC LIMIT 1",
+                (story_id,)
+            ).fetchone()
+            if row and row["name"]:
+                return str(row["name"])
+            return None
+        finally:
+            conn.close()
 
     def get_confirmed_facts(self, story_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         conn = self.get_connection()

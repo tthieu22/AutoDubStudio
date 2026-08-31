@@ -12,13 +12,24 @@ class NovelWriterPrompt:
         previous_scene_summary: str = "",
         narrative_contract: Optional[Any] = None,
         progress_ledger: Optional[Any] = None,
-        global_ledger: Optional[Any] = None
+        global_ledger: Optional[Any] = None,
+        enable_tiktok_slang: bool = False
     ) -> str:
         scene_goal = scene_plan.get("goal", f"Thực hiện phân cảnh {scene_index}")
         scene_emotion = scene_plan.get("emotion", "Căng thẳng")
         scene_conflict = scene_plan.get("conflict", "Xung đột tự nhiên")
         scene_ending = scene_plan.get("ending", "Chuyển tiếp hồi hộp")
         estimated_words = scene_plan.get("estimated_words", 600)
+
+        tiktok_slang_str = ""
+        if enable_tiktok_slang:
+            tiktok_slang_str = """
+---
+
+## RULE 8 — TIKTOK VIRAL SLANG & TRENDING HUMOR MODE
+- CHẾ ĐỘ BẮT TREND TIKTOK HÀI HƯỚC: BẬT (ENABLED).
+- HÃY KHÉO LÉO SỬ DỤNG TỪ NGỮ VIRAL & SLANG TIKTOK HÀI HƯỚC: (ví dụ: 'lật kèo kinh hoàng', 'tuyệt đối điện ảnh', 'độc lạ', 'ảo thật đấy', 'đỉnh nóc kịch trần', 'xịt keo', 'bất ổn', 'flex', 'quay xe'...) một cách dí dỏm, tự nhiên vào lời dẫn và lời thoại để tăng tính hấp dẫn, giải trí.
+"""
 
         contract_str = ""
         forbidden_reps_str = ""
@@ -108,6 +119,7 @@ Scene BẮT BUỘC kết thúc bằng: thông tin mới, quyết định, hành 
 ## RULE 7 — GENRE-APPROPRIATE PRONOUNS & ANTI-DUPLICATION
 - Xưng hô & Văn phong: PHẢI dùng xưng hô và văn phong CHUẨN XÁC THEO THỂ LOẠI VÀ BỐI CẢNH DỰ ÁN (Hiện đại/Sci-Fi/Trinh thám dùng xưng hô hiện đại phù hợp bối cảnh; Tiên hiệp/Cổ đại dùng xưng hô cổ trang tương ứng).
 - CẤM LẶP ĐOẠN VĂN: Tuyệt đối CẤM lặp lại nguyên văn hoặc diễn đạt cùng một đoạn văn 2 lần trong cùng phân cảnh.
+{tiktok_slang_str}
 
 ---
 

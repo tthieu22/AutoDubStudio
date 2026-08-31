@@ -542,6 +542,15 @@ export class PythonEngineService {
     });
   }
 
+  static subscribeNovelLogs(callback: (logLine: any) => void) {
+    if (!isTauri()) {
+      return () => {};
+    }
+    return listen<any>('novel://log', (event: Event<any>) => {
+      callback(event.payload);
+    });
+  }
+
   // Event listener helpers
   static subscribeProgress(callback: (event: PipelineProgressEvent) => void) {
     if (!isTauri()) {

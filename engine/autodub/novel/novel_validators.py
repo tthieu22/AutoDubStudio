@@ -28,11 +28,11 @@ def log_gpu_hardware_status(callback: Optional[Callable[[Dict[str, Any]], None]]
         if torch.cuda.is_available():
             dev_name = torch.cuda.get_device_name(0)
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            _out(f"[HARDWARE] 🚀 GPU Device Detected: {dev_name} ({vram_gb:.1f} GB VRAM)")
-            _out("[HARDWARE] ⚡ PyTorch CUDA Acceleration: ACTIVE (Device 0)")
-            _out("[HARDWARE] 🎯 Local LLM Offload: -ngl 99 (100% GPU VRAM Accelerated)")
+            _out(f"[HARDWARE] GPU Device Detected: {dev_name} ({vram_gb:.1f} GB VRAM)")
+            _out("[HARDWARE] PyTorch CUDA Acceleration: ACTIVE (Device 0)")
+            _out("[HARDWARE] Local LLM Offload: -ngl 99 (100% GPU VRAM Accelerated)")
         else:
-            _out("[HARDWARE] ⚠️ CUDA not detected in PyTorch environment. Running CPU Fallback Mode.")
+            _out("[HARDWARE] CUDA not detected in PyTorch environment. Running CPU Fallback Mode.")
     except Exception as e:
         _out(f"[HARDWARE] GPU status check: {e}")
 
@@ -41,6 +41,9 @@ def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str
     """Validates that generated characters or story bible contains the requested protagonist."""
     expected_p = idea.protagonist.get("name", "").strip() if isinstance(idea.protagonist, dict) else ""
     if not expected_p or expected_p.lower() in ("nhân vật chính", "chưa đặt tên"):
+        return True, ""
+
+    if isinstance(res, dict) and "characters" not in res:
         return True, ""
 
     chars = []
@@ -62,7 +65,10 @@ def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str
 def validate_genre_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
     """Validates that non-Xianxia genres do not contain forbidden Xianxia terms."""
     genre_lower = (idea.genre or "").lower()
-    xianxia_genres = ["tiên hiệp", "huyền huyễn", "tu tiên", "tiên đế"]
+    xianxia_genres = [
+        "tiên hiệp", "huyền huyễn", "tu tiên", "tiên đế", "xuyên không",
+        "cổ đại", "kiếm hiệp", "võ lâm", "hệ thống", "trùng sinh", "dị thế", "dị năng"
+    ]
     is_xianxia = any(xg in genre_lower for xg in xianxia_genres)
 
     if is_xianxia:

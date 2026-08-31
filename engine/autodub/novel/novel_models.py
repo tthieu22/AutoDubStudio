@@ -21,6 +21,7 @@ class StoryIdea(BaseModel):
         "background": "Hiện đại xuyên không"
     })
     total_chapters: int = 1000
+    enable_tiktok_slang: bool = False
     words_per_chapter: Tuple[int, int] = (2500, 3500)
     requirements: List[str] = Field(default_factory=lambda: [
         "Có plot twist",
@@ -137,6 +138,8 @@ class GenerationErrorCode(str, Enum):
     PROTAGONIST_INTEGRITY_ERROR = "PROTAGONIST_INTEGRITY_ERROR"
     GENRE_INTEGRITY_ERROR = "GENRE_INTEGRITY_ERROR"
     GENERATION_FAILED = "GENERATION_FAILED"
+    CANON_CONTRADICTION = "CANON_CONTRADICTION"
+    LLM_GENERATION_FAILED = "LLM_GENERATION_FAILED"
 
 
 class GenerationError(Exception):

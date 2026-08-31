@@ -12,7 +12,7 @@ from autodub.novel.novel_engine import NovelEngine
 class MockLlamaClient:
     def generate(self, prompt: str, timeout: int = 120) -> str:
         if "STORY DIRECTOR" in prompt:
-            return '{"premise": "Test premise", "world": {"continent_name": "Test Continent", "locations": ["Loc 1"]}, "progression_system": {"type": "cultivation", "ranks": [{"rank":1, "name":"Sơ Cấp"}]}, "cultivation_system": [{"rank":1, "name":"Sơ Cấp"}], "characters": [{"id":"char_001", "name":"Lâm Phàm", "realm":"Sơ Cấp"}], "rules": ["Rule 1"]}'
+            return '{"premise": "Test premise", "world": {"continent_name": "Test Continent", "locations": ["Loc 1"]}, "progression_system": {"type": "cultivation", "ranks": [{"rank":1, "name":"Sơ Cấp"}]}, "cultivation_system": [{"rank":1, "name":"Sơ Cấp"}], "characters": [{"id":"char_001", "name":"Lâm Phàm", "realm":"Sơ Cấp"}, {"id":"char_002", "name":"Nguyệt Nhi", "realm":"Sơ Cấp"}], "rules": ["Rule 1"]}'
         elif "MASTER PLANNER" in prompt:
             return '[{"arc_num": 1, "title": "Arc 1", "start_chapter": 1, "end_chapter": 50, "goal": "Goal 1"}]'
         elif "CHAPTER PLANNER" in prompt:
@@ -32,7 +32,7 @@ class MockLlamaClient:
 
 class TestNovelEnginePipeline(unittest.TestCase):
     def test_full_engine_pipeline(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
             story_dir = Path(tmp_dir) / "test_novel_001"
             mock_llm = MockLlamaClient()
             engine = NovelEngine(story_dir=story_dir, story_id="story_test", llm_client=mock_llm)
@@ -58,6 +58,8 @@ class TestNovelEnginePipeline(unittest.TestCase):
             facts = engine.db.get_canon_facts("story_test", limit=10)
             self.assertEqual(len(facts), 1)
             self.assertIn("yêu thú", facts[0]["fact_text"])
+
+            engine.db.close()
 
 
 if __name__ == "__main__":

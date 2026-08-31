@@ -114,10 +114,10 @@ export const RenderManager: React.FC<RenderManagerProps> = ({ projectDir }) => {
                 onChange={e => setEncoder(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-emerald-400 font-bold focus:outline-none"
               >
-                <option value="h264_nvenc">⚡ NVIDIA NVENC H.264 (Tăng tốc GPU)</option>
-                <option value="hevc_nvenc">⚡ NVIDIA NVENC H.265 / HEVC</option>
-                <option value="h264_amf">⚡ AMD AMF H.264</option>
-                <option value="libx264">💻 CPU x264 Software Encoder</option>
+                <option value="h264_nvenc">NVIDIA NVENC H.264 (Tăng tốc GPU)</option>
+                <option value="hevc_nvenc">NVIDIA NVENC H.265 / HEVC</option>
+                <option value="h264_amf">AMD AMF H.264</option>
+                <option value="libx264">CPU x264 Software Encoder</option>
               </select>
             </div>
 

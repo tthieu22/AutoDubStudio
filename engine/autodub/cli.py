@@ -458,11 +458,13 @@ def main():
                     if getattr(args, "protagonist_bg", None):
                         protagonist_data["background"] = args.protagonist_bg
 
+                    enable_tiktok_slang = bool(getattr(args, "enable_tiktok_slang", False))
                     idea = StoryIdea(
                         title=args.title,
                         genre=args.genre,
                         style=args.style,
                         total_chapters=args.chapters,
+                        enable_tiktok_slang=enable_tiktok_slang,
                         protagonist=protagonist_data if protagonist_data else {"name": "Nhân vật chính"}
                     )
                     bible = engine.initialize_story(idea)

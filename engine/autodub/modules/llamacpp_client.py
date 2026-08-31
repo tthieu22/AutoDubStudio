@@ -94,7 +94,7 @@ class LlamaCppClient:
         ollama_bin = shutil.which("ollama") or r"C:\Users\hieut\AppData\Local\Programs\Ollama\ollama.exe"
         if Path(ollama_bin).exists():
             try:
-                print(f"[INFO] [AUTO-LAUNCH] 🚀 Đang tự động kích hoạt Ollama GPU Server ({ollama_bin})...", flush=True)
+                print(f"[INFO] [AUTO-LAUNCH] Đang tự động kích hoạt Ollama GPU Server ({ollama_bin})...", flush=True)
                 subprocess.Popen(
                     [str(ollama_bin), "serve"],
                     stdout=subprocess.DEVNULL,

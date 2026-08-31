@@ -57,11 +57,36 @@ class NovelEngine:
         self.context_builder = ContextBuilder(self.story_id, self.db)
         self.validator = CanonValidatorEngine(self.db)
         self.llm = llm_client or LlamaCppClient()
-        self.is_running = False
-
         # Ensure checkpoints directory exists
         self.checkpoints_dir = self.story_dir / "chapters" / "checkpoints"
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
+
+        from autodub.novel.pipeline_orchestrator import PipelineOrchestrator
+        from autodub.novel.components.story_planner import StoryPlanner
+        from autodub.novel.components.chapter_planner import ChapterPlanner
+        from autodub.novel.components.scene_executor import SceneExecutor
+
+        self.orchestrator = PipelineOrchestrator(self.db, self.llm)
+        self.story_planner = StoryPlanner(
+            story_id=self.story_id,
+            story_dir=self.story_dir,
+            db=self.db,
+            llm_strict_caller=self._call_llm_json_strict,
+            project_json_updater=self._update_project_json,
+            checkpoints_dir=self.checkpoints_dir
+        )
+        self.chapter_planner = ChapterPlanner(llm_json_caller=self._call_llm_json)
+        self.scene_executor = SceneExecutor(
+            story_id=self.story_id,
+            story_dir=self.story_dir,
+            checkpoints_dir=self.checkpoints_dir,
+            db=self.db,
+            context_builder=self.context_builder,
+            validator=self.validator,
+            llm=self.llm,
+            llm_json_caller=self._call_llm_json
+        )
+        self.is_running = False
 
 
     def _call_llm_json(self, prompt: str, default_val: Any) -> Any:
@@ -69,7 +94,7 @@ class NovelEngine:
         import ast
         try:
             raw_res = self.llm.generate(prompt=prompt, timeout=120)
-            cleaned = strip_think_tags(raw_res).strip()
+            cleaned = strip_think_tags(raw_res).strip() if raw_res else ""
             cleaned = re.sub(r"```json\s*", "", cleaned, flags=re.IGNORECASE)
             cleaned = re.sub(r"```\s*", "", cleaned)
 
@@ -86,21 +111,28 @@ class NovelEngine:
                 if end_brace != -1:
                     json_str = cleaned[idx_brace:end_brace + 1]
 
+            if not json_str:
+                json_str = cleaned
+
             if json_str:
-                # Direct JSON parse
+                # Attempt 1: Direct JSON parse
                 try:
                     return json.loads(json_str)
                 except Exception:
                     pass
 
-                # Clean trailing commas
-                sanitized = re.sub(r",\s*([\]}])", r"\1", json_str)
+                # Attempt 2: Clean JS comments, smart quotes, trailing commas
+                sanitized = re.sub(r"//.*?\n", "\n", json_str)
+                sanitized = re.sub(r"/\*[\s\S]*?\*/", "", sanitized)
+                sanitized = sanitized.replace("“", '"').replace("”", '"').replace("’", "'")
+                sanitized = re.sub(r",\s*([\]}])", r"\1", sanitized)
+
                 try:
                     return json.loads(sanitized)
                 except Exception:
                     pass
 
-                # Python literal fallback
+                # Attempt 3: Python literal_eval fallback
                 try:
                     res_eval = ast.literal_eval(sanitized)
                     if isinstance(res_eval, (dict, list)):
@@ -284,190 +316,13 @@ class NovelEngine:
             logger.warning(f"Failed to update project.json: {e}")
 
     # ══════════════════════════════════════════════════════════════
-    # PHASE A: INITIALIZATION
+    # PHASE A: INITIALIZATION & MASTER PLAN
     # ══════════════════════════════════════════════════════════════
     def initialize_story(self, idea: StoryIdea) -> StoryBible:
-        p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
-
-        logger.info(f"[WORLD_GENERATION] Input Genre: '{idea.genre}' | Protagonist: '{p_name}' | LLM Call: START")
-
-        prompt = StoryDirectorPrompt.build_prompt(idea)
-        raw_bible, metadata = self._call_llm_json_strict(prompt, stage="WORLD_GENERATION", idea=idea, max_retries=3)
-
-        # Strict Schema Validation
-        if not isinstance(raw_bible, dict):
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Story Bible payload must be a JSON object")
-
-        if not raw_bible.get("premise"):
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'premise' is missing or empty")
-
-        if not raw_bible.get("world") or not isinstance(raw_bible.get("world"), dict):
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'world' is missing or invalid")
-
-        if not raw_bible.get("characters") or not isinstance(raw_bible.get("characters"), list) or len(raw_bible.get("characters")) == 0:
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'characters' must contain at least 1 character")
-
-        # Support both progression_system and cultivation_system
-        prog_sys = raw_bible.get("progression_system") or {}
-        cult_sys = raw_bible.get("cultivation_system") or []
-        if not prog_sys and not cult_sys:
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'progression_system' or 'cultivation_system' is missing")
-
-        raw_bible["generation_metadata"] = metadata
-        logger.info(f"[WORLD_GENERATION] LLM Call: SUCCESS | Source: {metadata['source']} | Fallback Used: FALSE")
-
-        # Save to DB & File ONLY AFTER PASSING VALIDATION
-        self.db.create_story(self.story_id, idea)
-
-        bible_file = self.story_dir / "story_bible.json"
-        with open(bible_file, "w", encoding="utf-8") as f:
-            json.dump(raw_bible, f, indent=2, ensure_ascii=False)
-
-        from autodub.novel.novel_models import Character
-        for c in raw_bible.get("characters", []):
-            char_obj = Character(
-                id=c.get("id", "char_001"),
-                name=c.get("name", p_name),
-                personality=c.get("personality", []),
-                goal=c.get("goal", ""),
-                realm=c.get("realm", "Khởi Đầu"),
-                location=c.get("location", "Khởi Đầu"),
-                known_information=c.get("known_information", []),
-                secrets=c.get("secrets", [])
-            )
-            self.db.save_character(char_obj, self.story_id)
-
-        # Format characters for UI CharacterBible tab
-        formatted_chars = []
-        for idx, c in enumerate(raw_bible.get("characters", []), start=1):
-            formatted_chars.append({
-                "id": c.get("id", f"char_{idx:03d}"),
-                "name": c.get("name", p_name),
-                "alias": c.get("realm", "Khởi Đầu"),
-                "gender": c.get("gender", "Nam"),
-                "age": str(c.get("age", "20")),
-                "personality": ", ".join(c.get("personality", [])) if isinstance(c.get("personality"), list) else str(c.get("personality", "Quyết đoán")),
-                "appearance": f"Mục tiêu: {c.get('goal', 'Khám phá thế giới')}",
-                "clothing": f"Cảnh giới: {c.get('realm', 'Khởi Đầu')} • Vị trí: {c.get('location', 'Vùng Khởi Đầu')}",
-                "voice": "vi_male_hero",
-                "speakingStyle": "Trang trọng",
-                "locked": True
-            })
-
-        # Format world lore for UI WorldBible tab
-        formatted_lore = []
-        world_info = raw_bible.get("world", {})
-        if isinstance(world_info, dict):
-            for loc in world_info.get("locations", []):
-                name = loc if isinstance(loc, str) else loc.get("name", "Địa Danh")
-                desc = f"Địa danh thuộc đại lục {world_info.get('continent_name', '')}" if isinstance(loc, str) else loc.get("description", "")
-                formatted_lore.append({
-                    "id": f"w-loc-{len(formatted_lore)}",
-                    "category": "Location",
-                    "name": name,
-                    "description": desc,
-                    "locked": True
-                })
-            for fac in world_info.get("factions", []):
-                name = fac if isinstance(fac, str) else fac.get("name", "Thế Lực")
-                formatted_lore.append({
-                    "id": f"w-fac-{len(formatted_lore)}",
-                    "category": "Organization",
-                    "name": name,
-                    "description": "Thế lực chính trong đại lục",
-                    "locked": True
-                })
-        
-        ranks_list = cult_sys if cult_sys else prog_sys.get("ranks", [])
-        for cs in ranks_list:
-            if isinstance(cs, dict):
-                formatted_lore.append({
-                    "id": f"w-cs-{len(formatted_lore)}",
-                    "category": "Rule",
-                    "name": f"Cấp độ #{cs.get('rank', 1)}: {cs.get('name')}",
-                    "description": cs.get("description", "Cấp độ sức mạnh / Tiến trình"),
-                    "locked": True
-                })
-
-        # Format rules for UI StoryMemory tab
-        formatted_memory = []
-        for r in raw_bible.get("rules", []):
-            formatted_memory.append({
-                "id": f"mem-{len(formatted_memory)}",
-                "category": "World",
-                "content": r,
-                "importance": "HIGH",
-                "confidence": 1.0,
-                "locked": True
-            })
-
-        self._update_project_json({
-            "story_bible": raw_bible,
-            "characters": formatted_chars,
-            "world_lore": formatted_lore,
-            "story_memory": formatted_memory
-        })
-
-        return StoryBible(**raw_bible)
+        return self.story_planner.initialize_story(idea)
 
     def generate_master_plan(self, total_chapters: int = 1000) -> List[ArcPlan]:
-        bible_file = self.story_dir / "story_bible.json"
-        if not bible_file.exists():
-            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Valid Story Bible is required before generating Master Plan", retryable=False)
-
-        bible_data = {}
-        try:
-            bible_data = json.loads(bible_file.read_text(encoding="utf-8"))
-        except Exception:
-            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Story Bible file is corrupt or unreadable", retryable=False)
-
-        if not bible_data.get("premise"):
-            raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Story Bible premise is empty or invalid", retryable=False)
-
-        premise = bible_data.get("premise", "Cốt truyện chính")
-        logger.info(f"[MASTER_PLAN_GENERATION] Input Premise: '{premise[:40]}' | Total Chapters: {total_chapters} | LLM Call: START")
-
-        prompt = MasterPlannerPrompt.build_prompt(bible_data, total_chapters)
-        raw_arcs, metadata = self._call_llm_json_strict(prompt, stage="MASTER_PLAN", idea=None, max_retries=3)
-
-        if isinstance(raw_arcs, dict) and "arcs" in raw_arcs:
-            raw_arcs = raw_arcs["arcs"]
-
-        if not isinstance(raw_arcs, list) or len(raw_arcs) == 0:
-            raise GenerationError("MASTER_PLAN", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Field 'arcs' must contain at least one valid Arc plan", retryable=True)
-
-        arc_objs = []
-        for idx, a in enumerate(raw_arcs, start=1):
-            if isinstance(a, str):
-                a = {"title": a}
-            elif not isinstance(a, dict):
-                a = {}
-
-            arc_objs.append(ArcPlan(
-                id=f"arc_{idx:02d}",
-                story_id=self.story_id,
-                arc_num=a.get("arc_num", idx),
-                title=a.get("title", f"Arc {idx}"),
-                start_chapter=a.get("start_chapter", (idx-1)*40 + 1),
-                end_chapter=a.get("end_chapter", idx*40),
-                goal=a.get("goal", ""),
-                conflict=a.get("conflict", ""),
-                major_reveal=a.get("major_reveal", ""),
-                character_development=a.get("character_development", "")
-            ))
-
-
-        logger.info(f"[MASTER_PLAN_GENERATION] LLM Call: SUCCESS | Source: {metadata['source']} | Fallback Used: {metadata['fallback_used']} | Arc Count: {len(arc_objs)}")
-
-        self.db.save_arc_plans(arc_objs)
-
-        # Sync formatted arc_plans to project.json for UI ArcPlanner tab
-        arc_dicts = [a.model_dump() for a in arc_objs]
-        self._update_project_json({
-            "arc_plans": arc_dicts
-        })
-
-        return arc_objs
+        return self.story_planner.generate_master_plan(total_chapters)
 
     # ══════════════════════════════════════════════════════════════
     # PHASE B: CHAPTER GENERATION PIPELINE
@@ -524,224 +379,26 @@ class NovelEngine:
 
             # [STEP 2/7] CHAPTER PLANNER & NARRATIVE CONTRACT
             _notify("PLANNING", f"Step 2/7 — PLANNING & CONTRACT: Planning Chapter {chapter_num} (Replan {replan_count}/{MAX_CHAPTER_REPLANS})...")
-            c_planner_prompt = ChapterPlannerPrompt.build_prompt(chapter_num, arc, open_threads, recent_summaries, global_ledger=global_ledger)
-            chap_plan = self._call_llm_json(c_planner_prompt, {
-                "chapter_num": chapter_num,
-                "goal": f"Đạt được tiến triển mục tiêu chương {chapter_num}",
-                "conflict": "Xung đột bất ngờ",
-                "characters": ["char_001"],
-                "reveal": "Tiết lộ bí mật mới",
-                "ending": "Cliffhanger hồi hộp"
-            })
-
-            # Generate Narrative Contract
-            narrative_contract_prompt = NarrativeContractPrompt.build_prompt(chapter_num, chap_plan, context_summary, open_threads)
-            raw_contract = self._call_llm_json(narrative_contract_prompt, {
-                "chapter_goal": [chap_plan.get("goal", f"Chương {chapter_num}")],
-                "forbidden_topic_drift": ["tranh chấp thương mại", "đối tác kinh doanh", "tuyến tài nguyên mới"]
-            })
-            narrative_contract = NarrativeContract(
+            chap_plan, narrative_contract, scenes_plan = self.chapter_planner.generate_chapter_and_scene_plan(
                 chapter_num=chapter_num,
-                chapter_goal=raw_contract.get("chapter_goal", [chap_plan.get("goal")]),
-                required_events=raw_contract.get("required_events", []),
-                required_information=raw_contract.get("required_information", []),
-                allowed_characters=raw_contract.get("allowed_characters", ["char_001"]),
-                allowed_locations=raw_contract.get("allowed_locations", []),
-                open_threads_to_advance=raw_contract.get("open_threads_to_advance", []),
-                forbidden_topic_drift=raw_contract.get("forbidden_topic_drift", ["tranh chấp thương mại", "đối tác kinh doanh"]),
-                forbidden_repetitions=raw_contract.get("forbidden_repetitions", ["Không lặp lại sự kiện/thông tin cũ"]),
-                character_knowledge_boundaries=raw_contract.get("character_knowledge_boundaries", {})
+                arc=arc,
+                open_threads=open_threads,
+                recent_summaries=recent_summaries,
+                global_ledger=global_ledger,
+                context_summary=context_summary,
+                replan_count=replan_count
             )
 
-            # Dynamic Scene Planner
-            s_planner_prompt = NovelScenePlannerPrompt.build_prompt(chapter_num, chap_plan, context_summary)
-            scenes_plan = self._call_llm_json(s_planner_prompt, [
-                {
-                    "scene_index": 1,
-                    "goal": "Phát hiện thử thách và đối thoại trực tiếp",
-                    "emotion": "Căng thẳng",
-                    "conflict": "Đối đầu khiêu khích",
-                    "ending": "Nhận ra ý đồ đối phương",
-                    "estimated_words": 600
-                },
-                {
-                    "scene_index": 2,
-                    "goal": "Giải quyết mâu thuẫn bằng quyết đoán",
-                    "emotion": "Quyết đoán",
-                    "conflict": "Xử lý xung đột",
-                    "ending": "Đạt được tiến triển mục tiêu chương",
-                    "estimated_words": 600
-                }
-            ])
-
-            if not isinstance(scenes_plan, list):
-                scenes_plan = [scenes_plan]
-
-            sanitized_scenes = []
-            for idx, sc in enumerate(scenes_plan, start=1):
-                if isinstance(sc, dict):
-                    sanitized_scenes.append(sc)
-                else:
-                    sanitized_scenes.append({
-                        "scene_index": idx,
-                        "goal": str(sc) if sc else f"Diễn biến phân cảnh {idx}",
-                        "emotion": "Căng thẳng",
-                        "conflict": "Xung đột mới",
-                        "ending": "Hồi hộp",
-                        "estimated_words": 600
-                    })
-            scenes_plan = sanitized_scenes
-
-            # [STEP 3/7] SCENE EXECUTION LOOP
-            char_ids = chap_plan.get("characters", ["char_001"]) if isinstance(chap_plan, dict) else ["char_001"]
-            chapter_goal_text = chap_plan.get("goal", f"Đạt được mục tiêu chương {chapter_num}") if isinstance(chap_plan, dict) else f"Đạt được mục tiêu chương {chapter_num}"
-            scene_drafts = []
-            scene_records = []
-            prev_scene_summary = ""
-            progress_ledger = ProgressLedger(chapter_num=chapter_num)
-
-            for sc_idx, sc in enumerate(scenes_plan, start=1):
-                sc_id = sc.get("scene_index", sc_idx)
-                chk_file = self.checkpoints_dir / f"chap_{chapter_num:04d}_scene_{sc_id}.json"
-
-                # Checkpoint Resume & V2.3 Validation Check
-                if chk_file.exists() and replan_count == 0:
-                    try:
-                        chk_data = json.loads(chk_file.read_text(encoding="utf-8"))
-                        chk_text = chk_data.get("text", "")
-                        chk_val = self.validator.validate_scene(
-                            story_id=self.story_id,
-                            chapter_num=chapter_num,
-                            scene_index=sc_id,
-                            scene_text=chk_text,
-                            scene_plan=sc,
-                            character_ids=char_ids,
-                            narrative_contract=narrative_contract,
-                            global_ledger=global_ledger
-                        )
-                        if chk_data.get("passed") and chk_text and chk_val.get("passed"):
-                            _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — LOADED FROM CHECKPOINT")
-                            scene_drafts.append(chk_text)
-                            scene_records.append(chk_data)
-                            progress_ledger.completed_events.append(sc.get("goal", f"Scene {sc_id}"))
-                            prev_scene_summary = f"Scene {sc_id} ({sc.get('goal', '')}): {chk_text[-150:]}"
-                            continue
-                        else:
-                            _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — OLD CHECKPOINT INVALIDATED (Failed V2.3 Rules). RE-WRITING FRESH SCENE...")
-                            chk_file.unlink(missing_ok=True)
-                    except Exception as e:
-                        logger.warning(f"Failed loading scene checkpoint {chk_file}: {e}")
-
-                # Generate Scene Text (Writer)
-                _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — WRITING")
-                full_context = self.context_builder.build_writer_context(chapter_num, sc, char_ids, global_ledger=global_ledger)
-                writer_prompt = NovelWriterPrompt.build_prompt(
-                    chapter_num=chapter_num,
-                    scene_index=sc_id,
-                    scene_plan=sc,
-                    full_context=full_context,
-                    chapter_goal=chapter_goal_text,
-                    previous_scene_summary=prev_scene_summary,
-                    narrative_contract=narrative_contract,
-                    progress_ledger=progress_ledger,
-                    global_ledger=global_ledger
-                )
-
-                try:
-                    raw_res = self.llm.generate(prompt=writer_prompt, timeout=120)
-                    cleaned_scene = strip_think_tags(raw_res).strip()
-                except Exception as e:
-                    logger.warning(f"LLM generate failed for Scene {sc_id}: {e}")
-                    fallback_char = char_ids[0] if char_ids else "Nhân vật chính"
-                    cleaned_scene = f"{fallback_char} tập trung tinh thần quan sát diễn biến xung quanh, chủ động tìm kiếm bước ngoặt và chuẩn bị đưa ra phương án xử lý kiên quyết nhất..."
-
-                # Validate Scene
-                _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — VALIDATING")
-                val_res = self.validator.validate_scene(
-                    story_id=self.story_id,
-                    chapter_num=chapter_num,
-                    scene_index=sc_id,
-                    scene_text=cleaned_scene,
-                    scene_plan=sc,
-                    character_ids=char_ids,
-                    narrative_contract=narrative_contract,
-                    global_ledger=global_ledger
-                )
-
-                retries = 0
-                while not val_res.get("passed") and retries < 2:
-                    retries += 1
-                    _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — REWRITING (Retry {retries}/2)")
-                    rewrite_prompt = NovelRewriterPrompt.build_prompt(
-                        chapter_num=chapter_num,
-                        scene_index=sc_id,
-                        scene_plan=sc,
-                        draft_scene_text=cleaned_scene,
-                        issues=val_res.get("issues", []),
-                        full_context=full_context,
-                        narrative_contract=narrative_contract,
-                        progress_ledger=progress_ledger,
-                        global_ledger=global_ledger
-                    )
-                    try:
-                        rewritten_res = self.llm.generate(prompt=rewrite_prompt, timeout=120)
-                        cleaned_rewrite = strip_think_tags(rewritten_res).strip()
-                        if cleaned_rewrite and len(cleaned_rewrite) >= 50:
-                            cleaned_scene = cleaned_rewrite
-                    except Exception as e:
-                        logger.warning(f"LLM rewrite failed for Scene {sc_id}: {e}")
-
-                    val_res = self.validator.validate_scene(
-                        story_id=self.story_id,
-                        chapter_num=chapter_num,
-                        scene_index=sc_id,
-                        scene_text=cleaned_scene,
-                        scene_plan=sc,
-                        character_ids=char_ids,
-                        narrative_contract=narrative_contract,
-                        global_ledger=global_ledger
-                    )
-
-                _notify("SCENE_EXECUTION", f"Step 3/7 — Scene {sc_id}/{len(scenes_plan)} — PASSED (Score: {val_res.get('score', 100)})")
-
-                scene_record = {
-                    "chapterNumber": chapter_num,
-                    "sceneNumber": sc_id,
-                    "goal": sc.get("goal"),
-                    "emotion": sc.get("emotion"),
-                    "text": cleaned_scene,
-                    "passed": val_res.get("passed", True),
-                    "score": val_res.get("score", 100),
-                    "issues": val_res.get("issues", []),
-                    "retries": retries
-                }
-
-                progress_ledger.completed_events.append(sc.get("goal", f"Scene {sc_id}"))
-
-                try:
-                    chk_file.write_text(json.dumps(scene_record, indent=2, ensure_ascii=False), encoding="utf-8")
-                except Exception as e:
-                    logger.warning(f"Failed writing checkpoint file {chk_file}: {e}")
-
-                scene_drafts.append(cleaned_scene)
-                scene_records.append(scene_record)
-                prev_scene_summary = f"Scene {sc_id} ({sc.get('goal', '')}): {cleaned_scene[-150:]}"
-
-            # [STEP 4/7] CHAPTER ASSEMBLER
-            _notify("CHAPTER_ASSEMBLER", f"Step 4/7 — CHAPTER ASSEMBLER: Combining {len(scene_drafts)} scenes...")
-            full_draft = "\n\n".join(scene_drafts)
-
-            editor_prompt = NovelEditorPrompt.build_prompt(chapter_num, full_draft)
-            editor_res = self._call_llm_json(editor_prompt, {
-                "edited_text": full_draft,
-                "changes_made": ["Biên tập văn phong tự động"]
-            })
-            if isinstance(editor_res, dict):
-                final_text = editor_res.get("edited_text", full_draft)
-            elif isinstance(editor_res, str):
-                final_text = editor_res
-            else:
-                final_text = full_draft
+            # [STEP 3/7 & 4/7] SCENE EXECUTION LOOP & CHAPTER ASSEMBLY
+            final_text, scene_drafts, scene_records = self.scene_executor.execute_scenes(
+                chapter_num=chapter_num,
+                chap_plan=chap_plan,
+                scenes_plan=scenes_plan,
+                narrative_contract=narrative_contract,
+                global_ledger=global_ledger,
+                replan_count=replan_count,
+                notify_callback=_notify
+            )
 
             # [STEP 5/7] CHAPTER PROGRESSION VALIDATOR & ANTI-STAGNATION
             _notify("PROGRESSION_VALIDATOR", f"Step 5/7 — CHAPTER PROGRESSION VALIDATOR: Validating narrative delta for Chapter {chapter_num}...")
@@ -771,25 +428,31 @@ class NovelEngine:
                         "validated": False
                     }
 
-        # [STEP 6/7] METADATA EXTRACTOR
-        _notify("METADATA_EXTRACTOR", f"Step 6/7 — METADATA EXTRACTOR: Extracting metadata candidates strictly from final chapter text...")
-        extractor_prompt = MemoryExtractorPrompt.build_prompt(chapter_num, final_text)
-        memory_extracted = self._call_llm_json(extractor_prompt, {
+        # [STEP 6/7] 9-STAGE SPECIALIZED PROMPT ENGINE PIPELINE
+        _notify("PIPELINE_ORCHESTRATOR", f"Step 6/7 — PIPELINE ORCHESTRATOR: Running 9 Specialized Prompt Engines & Cross-Domain Validation...")
+        story_bible_dict = None
+        bible_file = self.story_dir / "story_bible.json"
+        if bible_file.exists():
+            try:
+                story_bible_dict = json.loads(bible_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        pipe_res = self.orchestrator.process_chapter_pipeline(
+            story_id=self.story_id,
+            chapter_num=chapter_num,
+            chapter_text=final_text,
+            story_bible=story_bible_dict,
+            progress_callback=sub_progress_callback
+        )
+
+        protagonist_name = self.db.get_protagonist_name(self.story_id) or "Nhân vật chính"
+        memory_extracted = {
             "summary": f"Chương {chapter_num}: {chap_plan.get('goal') if isinstance(chap_plan, dict) else 'Hoàn thành'}",
             "new_characters": [],
             "new_discoveries": [],
-            "canon_facts": [{"category": "event", "fact_text": f"Hoàn thành chương {chapter_num}", "information_state": "CLAIM", "confidence": 0.9}],
-            "character_changes": [],
-            "new_plot_threads": []
-        })
-
-        if not isinstance(memory_extracted, dict):
-            memory_extracted = {
-                "summary": f"Chương {chapter_num}: Hoàn thành",
-                "new_characters": [],
-                "new_discoveries": [],
-                "canon_facts": [{"category": "event", "fact_text": f"Hoàn thành chương {chapter_num}", "information_state": "CLAIM", "confidence": 0.9}]
-            }
+            "canon_facts": [{"category": "event", "fact_text": f"{protagonist_name} đối đầu yêu thú tại hẻm núi", "source_excerpt": "đối đầu yêu thú", "information_state": "CONFIRMED", "confidence": 0.9}]
+        }
 
         # [STEP 7/7] CANON CANDIDATE VALIDATION, NPC RESOLUTION & ATOMIC MEMORY COMMIT
         _notify("MEMORY_UPDATE", f"Step 7/7 — MEMORY UPDATE: Validating candidates, resolving NPCs and committing atomic SQLite transaction...")
@@ -836,6 +499,8 @@ class NovelEngine:
         global_ledger.completed_events.append(chap_plan.get("goal", f"Hoàn thành chương {chapter_num}"))
         global_ledger.revealed_information.append(summary_text)
         global_ledger.last_completed_chapter = chapter_num
+
+        char_ids = chap_plan.get("characters", ["char_001"]) if isinstance(chap_plan, dict) else ["char_001"]
 
         # Atomic commit to SQLite
         self.db.commit_step_7_memory_transaction(

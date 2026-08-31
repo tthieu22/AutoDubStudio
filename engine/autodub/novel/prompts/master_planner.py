@@ -4,7 +4,10 @@ from typing import Dict, Any, List
 class MasterPlannerPrompt:
     @staticmethod
     def build_prompt(story_bible: Dict[str, Any], total_chapters: int = 1000) -> str:
-        arcs_count = max(4, min(8, total_chapters // 100))
+        # Scale Arcs dynamically (~20 chapters per Arc for smooth pacing & rich plot structure)
+        chaps_per_arc = 20
+        arcs_count = max(5, min(50, (total_chapters + chaps_per_arc - 1) // chaps_per_arc))
+
         premise = story_bible.get('premise', 'Cốt truyện chính')
         prog_ranks = []
         prog_sys = story_bible.get('progression_system', {})
@@ -13,20 +16,20 @@ class MasterPlannerPrompt:
         if not prog_ranks:
             prog_ranks = [c.get('name') for c in story_bible.get('cultivation_system', []) if isinstance(c, dict) and c.get('name')]
         
-        chaps_per_arc = max(10, total_chapters // arcs_count)
-
-        return f"""=== VAI TRÒ: MASTER PLANNER (KIẾN TRÚC SƯ KỊCH BẢN TỔNG THỂ) ===
-Hãy chia bộ truyện dài {total_chapters} chương thành {arcs_count} Arc (Quyển/Tuyến truyện chính).
+        return f"""=== VAI TRÒ: MASTER PLANNER (KIẾN TRÚC SƯ KỊCH BẢN TỔNG THỂ DÀI HẠN) ===
+Nhiệm vụ: Hãy phân bổ bộ truyện dài {total_chapters} chương thành chuỗi {arcs_count} Arc (Quyển/Tuyến truyện liên hoàn). Mỗi Arc kéo dài khoảng {chaps_per_arc} chương để đảm bảo cốt truyện dày dặn, cao trào liên tục và không bị lặp.
 
 THÔNG TIN BẢN ĐỒ NỀN MÓNG (STORY BIBLE):
 - Tóm tắt cốt truyện: {premise}
 - Hệ thống sức mạnh / Cấp độ: {", ".join(prog_ranks) if prog_ranks else "Theo tiến trình câu chuyện"}
 - Quy tắc thế giới: {story_bible.get('rules', [])}
 
-⚠️ QUY TẮC BẮT BUỘC:
-1. Mỗi Arc đại diện cho 1 giai đoạn phát triển cốt truyện chính, có Mục tiêu (Goal), Xung đột (Conflict), Tiết lộ lớn (Major Reveal), và Sự phát triển nhân vật (Character Development).
-2. Tựa đề Arc và nội dung Arc PHẢI bám sát Tiền đề '{premise}'.
-3. ĐẦU RA PHẢI LÀ MỘT MẢNG JSON THUẦN TÚY (RAW JSON ARRAY), KHÔNG CÓ BẤT KỲ VĂN BẢN LỜI DẪN NÀO BÊN NGOÀI MẢNG JSON.
+QUY TẮC BẮT BUỘC:
+1. Chia đủ {arcs_count} Arc nối tiếp nhau từ Chương 1 đến Chương {total_chapters}.
+2. Mỗi Arc có Mục tiêu (Goal), Xung đột (Conflict), Phát hiện lớn (Major Reveal), và Phát triển nhân vật (Character Development) riêng biệt.
+3. Tựa đề Arc và nội dung Arc PHẢI bám sát Tiền đề '{premise}'.
+4. TOÀN BỘ NỘI DUNG (Tựa đề Arc, Mục tiêu, Xung đột, Phát hiện lớn, Phát triển nhân vật) PHẢI VIẾT HOÀN TOÀN BẰNG TIẾNG VIỆT 100% (CẤM dùng tiếng Anh hoặc tiếng Trung).
+5. ĐẦU RA PHẢI LÀ MỘT MẢNG JSON THUẦN TÚY (RAW JSON ARRAY), KHÔNG CÓ BẤT KỲ VĂN BẢN LỜI DẪN NÀO BÊN NGOÀI MẢNG JSON.
 
 MẪU ĐẦU RA YÊU CẦU:
 [

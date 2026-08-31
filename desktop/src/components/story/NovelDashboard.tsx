@@ -13,10 +13,11 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   const [title, setTitle] = useState('Vũ Trụ Chi Vương');
   const [genre, setGenre] = useState('Khoa học viễn tưởng');
   const [style, setStyle] = useState('Tiết tấu nhanh, cuốn hút, giàu hình ảnh');
-  const [protagonistName, setProtagonistName] = useState('Alex Chen');
-  const [protagonistAge, setProtagonistAge] = useState('24');
-  const [protagonistBg, setProtagonistBg] = useState('Kỹ sư cơ khí không gian tại trạm nghiên cứu');
+  const [protagonistName, setProtagonistName] = useState('Diệp Phàm');
+  const [protagonistAge, setProtagonistAge] = useState('20');
+  const [protagonistBg, setProtagonistBg] = useState('Thiếu niên khám phá thế giới quan mới');
   const [totalChapters, setTotalChapters] = useState(1000);
+  const [enableTiktokSlang, setEnableTiktokSlang] = useState(false);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>('IDLE');
@@ -27,7 +28,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   const [globalProgress, setGlobalProgress] = useState<any>(null);
   const [hasMasterPlan, setHasMasterPlan] = useState<boolean>(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
-  const [gpuServerInfo, setGpuServerInfo] = useState<string>('⏳ Đang khởi động GPU Ollama (qwen2.5:3b)...');
+  const [gpuServerInfo, setGpuServerInfo] = useState<string>('Đang khởi động GPU Ollama (qwen2.5:3b)...');
 
   const handleCopyLogs = () => {
     if (logs.length === 0) return;
@@ -50,12 +51,12 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
 
     PythonEngineService.ensureLocalLlmServer().then(res => {
       if (res && res.active) {
-        setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+        setGpuServerInfo(`GPU CUDA (GTX 1650 Ti) Ready`);
       } else {
-        setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+        setGpuServerInfo(`GPU CUDA (GTX 1650 Ti) Ready`);
       }
     }).catch(() => {
-      setGpuServerInfo(`🚀 GPU CUDA (GTX 1650 Ti) Ready`);
+      setGpuServerInfo(`GPU CUDA (GTX 1650 Ti) Ready`);
     });
 
     if (projectDir) {
@@ -68,6 +69,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
           setTitle(data.novel_idea.title || title);
           setGenre(data.novel_idea.genre || genre);
           setStyle(data.novel_idea.style || style);
+          if (typeof data.novel_idea.enable_tiktok_slang === 'boolean') {
+            setEnableTiktokSlang(data.novel_idea.enable_tiktok_slang);
+          }
           if (data.novel_idea.protagonist) {
             setProtagonistName(data.novel_idea.protagonist.name || protagonistName);
             setProtagonistAge(data.novel_idea.protagonist.age || protagonistAge);
@@ -79,6 +83,9 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         }
         if (data.story_bible) {
           setStoryBible(data.story_bible);
+          if (typeof data.story_bible.enable_tiktok_slang === 'boolean') {
+            setEnableTiktokSlang(data.story_bible.enable_tiktok_slang);
+          }
           if (!data.global_progress && data.story_bible.global_progress) {
             setGlobalProgress(data.story_bible.global_progress);
           }
@@ -118,40 +125,30 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         setCurrentChapterNum(evt.current);
         setProgressPercent(evt.percent || 0);
         setCurrentStage(`WRITING_CHAPTER_${evt.current}`);
-        saveNovelStateToProject({ novel_current_chapter: evt.current, novel_progress_percent: evt.percent || 0, novel_current_stage: `WRITING_CHAPTER_${evt.current}` });
-      } else if (evt.event === 'novel_sub_stage') {
-        setCurrentStage(evt.step || 'WRITING');
       } else if (evt.event === 'novel_chapter_complete') {
-        if (evt.current >= totalChapters) {
-          setIsGenerating(false);
-          setCurrentStage('COMPLETED');
-          saveNovelStateToProject({ novel_current_chapter: evt.current, novel_current_stage: 'COMPLETED' });
-        } else {
-          saveNovelStateToProject({ novel_current_chapter: evt.current });
-        }
+        setCurrentChapterNum(evt.current + 1);
+        setProgressPercent(evt.percent || 0);
+      } else if (evt.event === 'novel_complete') {
+        setIsGenerating(false);
+        setCurrentStage('COMPLETED');
+        setProgressPercent(100);
       }
     });
 
-    const resLog = PythonEngineService.subscribeLog((rawLine: string) => {
-      let displayLine = rawLine.trim();
-      if (!displayLine) return;
-
-      // Extract human readable message if line is JSON event
+    const resLog = PythonEngineService.subscribeNovelLogs((evt: any) => {
+      let displayLine = typeof evt === 'string' ? evt : evt.message || JSON.stringify(evt);
       if (displayLine.startsWith('{') && displayLine.endsWith('}')) {
         try {
           const parsed = JSON.parse(displayLine);
           if (parsed.message) {
             displayLine = `[INFO] ${parsed.message}`;
           } else {
-            return; // Skip raw json without message
+            return;
           }
-        } catch {
-          // Ignore parse failure
-        }
+        } catch {}
       }
 
       setLogs(prev => {
-        // Prevent duplicate consecutive lines
         if (prev.length > 0 && prev[0] === displayLine) return prev;
         const newLogs = [displayLine, ...prev.slice(0, 100)];
         saveNovelStateToProject({ novel_logs: newLogs });
@@ -204,7 +201,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         genre,
         style,
         protagonist: { name: protagonistName, age: protagonistAge, background: protagonistBg },
-        total_chapters: totalChapters
+        total_chapters: totalChapters,
+        enable_tiktok_slang: enableTiktokSlang
       };
 
       await saveNovelStateToProject({ novel_idea: idea, novel_current_stage: 'INITIALIZING_STORY_BIBLE' });
@@ -548,12 +546,31 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
             />
           </div>
 
+          {/* TikTok Slang & Trend Mode Toggle */}
+          <div className="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-emerald-500/30 select-none">
+            <div className="pr-2">
+              <label className="text-xs font-bold text-emerald-400 block cursor-pointer" onClick={() => setEnableTiktokSlang(!enableTiktokSlang)}>
+                Bắt Trend TikTok Slang & Hài Hước
+              </label>
+              <span className="text-[10px] text-slate-400 block leading-tight">
+                Tự động lồng ghép slang TikTok, thoại hài hước (lật kèo, tuyệt đối điện ảnh, xịt keo, ảo thật đấy...)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEnableTiktokSlang(!enableTiktokSlang)}
+              className={`w-10 h-5 rounded-full p-0.5 transition-colors cursor-pointer shrink-0 ${enableTiktokSlang ? 'bg-emerald-500' : 'bg-slate-700'}`}
+            >
+              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${enableTiktokSlang ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
           <button
             onClick={handleInitializeNovel}
             disabled={isGenerating}
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
           >
-            <Sparkles size={15} /> Tạo Thế Giới & Master Plan (20-30 Arcs)
+            <Sparkles size={15} /> Tạo Thế Giới & Master Plan (20-50 Arcs)
           </button>
         </div>
 
