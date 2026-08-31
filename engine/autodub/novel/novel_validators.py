@@ -43,8 +43,18 @@ def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str
     if not expected_p or expected_p.lower() in ("nhân vật chính", "chưa đặt tên"):
         return True, ""
 
+    # Skip validation for responses that clearly don't contain character data
     if isinstance(res, dict) and "characters" not in res:
         return True, ""
+
+    # Skip validation for list responses that aren't character lists
+    # (e.g. list of rule strings, list of terminology entries)
+    if isinstance(res, list):
+        if len(res) == 0:
+            return True, ""
+        # If list items are strings (rules) or non-dict, this is not a character list
+        if not any(isinstance(item, dict) and "name" in item for item in res):
+            return True, ""
 
     chars = []
     if isinstance(res, dict):
@@ -53,6 +63,10 @@ def validate_protagonist_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str
         chars = res
 
     char_names = [c.get("name", "").strip().lower() for c in chars if isinstance(c, dict)]
+    
+    if not char_names:
+        return True, ""
+    
     forbidden_p = FORBIDDEN_GENRE_TERMS[-1]
     if any(expected_p.lower() in cn or cn in expected_p.lower() for cn in char_names):
         if expected_p.lower() != forbidden_p and any(cn == forbidden_p for cn in char_names):

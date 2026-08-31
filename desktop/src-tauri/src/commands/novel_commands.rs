@@ -202,7 +202,17 @@ pub async fn initialize_novel(window: Window, project_dir: String, idea: serde_j
         }
         Ok(serde_json::json!({ "status": "SUCCESS" }))
     } else {
-        Err("Failed to initialize novel story bible".to_string())
+        let log_file = p_path.join("novel_execution.log");
+        let detail = if log_file.exists() {
+            fs::read_to_string(&log_file).ok().and_then(|content| {
+                content.lines().rev().find(|line| {
+                    line.contains("[ERROR]") || line.contains("GenerationError") || line.contains("failed") || line.contains("FAIL")
+                }).map(|l| l.to_string())
+            })
+        } else {
+            None
+        };
+        Err(detail.unwrap_or_else(|| "Failed to initialize novel story bible".to_string()))
     }
 }
 
@@ -387,15 +397,81 @@ pub fn is_novel_writing_active(
 }
 
 #[tauri::command]
-pub async fn get_novel_canon_facts(_project_dir: String, _limit: Option<i64>) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([
-        { "id": "fact_1", "subject": "Nhân vật chính", "predicate": "bắt đầu", "object": "Hành trình mới", "confidence": 1.0, "chapter": 1 }
-    ]))
+pub async fn get_novel_canon_facts(project_dir: String, _limit: Option<i64>) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "status",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&stdout_str) {
+                if let Some(facts) = val.get("canonFacts") {
+                    return Ok(facts.clone());
+                }
+            }
+        }
+    }
+
+    let p_json = p_path.join("project.json");
+    if p_json.exists() {
+        if let Ok(content) = fs::read_to_string(&p_json) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(facts) = val.get("canon_facts") {
+                    return Ok(facts.clone());
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!([]))
 }
 
 #[tauri::command]
-pub async fn get_novel_plot_threads(_project_dir: String) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([
-        { "id": "thread_1", "title": "Tài liệu bí mật bị mất tích", "status": "OPEN", "since_chapter": 5, "description": "Manh mối dẫn đến vùng đất mới chưa được giải mã" }
-    ]))
+pub async fn get_novel_plot_threads(project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "status",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&stdout_str) {
+                if let Some(threads) = val.get("openThreads") {
+                    return Ok(threads.clone());
+                }
+            }
+        }
+    }
+
+    let p_json = p_path.join("project.json");
+    if p_json.exists() {
+        if let Ok(content) = fs::read_to_string(&p_json) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(threads) = val.get("open_threads") {
+                    return Ok(threads.clone());
+                }
+            }
+        }
+    }
+
+    Ok(serde_json::json!([]))
 }

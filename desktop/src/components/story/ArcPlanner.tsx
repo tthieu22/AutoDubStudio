@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Search, ChevronRight, Target, Flame, Eye, Sparkles } from 'lucide-react';
+import { Layers, Search, Target, Flame, Eye, Copy, Check } from 'lucide-react';
 import { PythonEngineService } from '../../services/pythonEngine';
 
 export interface ArcPlanItem {
@@ -23,6 +23,8 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
   const [arcs, setArcs] = useState<ArcPlanItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArcId, setSelectedArcId] = useState<string>('');
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedArcId, setCopiedArcId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectDir) {
@@ -38,6 +40,28 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
     }
   }, [projectDir]);
 
+  const handleCopyAllArcs = () => {
+    if (arcs.length === 0) return;
+    const formatted = arcs.map(a => 
+      `### Arc #${a.arc_num}: ${a.title} (Chương ${a.start_chapter} - ${a.end_chapter})\n- **Mục tiêu Arc**: ${a.goal || 'N/A'}\n- **Xung đột chính**: ${a.conflict || 'N/A'}\n- **Tiết lộ lớn**: ${a.major_reveal || 'N/A'}\n- **Phát triển nhân vật**: ${a.character_development || 'N/A'}`
+    ).join('\n\n---\n\n');
+
+    const textToCopy = `# MASTER PLAN ARCS (${arcs.length} Arcs)\n\n${formatted}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  };
+
+  const handleCopySingleArc = (arc: ArcPlanItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const formatted = `### Arc #${arc.arc_num}: ${arc.title} (Chương ${arc.start_chapter} - ${arc.end_chapter})\n- **Mục tiêu Arc**: ${arc.goal || 'N/A'}\n- **Xung đột chính**: ${arc.conflict || 'N/A'}\n- **Tiết lộ lớn**: ${arc.major_reveal || 'N/A'}\n- **Phát triển nhân vật**: ${arc.character_development || 'N/A'}`;
+    
+    navigator.clipboard.writeText(formatted);
+    const arcKey = arc.id || String(arc.arc_num);
+    setCopiedArcId(arcKey);
+    setTimeout(() => setCopiedArcId(null), 2000);
+  };
+
   const filteredArcs = arcs.filter(a =>
     a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.goal.toLowerCase().includes(searchQuery.toLowerCase())
@@ -52,8 +76,13 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
             <Layers size={18} />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white font-['Outfit'] tracking-tight">
-              Master Plan — Danh Sách Arcs Truyện AI
+            <h2 className="text-base font-bold text-white font-['Outfit'] tracking-tight flex items-center gap-2">
+              Master Plan — Danh Sách {arcs.length > 0 ? `${arcs.length} Arcs` : 'Arcs'} Truyện AI
+              {arcs.length > 0 && (
+                <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold">
+                  {arcs.length} Arcs Master Plan
+                </span>
+              )}
             </h2>
             <p className="text-xs text-slate-400">
               Cấu trúc tổng thể kịch bản do AI sáng tạo định hướng toàn bộ câu chuyện.
@@ -61,15 +90,33 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 relative max-w-xs w-full">
-          <Search size={14} className="absolute left-3 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm Arc..."
-            className="w-full bg-[#0b0d10] border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
-          />
+        <div className="flex items-center gap-2 max-w-md w-full justify-end">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Tìm kiếm Arc..."
+              className="w-full bg-[#0b0d10] border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+            />
+          </div>
+
+          <button
+            onClick={handleCopyAllArcs}
+            disabled={arcs.length === 0}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer select-none ${
+              copiedAll
+                ? 'bg-emerald-500 text-black shadow-emerald-500/20'
+                : arcs.length > 0
+                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20 active:scale-95'
+                : 'bg-white/5 text-slate-500 border border-white/5 cursor-not-allowed'
+            }`}
+            title="Sao chép toàn bộ danh sách Arcs kịch bản"
+          >
+            {copiedAll ? <Check size={14} className="stroke-[3]" /> : <Copy size={14} />}
+            <span>{copiedAll ? 'Đã Copy Tất Cả!' : 'Copy Tất Cả Arcs'}</span>
+          </button>
         </div>
       </div>
 
@@ -85,11 +132,14 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
           </div>
         ) : (
           filteredArcs.map(arc => {
-            const isSelected = selectedArcId === arc.id;
+            const arcKey = arc.id || String(arc.arc_num);
+            const isSelected = selectedArcId === arcKey;
+            const isCopied = copiedArcId === arcKey;
+
             return (
               <div
-                key={arc.id || arc.arc_num}
-                onClick={() => setSelectedArcId(arc.id || String(arc.arc_num))}
+                key={arcKey}
+                onClick={() => setSelectedArcId(arcKey)}
                 className={`p-4 rounded-xl border transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-indigo-500/10 border-indigo-500/50 shadow-md shadow-indigo-500/10'
@@ -104,9 +154,24 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
                     <h3 className="text-sm font-bold text-white font-['Outfit']">{arc.title}</h3>
                   </div>
 
-                  <span className="text-xs font-mono text-cyan-400 font-semibold">
-                    Chương {arc.start_chapter} – {arc.end_chapter}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-cyan-400 font-semibold">
+                      Chương {arc.start_chapter} – {arc.end_chapter}
+                    </span>
+
+                    <button
+                      onClick={e => handleCopySingleArc(arc, e)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-all border select-none cursor-pointer ${
+                        isCopied
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+                      }`}
+                      title={`Copy nội dung Arc #${arc.arc_num}`}
+                    >
+                      {isCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                      <span>{isCopied ? 'Đã Copy' : 'Copy Arc'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-2 border-t border-white/5">
@@ -114,19 +179,19 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
                     <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
                       <Target size={11} className="text-emerald-400" /> Mục Tiêu Arc
                     </span>
-                    <p className="text-slate-300">{arc.goal}</p>
+                    <p className="text-slate-300">{arc.goal || 'N/A'}</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
                       <Flame size={11} className="text-rose-400" /> Xung Đột Chính
                     </span>
-                    <p className="text-slate-300">{arc.conflict}</p>
+                    <p className="text-slate-300">{arc.conflict || 'N/A'}</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
                       <Eye size={11} className="text-amber-400" /> Tiết Lộ Lớn (Major Reveal)
                     </span>
-                    <p className="text-slate-300">{arc.major_reveal}</p>
+                    <p className="text-slate-300">{arc.major_reveal || 'N/A'}</p>
                   </div>
                 </div>
               </div>

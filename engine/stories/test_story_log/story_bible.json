@@ -1,0 +1,222 @@
+{
+  "premise": "Trong thế giới mở Test Story Realtime Log, Nhân vật chính, một tân thủ, được đào tạo tại một trạm vũ trụ bí ẩn trước khi được trao quyền để thách thức các thế lực chính và phản diện trong cuộc chiến bảo vệ trái đất.",
+  "world": {
+    "continent_name": "Trái Đất Mới",
+    "factions": [
+      "Đoàn quân Trung tâm (Tổ chức vũ trụ)",
+      "Đế quốc Thượng giới (Tổ chức phản diện)"
+    ],
+    "locations": [
+      "Trạm Vũ trụ Trung tâm (Trạm vũ trụ bí ẩn)",
+      "Thành phố Trung tâm (Trung tâm hành tinh)"
+    ]
+  },
+  "progression_system": {
+    "type": "level",
+    "ranks": [
+      {
+        "rank": 1,
+        "name": "Cấp độ 1 Khởi Đầu",
+        "description": "Mô tả sức mạnh cấp 1"
+      },
+      {
+        "rank": 2,
+        "name": "Cấp độ 2 Tiến Bổn",
+        "description": "Mô tả sức mạnh cấp 2"
+      },
+      {
+        "rank": 3,
+        "name": "Cấp độ 3 Đột Phá",
+        "description": "Mô tả sức mạnh cấp 3"
+      },
+      {
+        "rank": 4,
+        "name": "Cấp độ 4 Chuyên Viên",
+        "description": "Mô tả sức mạnh cấp 4"
+      },
+      {
+        "rank": 5,
+        "name": "Cấp độ 5 Đỉnh Phong",
+        "description": "Mô tả sức mạnh cấp 5"
+      },
+      {
+        "rank": 6,
+        "name": "Cấp độ 6 Thượng Giới",
+        "description": "Mô tả sức mạnh cấp 6"
+      },
+      {
+        "rank": 7,
+        "name": "Cấp độ 7 Thần Giới",
+        "description": "Mô tả sức mạnh cấp 7"
+      }
+    ]
+  },
+  "cultivation_system": [
+    {
+      "rank": 1,
+      "name": "Cấp độ 1 Khởi Đầu",
+      "description": "Mô tả sức mạnh cấp 1"
+    },
+    {
+      "rank": 2,
+      "name": "Cấp độ 2 Tiến Bổn",
+      "description": "Mô tả sức mạnh cấp 2"
+    },
+    {
+      "rank": 3,
+      "name": "Cấp độ 3 Đột Phá",
+      "description": "Mô tả sức mạnh cấp 3"
+    },
+    {
+      "rank": 4,
+      "name": "Cấp độ 4 Chuyên Viên",
+      "description": "Mô tả sức mạnh cấp 4"
+    },
+    {
+      "rank": 5,
+      "name": "Cấp độ 5 Đỉnh Phong",
+      "description": "Mô tả sức mạnh cấp 5"
+    },
+    {
+      "rank": 6,
+      "name": "Cấp độ 6 Thượng Giới",
+      "description": "Mô tả sức mạnh cấp 6"
+    },
+    {
+      "rank": 7,
+      "name": "Cấp độ 7 Thần Giới",
+      "description": "Mô tả sức mạnh cấp 7"
+    }
+  ],
+  "characters": [
+    {
+      "id": "char_001",
+      "name": "Nhân vật chính",
+      "gender": "Nam",
+      "personality": [
+        "Điềm tĩnh",
+        "Thông minh",
+        "Quyết đoán"
+      ],
+      "goal": "Mục tiêu lớn nhất của Nhân vật chính",
+      "realm": "Cấp độ 1 Khởi Đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": [
+        "Bối cảnh ban đầu"
+      ],
+      "secrets": [
+        "Kim thủ chỉ / Bí mật lớn"
+      ]
+    },
+    {
+      "id": "char_002",
+      "name": "Nguyệt Nhi",
+      "gender": "Nữ",
+      "personality": [
+        "Sắc sảo",
+        "Thông minh",
+        "Trung thành"
+      ],
+      "goal": "Sát cánh hỗ trợ Nhân vật chính",
+      "realm": "Cấp độ 1 Khởi Đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": [
+        "Gia thế đồng đội"
+      ],
+      "secrets": [
+        "Bí mật gia thế / Manh mối cổ"
+      ]
+    },
+    {
+      "id": "char_003",
+      "name": "Trần Phong",
+      "gender": "Nam",
+      "personality": [
+        "Khác biệt",
+        "Khát vọng",
+        "Khéo léo"
+      ],
+      "goal": "Khát vọng của Trần Phong",
+      "realm": "Cấp độ 1 Khởi Đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": [
+        "Gia thế đồng đội"
+      ],
+      "secrets": [
+        "Bí mật gia thế / Manh mối cổ"
+      ]
+    },
+    {
+      "id": "char_004",
+      "name": "Hương Nguyệt",
+      "gender": "Nữ",
+      "personality": [
+        "Sắc sảo",
+        "Trung thành",
+        "Khéo léo"
+      ],
+      "goal": "Sát cánh hỗ trợ Nhân vật chính",
+      "realm": "Cấp độ 1 Khởi Đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": [
+        "Gia thế đồng đội"
+      ],
+      "secrets": [
+        "Bí mật gia thế / Manh mối cổ"
+      ]
+    },
+    {
+      "id": "char_005",
+      "name": "Trần Phong",
+      "gender": "Nam",
+      "personality": [
+        "Khác biệt",
+        "Khát vọng",
+        "Khéo léo"
+      ],
+      "goal": "Khát vọng của Trần Phong",
+      "realm": "Cấp độ 1 Khởi Đầu",
+      "location": "Vị trí khởi đầu",
+      "known_information": [
+        "Gia thế đồng đội"
+      ],
+      "secrets": [
+        "Bí mật gia thế / Manh mối cổ"
+      ]
+    }
+  ],
+  "rules": [
+    "Cấp độ sức mạnh tuân thủ nghiêm ngặt quy tắc đại lục",
+    "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc",
+    "Tài nguyên quý hiếm đều bị các thế lực lớn kiểm soát",
+    "Quy tắc sinh tồn và giao dịch trong thế giới",
+    "Các thế lực chính và phản diện nắm giữ quyền lực tối cao",
+    "Thế lực lớn thường xuyên can thiệp vào các cuộc chiến nhỏ",
+    "Quy tắc về thăng cấp và thăng chức trong thế lực",
+    "Quy tắc về giới hạn và sự cân bằng giữa nhân loại và các sinh vật ngoài hành tinh",
+    "Quy tắc về sự tồn tại và diệt vong của các thế lực",
+    "Quy tắc về giao dịch và trao đổi giữa các nhân vật và thế lực",
+    "Quy tắc về sự thay đổi và phát triển của thế lực trong thời gian"
+  ],
+  "terminology": {
+    "Thuật ngữ 1": "Trái Đất Mới: Là một thế giới mở rộng lớn, nơi mà nhân vật chính được đào tạo trước khi tham gia vào cuộc chiến bảo vệ trái đất. Đây là một không gian đầy thách thức và thử thách.",
+    "Thuật ngữ 2": "Hành động: Thể loại này đòi hỏi sự nhanh nhạy, quyết đoán và khả năng ứng phó nhanh chóng với các tình huống khẩn cấp. Thuật ngữ này mô tả những hành động quyết liệt và quyết đoán của nhân vật chính trong cuộc chiến.",
+    "Thuật ngữ 3": "Tân thủ: Là thuật ngữ chỉ nhân vật chính, một tân thủ mới đến từ Trái Đất Mới, chưa có kinh nghiệm và kỹ năng chiến đấu.",
+    "Thuật ngữ 4": "Đội quân Trung tâm: Là thuật ngữ chỉ tổ chức vũ trụ, một lực lượng mạnh mẽ và chuyên nghiệp, được đào tạo và huấn luyện kỹ lưỡng để bảo vệ trái đất.",
+    "Thuật ngữ 5": "Đế quốc Thượng giới: Là thuật ngữ chỉ tổ chức phản diện, một thế lực mạnh mẽ và quyền lực, luôn tìm cách kiểm soát trái đất và các thế lực khác.",
+    "Thuật ngữ 6": "Khả năng cường hóa: Thuật ngữ này mô tả các kỹ năng và khả năng đặc biệt mà nhân vật chính có thể sử dụng để tăng cường sức mạnh của mình, bao gồm cả kỹ năng chiến đấu và kỹ năng sống sót.",
+    "Thuật ngữ 7": "Thế lực phản diện: Thuật ngữ này mô tả các lực lượng và tổ chức mà nhân vật chính cần phải đối đầu để bảo vệ trái đất, bao gồm cả Đế quốc Thượng giới.",
+    "Thuật ngữ 8": "Cuộc chiến bảo vệ trái đất: Thuật ngữ này mô tả cuộc chiến quyết liệt và khốc liệt giữa nhân vật chính và các thế lực phản diện, với mục tiêu duy nhất là bảo vệ trái đất khỏi sự xâm lược của chúng.",
+    "Thuật ngữ 9": "Thế lực chính: Thuật ngữ này mô tả các lực lượng và tổ chức mà nhân vật chính cần phải hợp tác hoặc đối đầu với để bảo vệ trái đất, bao gồm cả Đội quân Trung tâm.",
+    "Thuật ngữ 10": "Thế lực bí ẩn: Thuật ngữ này mô tả các lực lượng và tổ chức mà nhân vật chính chưa biết đến hoặc chưa hiểu rõ, nhưng có thể đóng vai trò quan trọng trong cuộc chiến bảo vệ trái đất."
+  },
+  "generation_metadata": {
+    "source": "LLM_GENERATED",
+    "model": "qwen2.5:3b",
+    "fallback_used": false,
+    "template_used": false,
+    "attempt": 1,
+    "generated_at": "2026-09-01T01:19:28.595217"
+  },
+  "enable_tiktok_slang": false
+}

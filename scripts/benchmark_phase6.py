@@ -7,9 +7,9 @@ from pathlib import Path
 root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir / "engine"))
 
-from autodub.pipeline.manager import PipelineManager
-from autodub.pipeline.state import PipelineStage
-from autodub.modules.tts import RealTTS, PiperClient
+from autodub.pipeline.manager import PipelineManager  # type: ignore
+from autodub.pipeline.state import PipelineStage  # type: ignore
+from autodub.modules.tts import RealTTS, PiperClient  # type: ignore
 
 def run_benchmark():
     print("=== PHASE 6 LOCAL TEXT-TO-SPEECH (PIPER TTS) BENCHMARK ===")

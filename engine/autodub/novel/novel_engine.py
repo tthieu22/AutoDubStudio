@@ -40,6 +40,16 @@ from autodub.novel.novel_validators import (
 )
 
 
+def _safe_print_log(msg: str):
+    """Print debug log safely, handling Windows codepage encoding issues."""
+    import sys
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((msg + '\n').encode('utf-8', errors='replace'))
+        sys.stdout.buffer.flush()
+
+
 class NovelEngine:
     """
     Complete AI Novel Engine Orchestrator.
@@ -183,7 +193,11 @@ class NovelEngine:
             if res is None:
                 last_error_code = GenerationErrorCode.JSON_PARSE_ERROR
                 last_error_msg = f"LLM returned malformed JSON during {stage} (Attempt {attempt}/{max_retries})"
+                # Debug log the raw output to help diagnose extraction failures
+                preview = cleaned[:200].replace('\n', ' ').replace('\r', '')
                 logger.warning(f"[{stage}_RETRY] {last_error_msg}")
+                logger.debug(f"[{stage}_RAW_OUTPUT] Preview: {preview}")
+                _safe_print_log(f"[{stage}_DEBUG] Raw LLM output preview: {preview}")
                 continue
 
             if idea:
@@ -231,18 +245,60 @@ class NovelEngine:
         cleaned = re.sub(r"```\s*", "", cleaned)
 
         def sanitize(s: str) -> str:
+            s = re.sub(r"//.*?\n", "\n", s)
+            s = re.sub(r"/\*[\s\S]*?\*/", "", s)
+            s = s.replace("“", '"').replace("”", '"').replace("’", "'")
             s = re.sub(r",\s*([\]}])", r"\1", s)
-            s = re.sub(r"[\r\n]+", " ", s)
             return s
 
-        # Strategy 1: Direct JSON parse
+        def repair_truncated_json(s: str) -> Optional[Any]:
+            idx = s.find('{')
+            idx_b = s.find('[')
+            if idx == -1 or (idx_b != -1 and idx_b < idx):
+                idx = idx_b
+            if idx == -1:
+                return None
+            cand = s[idx:].strip()
+
+            # Truncate after last valid comma
+            last_comma = cand.rfind(',')
+            if last_comma != -1:
+                sub = cand[:last_comma].strip()
+                in_str, esc, stack = False, False, []
+                for ch in sub:
+                    if esc:
+                        esc = False
+                        continue
+                    if ch == '\\':
+                        esc = True
+                        continue
+                    if ch == '"':
+                        in_str = not in_str
+                        continue
+                    if not in_str:
+                        if ch == '{': stack.append('}')
+                        elif ch == '[': stack.append(']')
+                        elif ch in ('}', ']') and stack: stack.pop()
+
+                if not in_str and stack:
+                    repaired = sub + "".join(reversed(stack))
+                    try:
+                        return json.loads(repaired, strict=False)
+                    except Exception:
+                        try:
+                            return json.loads(sanitize(repaired), strict=False)
+                        except Exception:
+                            pass
+            return None
+
+        # Strategy 1: Direct JSON parse with strict=False
         try:
-            return json.loads(cleaned)
+            return json.loads(cleaned, strict=False)
         except Exception:
             pass
 
         try:
-            return json.loads(sanitize(cleaned))
+            return json.loads(sanitize(cleaned), strict=False)
         except Exception:
             pass
 
@@ -255,10 +311,10 @@ class NovelEngine:
             if last_brace != -1:
                 candidate = cleaned[first_brace:last_brace + 1]
                 try:
-                    return json.loads(candidate)
+                    return json.loads(candidate, strict=False)
                 except Exception:
                     try:
-                        return json.loads(sanitize(candidate))
+                        return json.loads(sanitize(candidate), strict=False)
                     except Exception:
                         try:
                             res_eval = ast.literal_eval(sanitize(candidate))
@@ -273,10 +329,10 @@ class NovelEngine:
             if last_bracket != -1:
                 candidate = cleaned[first_bracket:last_bracket + 1]
                 try:
-                    return json.loads(candidate)
+                    return json.loads(candidate, strict=False)
                 except Exception:
                     try:
-                        return json.loads(sanitize(candidate))
+                        return json.loads(sanitize(candidate), strict=False)
                     except Exception:
                         try:
                             res_eval = ast.literal_eval(sanitize(candidate))
@@ -290,14 +346,32 @@ class NovelEngine:
             valid_items = []
             for d in dict_blocks:
                 try:
-                    valid_items.append(json.loads(d))
+                    valid_items.append(json.loads(d, strict=False))
                 except Exception:
                     try:
-                        valid_items.append(json.loads(sanitize(d)))
+                        valid_items.append(json.loads(sanitize(d), strict=False))
                     except Exception:
                         pass
             if valid_items:
                 return valid_items
+
+        # Strategy 4: Truncated JSON Repair Fallback
+        repaired_payload = repair_truncated_json(cleaned)
+        if repaired_payload is not None:
+            return repaired_payload
+
+        # Strategy 5: Extract key-value pairs from plain text (for terminology-like outputs)
+        # Handles: "- linh khí: Năng lượng tu luyện" or "1. linh khí — Năng lượng"
+        kv_pattern = re.findall(r'["\-\d\.\*]?\s*["\']?([^":\n\-\*]+?)["\']?\s*[:—–]\s*["\']?(.+?)["\']?\s*$', cleaned, re.MULTILINE)
+        if kv_pattern and len(kv_pattern) >= 2:
+            result = {}
+            for k, v in kv_pattern:
+                key = k.strip().strip('"\'').strip()
+                val = v.strip().strip('"\'.,').strip()
+                if key and val and len(key) < 50 and len(val) < 200:
+                    result[key] = val
+            if len(result) >= 2:
+                return result
 
         return None
 

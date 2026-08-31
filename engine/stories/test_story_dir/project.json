@@ -1,0 +1,416 @@
+{
+  "story_bible": {
+    "premise": "Trong thế giới mới mẻ và đầy thách thức của Vạn Thủy, Nhân vật chính, một tân thủ, phải đối mặt với nguy hiểm khi rời bỏ Làng Tinh Hồn để tìm kiếm sức mạnh và sống sót. Bước ngoặt đầu tiên của anh là khi anh nhận ra rằng chỉ có sự đoàn kết mới có thể đánh bại Tổ chức phản diện đang âm mưu thống trị Vạn Thủy.",
+    "world": {
+      "continent_name": "Vạn Thủy",
+      "factions": [
+        "Thế lực Tinh Hồn",
+        "Tổ chức Thanh Long"
+      ],
+      "locations": [
+        "Làng Tinh Hồn",
+        "Thành phố Tinh Hồn trung tâm"
+      ]
+    },
+    "progression_system": {
+      "type": "level",
+      "ranks": [
+        {
+          "rank": 1,
+          "name": "Cấp độ 1 Khởi Đầu",
+          "description": "Sức mạnh cơ bản, chưa có kỹ năng đặc biệt"
+        },
+        {
+          "rank": 2,
+          "name": "Cấp độ 2 Tiến Bổn",
+          "description": "Sức mạnh tăng lên, có thể thực hiện các kỹ năng cơ bản"
+        },
+        {
+          "name": "Cấp độ 3 Đột Phá",
+          "description": "Sức mạnh đạt đến đỉnh điểm, bắt đầu có thể sử dụng các kỹ năng mới"
+        },
+        {
+          "rank": 4,
+          "name": "Cấp độ 4 Chuyên Viên",
+          "description": "Sức mạnh đạt đến mức cao nhất, có thể sử dụng kỹ năng chuyên môn"
+        },
+        {
+          "rank": 5,
+          "name": "Cấp độ 5 Đỉnh Phong",
+          "description": "Sức mạnh đạt đến cực hạn, có khả năng vượt qua nguy hiểm lớn"
+        }
+      ]
+    },
+    "cultivation_system": [
+      {
+        "rank": 1,
+        "name": "Cấp độ 1 Khởi Đầu",
+        "description": "Sức mạnh cơ bản, chưa có kỹ năng đặc biệt"
+      },
+      {
+        "rank": 2,
+        "name": "Cấp độ 2 Tiến Bổn",
+        "description": "Sức mạnh tăng lên, có thể thực hiện các kỹ năng cơ bản"
+      },
+      {
+        "name": "Cấp độ 3 Đột Phá",
+        "description": "Sức mạnh đạt đến đỉnh điểm, bắt đầu có thể sử dụng các kỹ năng mới"
+      },
+      {
+        "rank": 4,
+        "name": "Cấp độ 4 Chuyên Viên",
+        "description": "Sức mạnh đạt đến mức cao nhất, có thể sử dụng kỹ năng chuyên môn"
+      },
+      {
+        "rank": 5,
+        "name": "Cấp độ 5 Đỉnh Phong",
+        "description": "Sức mạnh đạt đến cực hạn, có khả năng vượt qua nguy hiểm lớn"
+      }
+    ],
+    "characters": [
+      {
+        "id": "char_001",
+        "name": "Nhân vật chính",
+        "gender": "Nam",
+        "personality": [
+          "Điềm tĩnh",
+          "Thông minh",
+          "Quyết đoán"
+        ],
+        "goal": "Mở rộng sức mạnh và tìm kiếm sự sống sót trong thế giới Vạn Thủy",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Bối cảnh ban đầu của Vạn Thủy"
+        ],
+        "secrets": [
+          "Kim thủ chỉ / Bí mật lớn"
+        ]
+      },
+      {
+        "id": "char_002",
+        "name": "Nguyệt Nhi",
+        "gender": "Nữ",
+        "personality": [
+          "Sắc sảo",
+          "Thông minh",
+          "Trung thành"
+        ],
+        "goal": "Hỗ trợ và bảo vệ Nhân vật chính",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Gia thế đồng đội"
+        ],
+        "secrets": [
+          "Bí mật gia thế / Manh mối cổ"
+        ]
+      },
+      {
+        "id": "char_003",
+        "name": "Hồng Phong",
+        "gender": "Nam",
+        "personality": [
+          "Cương trực",
+          "Trung thực",
+          "Kháng chiến"
+        ],
+        "goal": "Đối đầu với Tổ chức phản diện",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Bối cảnh ban đầu của Vạn Thủy"
+        ],
+        "secrets": [
+          "Bí mật gia thế / Manh mối cổ"
+        ]
+      },
+      {
+        "id": "char_004",
+        "name": "Thiên Ân",
+        "gender": "Nữ",
+        "personality": [
+          "Sắc sảo",
+          "Trung thành",
+          "Kháng chiến"
+        ],
+        "goal": "Hỗ trợ và bảo vệ Nhân vật chính",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Gia thế đồng đội"
+        ],
+        "secrets": [
+          "Bí mật gia thế / Manh mối cổ"
+        ]
+      },
+      {
+        "id": "char_005",
+        "name": "Thiên Âm",
+        "gender": "Nữ",
+        "personality": [
+          "Sắc sảo",
+          "Trung thành",
+          "Kháng chiến"
+        ],
+        "goal": "Hỗ trợ và bảo vệ Nhân vật chính",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Gia thế đồng đội"
+        ],
+        "secrets": [
+          "Bí mật gia thế / Manh mối cổ"
+        ]
+      },
+      {
+        "id": "char_006",
+        "name": "Thiên Ân",
+        "gender": "Nữ",
+        "personality": [
+          "Sắc sảo",
+          "Trung thành",
+          "Kháng chiến"
+        ],
+        "goal": "Đối đầu với Tổ chức phản diện",
+        "realm": "Cấp độ 1 Khởi Đầu",
+        "location": "Làng Tinh Hồn",
+        "known_information": [
+          "Bối cảnh ban đầu của Vạn Thủy"
+        ],
+        "secrets": [
+          "Bí mật gia thế / Manh mối cổ"
+        ]
+      }
+    ],
+    "rules": [
+      "Cấp độ sức mạnh tuân thủ nghiêm ngặt quy tắc đại lục",
+      "Quyền lực chỉ được mở rộng thông qua sự đoàn kết và hợp tác",
+      "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc",
+      "Sự sống sót và chiến đấu đòi hỏi sự thông minh và sự linh hoạt",
+      "Tổ chức phản diện âm mưu thống trị Vạn Thủy",
+      "Đoạn đường tìm kiếm sức mạnh dẫn đến những thử thách và nguy hiểm",
+      "Sự đoàn kết là chìa khóa để đánh bại Tổ chức phản diện"
+    ],
+    "terminology": {
+      "Đòn Bẩy": "Hành động sử dụng một vật thể để tăng sức mạnh của cú đánh hoặc cú đạp lên đối phương.",
+      "Đòn Bánh": "Hành động kết hợp nhiều cú đánh hoặc cú đạp liên tiếp nhằm gây ra tổn thương lớn cho đối phương.",
+      "Đòn Bánh Đánh": "Hành động kết hợp giữa một cú đánh mạnh và một cú đòn bẩy để tạo ra cú đánh cuối cùng có sức mạnh gấp nhiều lần.",
+      "Đòn Bánh Đánh Đánh": "Hành động kết hợp giữa một cú đánh mạnh và một cú đòn bánh để tạo ra cú đánh cuối cùng có sức mạnh gấp nhiều lần.",
+      "Đòn Bánh Đánh Đánh Đánh": "Hành động kết hợp giữa một cú đánh mạnh, một cú đòn bánh và một cú đòn bẩy để tạo ra cú đánh cuối cùng có sức mạnh gấp nhiều lần.",
+      "Đòn Bánh Đánh Đánh Đánh Đánh": "Hành động kết hợp giữa một cú đánh mạnh, một cú đòn bánh, một cú đòn bẩy và một cú đòn bẩy để tạo ra cú đánh cuối cùng có sức mạnh gấp nhiều lần."
+    },
+    "generation_metadata": {
+      "source": "LLM_GENERATED",
+      "model": "qwen2.5:3b",
+      "fallback_used": false,
+      "template_used": false,
+      "attempt": 1,
+      "generated_at": "2026-09-01T01:13:44.839851"
+    },
+    "enable_tiktok_slang": false
+  },
+  "characters": [
+    {
+      "id": "char_001",
+      "name": "Nhân vật chính",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nam",
+      "age": "20",
+      "personality": "Điềm tĩnh, Thông minh, Quyết đoán",
+      "appearance": "Mục tiêu: Mở rộng sức mạnh và tìm kiếm sự sống sót trong thế giới Vạn Thủy",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_male_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    },
+    {
+      "id": "char_002",
+      "name": "Nguyệt Nhi",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nữ",
+      "age": "20",
+      "personality": "Sắc sảo, Thông minh, Trung thành",
+      "appearance": "Mục tiêu: Hỗ trợ và bảo vệ Nhân vật chính",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_female_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    },
+    {
+      "id": "char_003",
+      "name": "Hồng Phong",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nam",
+      "age": "20",
+      "personality": "Cương trực, Trung thực, Kháng chiến",
+      "appearance": "Mục tiêu: Đối đầu với Tổ chức phản diện",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_male_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    },
+    {
+      "id": "char_004",
+      "name": "Thiên Ân",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nữ",
+      "age": "20",
+      "personality": "Sắc sảo, Trung thành, Kháng chiến",
+      "appearance": "Mục tiêu: Hỗ trợ và bảo vệ Nhân vật chính",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_female_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    },
+    {
+      "id": "char_005",
+      "name": "Thiên Âm",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nữ",
+      "age": "20",
+      "personality": "Sắc sảo, Trung thành, Kháng chiến",
+      "appearance": "Mục tiêu: Hỗ trợ và bảo vệ Nhân vật chính",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_female_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    },
+    {
+      "id": "char_006",
+      "name": "Thiên Ân",
+      "alias": "Cấp độ 1 Khởi Đầu",
+      "gender": "Nữ",
+      "age": "20",
+      "personality": "Sắc sảo, Trung thành, Kháng chiến",
+      "appearance": "Mục tiêu: Đối đầu với Tổ chức phản diện",
+      "clothing": "Cảnh giới: Cấp độ 1 Khởi Đầu • Vị trí: Làng Tinh Hồn",
+      "voice": "vi_female_hero",
+      "speakingStyle": "Trang trọng",
+      "locked": true
+    }
+  ],
+  "world_lore": [
+    {
+      "id": "w-loc-0",
+      "category": "Location",
+      "name": "Làng Tinh Hồn",
+      "description": "Địa danh thuộc đại lục Vạn Thủy",
+      "locked": true
+    },
+    {
+      "id": "w-loc-1",
+      "category": "Location",
+      "name": "Thành phố Tinh Hồn trung tâm",
+      "description": "Địa danh thuộc đại lục Vạn Thủy",
+      "locked": true
+    },
+    {
+      "id": "w-fac-2",
+      "category": "Organization",
+      "name": "Thế lực Tinh Hồn",
+      "description": "Thế lực chính trong đại lục",
+      "locked": true
+    },
+    {
+      "id": "w-fac-3",
+      "category": "Organization",
+      "name": "Tổ chức Thanh Long",
+      "description": "Thế lực chính trong đại lục",
+      "locked": true
+    },
+    {
+      "id": "w-cs-4",
+      "category": "Rule",
+      "name": "Cấp độ #1: Cấp độ 1 Khởi Đầu",
+      "description": "Sức mạnh cơ bản, chưa có kỹ năng đặc biệt",
+      "locked": true
+    },
+    {
+      "id": "w-cs-5",
+      "category": "Rule",
+      "name": "Cấp độ #2: Cấp độ 2 Tiến Bổn",
+      "description": "Sức mạnh tăng lên, có thể thực hiện các kỹ năng cơ bản",
+      "locked": true
+    },
+    {
+      "id": "w-cs-6",
+      "category": "Rule",
+      "name": "Cấp độ #1: Cấp độ 3 Đột Phá",
+      "description": "Sức mạnh đạt đến đỉnh điểm, bắt đầu có thể sử dụng các kỹ năng mới",
+      "locked": true
+    },
+    {
+      "id": "w-cs-7",
+      "category": "Rule",
+      "name": "Cấp độ #4: Cấp độ 4 Chuyên Viên",
+      "description": "Sức mạnh đạt đến mức cao nhất, có thể sử dụng kỹ năng chuyên môn",
+      "locked": true
+    },
+    {
+      "id": "w-cs-8",
+      "category": "Rule",
+      "name": "Cấp độ #5: Cấp độ 5 Đỉnh Phong",
+      "description": "Sức mạnh đạt đến cực hạn, có khả năng vượt qua nguy hiểm lớn",
+      "locked": true
+    }
+  ],
+  "story_memory": [
+    {
+      "id": "mem-0",
+      "category": "World",
+      "content": "Cấp độ sức mạnh tuân thủ nghiêm ngặt quy tắc đại lục",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-1",
+      "category": "World",
+      "content": "Quyền lực chỉ được mở rộng thông qua sự đoàn kết và hợp tác",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-2",
+      "category": "World",
+      "content": "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-3",
+      "category": "World",
+      "content": "Sự sống sót và chiến đấu đòi hỏi sự thông minh và sự linh hoạt",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-4",
+      "category": "World",
+      "content": "Tổ chức phản diện âm mưu thống trị Vạn Thủy",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-5",
+      "category": "World",
+      "content": "Đoạn đường tìm kiếm sức mạnh dẫn đến những thử thách và nguy hiểm",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    },
+    {
+      "id": "mem-6",
+      "category": "World",
+      "content": "Sự đoàn kết là chìa khóa để đánh bại Tổ chức phản diện",
+      "importance": "HIGH",
+      "confidence": 1.0,
+      "locked": true
+    }
+  ]
+}

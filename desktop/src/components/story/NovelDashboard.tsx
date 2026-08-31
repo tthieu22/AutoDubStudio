@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Play, Pause, RefreshCw, BookOpen, Layers, ShieldCheck, 
-  Brain, FileText, CheckCircle2, AlertCircle, Sliders, Cpu, Activity, Clock, Copy, Check, Trash2
+  Brain, FileText, CheckCircle2, AlertCircle, AlertTriangle, Sliders, Cpu, Activity, Clock, Copy, Check, Trash2
 } from 'lucide-react';
 import { PythonEngineService } from '../../services/pythonEngine';
 
@@ -29,6 +29,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   const [hasMasterPlan, setHasMasterPlan] = useState<boolean>(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
   const [gpuServerInfo, setGpuServerInfo] = useState<string>('Đang khởi động GPU Ollama (qwen2.5:3b)...');
+  const [currentSubStage, setCurrentSubStage] = useState<'1A' | '1B' | '1C' | '1D' | '1E' | '2A' | 'DONE' | 'IDLE'>('IDLE');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleCopyLogs = () => {
     if (logs.length === 0) return;
@@ -148,6 +150,22 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         } catch {}
       }
 
+      if (displayLine.includes('PROMPT 1A/5') || displayLine.includes('BƯỚC 1/7') || displayLine.includes('WORLD_GENERATION')) {
+        setCurrentSubStage('1A');
+      } else if (displayLine.includes('PROMPT 1B/5') || displayLine.includes('PROGRESSION_GENERATION')) {
+        setCurrentSubStage('1B');
+      } else if (displayLine.includes('PROMPT 1C/5') || displayLine.includes('CAST_GENERATION')) {
+        setCurrentSubStage('1C');
+      } else if (displayLine.includes('PROMPT 1D/5') || displayLine.includes('RULES_GENERATION')) {
+        setCurrentSubStage('1D');
+      } else if (displayLine.includes('PROMPT 1E/5') || displayLine.includes('TERMINOLOGY_GENERATION')) {
+        setCurrentSubStage('1E');
+      } else if (displayLine.includes('MASTER_PLAN') || displayLine.includes('GENERATING_MASTER_PLAN') || displayLine.includes('BƯỚC 2-3/7')) {
+        setCurrentSubStage('2A');
+      } else if (displayLine.includes('Hoàn thành 5/5') || displayLine.includes('THÀNH CÔNG')) {
+        // Keep at 1E until master plan starts
+      }
+
       setLogs(prev => {
         if (prev.length > 0 && prev[0] === displayLine) return prev;
         const newLogs = [displayLine, ...prev.slice(0, 100)];
@@ -189,11 +207,22 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     }
   };
 
-  const handleInitializeNovel = async () => {
+  const executeInitializeNovel = async () => {
     if (!projectDir || isGenerating) return null;
     setIsGenerating(true);
+    
+    // 1. CLEAR OLD DATA & RESET ALL PROCESS INDICATORS
+    setStoryBible(null);
+    setGlobalProgress(null);
+    setHasMasterPlan(false);
+    setLogs([]);
+    setProgressPercent(0);
+    setCurrentChapterNum(1);
+    setCurrentSubStage('1A');
     setCurrentStage('INITIALIZING_STORY_BIBLE');
-    setLogs(prev => ['[INFO] AI Story Director building Story Bible & World Rules...', ...prev]);
+
+    const startLog = '[INFO] AI Story Director building Story Bible & World Rules...';
+    setLogs([startLog]);
 
     try {
       const idea = {
@@ -205,19 +234,34 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         enable_tiktok_slang: enableTiktokSlang
       };
 
-      await saveNovelStateToProject({ novel_idea: idea, novel_current_stage: 'INITIALIZING_STORY_BIBLE' });
+      // Reset novel_execution.log file & clean old project state
+      await PythonEngineService.writeTextFile(`${projectDir}/novel_execution.log`, '');
+      await saveNovelStateToProject({ 
+        novel_idea: idea, 
+        story_bible: null,
+        arc_plans: [],
+        global_progress: null,
+        novel_logs: [startLog],
+        novel_current_stage: 'INITIALIZING_STORY_BIBLE',
+        novel_current_chapter: 1,
+        novel_progress_percent: 0,
+        chapters: []
+      });
 
       const bible = await PythonEngineService.initializeNovel(projectDir, idea);
       setStoryBible(bible);
       
-      setLogs(prev => ['[SUCCESS] Story Bible generated! Creating Master Plan (20-30 Arcs)...', ...prev]);
+      setLogs(prev => ['[SUCCESS] Story Bible generated! Creating Master Plan (20-50 Arcs)...', ...prev]);
       setCurrentStage('GENERATING_MASTER_PLAN');
+      setCurrentSubStage('2A');
 
       await saveNovelStateToProject({ story_bible: bible, novel_current_stage: 'GENERATING_MASTER_PLAN' });
 
       const masterPlan = await PythonEngineService.generateNovelMasterPlan(projectDir);
       setLogs(prev => ['[SUCCESS] Master Plan created! Ready for Auto-Write.', ...prev]);
       setCurrentStage('READY');
+      setCurrentSubStage('DONE');
+      setHasMasterPlan(true);
 
       await saveNovelStateToProject({ arc_plans: masterPlan, novel_current_stage: 'READY' });
       return bible;
@@ -230,13 +274,22 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     }
   };
 
+  const handleInitializeNovelClick = () => {
+    if (isGenerating) return;
+    if (storyBible || hasMasterPlan || logs.length > 0) {
+      setShowResetConfirm(true);
+    } else {
+      executeInitializeNovel();
+    }
+  };
+
   const handleStartAutoWrite = async () => {
     if (!projectDir || isGenerating) return;
 
     let activeBible = storyBible;
     if (!activeBible) {
       setLogs(prev => ['[INFO] Chưa phát hiện Story Bible & Master Plan. Tự động thực hiện Bước 1, 2, 3 trước...', ...prev]);
-      activeBible = await handleInitializeNovel();
+      activeBible = await executeInitializeNovel();
       if (!activeBible) {
         setLogs(prev => ['[ERROR] Khởi tạo thế giới thất bại. Đã dừng quy trình.', ...prev]);
         return;
@@ -375,6 +428,78 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               {globalProgress?.last_completed_chapter || currentChapterNum}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* STEP 1 & STEP 2 PROMPT PROCESS STEPPER V2.3 */}
+      <div className="bg-[#111318] p-3.5 rounded-xl border border-white/5 shadow-md space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-white font-['Outfit'] flex items-center gap-2 uppercase tracking-wider">
+            <Sparkles size={14} className="text-cyan-400" /> Tiến Trình Khởi Tạo Prompt AI (Bước 1 & Bước 2)
+          </h3>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {currentStage === 'INITIALIZING_STORY_BIBLE' ? 'Đang Khởi Tạo Bối Cảnh Thế Giới (Bước 1)...' :
+             currentStage === 'GENERATING_MASTER_PLAN' ? 'Đang Tạo Master Plan 20-50 Arcs (Bước 2)...' :
+             storyBible && hasMasterPlan ? '✓ Đã Hoàn Thành Bước 1 & Bước 2' : 'Sẵn Sàng Khởi Tạo'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+          {[
+            { key: '1A', label: 'Prompt 1A', title: 'Bối Cảnh Thế Giới', desc: 'World & Premise' },
+            { key: '1B', label: 'Prompt 1B', title: 'Hệ Thống Cảnh Giới', desc: 'Progression Ranks' },
+            { key: '1C', label: 'Prompt 1C', title: 'Dàn Nhân Vật Nam/Nữ', desc: 'Full Cast Profiles' },
+            { key: '1D', label: 'Prompt 1D', title: 'Quy Tắc Thế Giới', desc: 'World Rules & Canon' },
+            { key: '1E', label: 'Prompt 1E', title: 'Từ Điển Thuật Ngữ', desc: 'Genre Terminology' },
+            { key: '2A', label: 'Bước 2 (2A)', title: 'Master Plan (20-50 Arcs)', desc: '20-50 Master Arcs' },
+          ].map((sub) => {
+            const isCompleted = 
+              sub.key === '1A' ? (!!storyBible || ['1B', '1C', '1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1B' ? (!!storyBible || ['1C', '1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1C' ? (!!storyBible || ['1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1D' ? (!!storyBible || ['1E', '2A', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1E' ? (!!storyBible || ['2A', 'DONE'].includes(currentSubStage)) :
+              sub.key === '2A' ? (hasMasterPlan || currentSubStage === 'DONE') : false;
+
+            const isActive = !isCompleted && currentSubStage === sub.key;
+
+            return (
+              <div
+                key={sub.key}
+                className={`p-2.5 rounded-lg border flex flex-col justify-between transition-all ${
+                  isCompleted
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : isActive
+                    ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-200 shadow-md shadow-cyan-500/10 animate-pulse'
+                    : 'bg-black/30 border-white/5 text-slate-500'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold font-mono uppercase">{sub.label}</span>
+                  {isCompleted ? (
+                    <CheckCircle2 size={13} className="text-emerald-400" />
+                  ) : isActive ? (
+                    <Clock size={13} className="text-cyan-400 animate-spin" />
+                  ) : (
+                    <Clock size={13} className="text-slate-600" />
+                  )}
+                </div>
+                <span className="font-bold text-[11px] leading-tight">{sub.title}</span>
+                <span className="text-[9px] text-slate-400 mt-0.5">{sub.desc}</span>
+                <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden mt-2 border border-white/5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isCompleted
+                        ? 'bg-emerald-400 w-full'
+                        : isActive
+                        ? 'bg-cyan-400 w-3/4 animate-pulse'
+                        : 'w-0'
+                    }`}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -566,7 +691,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
           </div>
 
           <button
-            onClick={handleInitializeNovel}
+            onClick={handleInitializeNovelClick}
             disabled={isGenerating}
             className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
           >
@@ -648,6 +773,59 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
           </div>
         </div>
       </div>
+
+      {/* RESET & RE-INITIALIZE CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#111318] border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 relative">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle size={24} className="animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-white font-['Outfit']">
+                  Xác Nhận Xóa Dữ Liệu Cũ & Tạo Mới
+                </h3>
+                <p className="text-xs text-amber-400/90 font-medium">
+                  Cảnh báo: Hành động này không thể hoàn tác!
+                </p>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-2 bg-black/40 p-3.5 rounded-xl border border-white/5 leading-relaxed">
+              <p>
+                Bạn đang yêu cầu <strong className="text-white">tạo mới bối cảnh thế giới & Master Plan Arcs</strong>. 
+                Hệ thống sẽ <strong className="text-rose-400">đặt lại toàn bộ tiến trình</strong> và <strong className="text-rose-400">xóa sạch các dữ liệu cũ</strong> bao gồm:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-slate-400 text-[11px] pt-1">
+                <li>Hồ sơ thế giới & Story Bible hiện tại</li>
+                <li>Kế hoạch 20-50 Arcs kịch bản (Master Plan)</li>
+                <li>Nhật ký tiến trình log & Tiến trình các chương đã tạo</li>
+                <li>Toàn bộ thông tin Canon Facts & Open Threads trong bộ nhớ</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold transition-all border border-white/10 cursor-pointer"
+              >
+                Hủy Bỏ
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowResetConfirm(false);
+                  executeInitializeNovel();
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-amber-600 hover:from-rose-400 hover:to-amber-500 text-white text-xs font-extrabold shadow-lg shadow-rose-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles size={14} /> Xác Nhận Xóa Cũ & Tạo Mới
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

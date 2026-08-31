@@ -546,7 +546,7 @@ export class PythonEngineService {
     if (!isTauri()) {
       return () => {};
     }
-    return listen<any>('novel://log', (event: Event<any>) => {
+    return listen<any>('pipeline://log', (event: Event<any>) => {
       callback(event.payload);
     });
   }

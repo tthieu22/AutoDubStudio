@@ -15,6 +15,16 @@ from autodub.novel.prompts.master_planner import MasterPlannerPrompt
 logger = logging.getLogger(__name__)
 
 
+def _safe_print(msg: str):
+    """Print to stdout safely, handling Windows codepage encoding issues."""
+    import sys
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((msg + '\n').encode('utf-8', errors='replace'))
+        sys.stdout.buffer.flush()
+
+
 class StoryPlanner:
     """
     Component handling Story Bible initialization (Phase A1) and Master Plan Arc Generation (Phase A2).
@@ -41,67 +51,87 @@ class StoryPlanner:
 
         logger.info(f"[WORLD_GENERATION] Starting Modular Initialization for '{idea.title}' (Genre: '{idea.genre}')...")
 
-        # Step 1A: Primary World Generation Prompt
+        # Step 1A: Primary World Generation Prompt (Premise & World)
+        msg_1a = f"[INFO] === PROMPT 1A/5: Sáng tạo Bối Cảnh Thế Giới & Premise ==="
+        logger.info(msg_1a)
+        _safe_print(msg_1a)
         world_prompt = StoryDirectorPrompt.build_world_prompt(idea)
-        raw_bible, metadata = self._call_llm_json_strict(world_prompt, stage="WORLD_GENERATION", idea=idea, max_retries=3)
-        if not isinstance(raw_bible, dict):
+        w_res, metadata = self._call_llm_json_strict(world_prompt, stage="WORLD_GENERATION", idea=idea, max_retries=3)
+        if not isinstance(w_res, dict):
             raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Story Bible payload must be a JSON object")
 
-        if not raw_bible.get("premise"):
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'premise' is missing or empty")
+        raw_bible = {
+            "premise": w_res.get("premise", f"Hành trình của {idea.title}"),
+            "world": w_res.get("world", {})
+        }
 
-        if not raw_bible.get("world") or not isinstance(raw_bible.get("world"), dict):
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'world' is missing or invalid")
+        # Step 1B: Progression System — FAIL-CLOSED (No Fallback)
+        msg_1b = f"[INFO] === PROMPT 1B/5: Sáng tạo Hệ Thống Cảnh Giới & Sức Mạnh ==="
+        logger.info(msg_1b)
+        _safe_print(msg_1b)
+        prog_prompt = StoryDirectorPrompt.build_progression_prompt(idea, raw_bible)
+        prog_res, _ = self._call_llm_json_strict(prog_prompt, stage="PROGRESSION_GENERATION", max_retries=3)
+        if isinstance(prog_res, dict):
+            raw_bible["progression_system"] = prog_res.get("progression_system", prog_res)
+            raw_bible["cultivation_system"] = prog_res.get("cultivation_system", prog_res.get("ranks", []))
+        elif isinstance(prog_res, list):
+            raw_bible["progression_system"] = {"type": "level", "ranks": prog_res}
+            raw_bible["cultivation_system"] = prog_res
+        else:
+            raise GenerationError("PROGRESSION_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                  "LLM trả về dữ liệu Hệ Thống Cảnh Giới không hợp lệ (không phải dict hoặc list)")
 
-        # Step 1B: Progression System (Fetch via sub-step if missing)
-        prog_sys = raw_bible.get("progression_system") or {}
-        cult_sys = raw_bible.get("cultivation_system") or []
-        if not prog_sys and not cult_sys:
-            logger.info("[WORLD_GENERATION] 'progression_system' missing in primary payload. Invoking Sub-Step 1B...")
-            prog_prompt = StoryDirectorPrompt.build_progression_prompt(idea, raw_bible.get("premise", ""))
-            prog_res, _ = self._call_llm_json_strict(prog_prompt, stage="PROGRESSION_GENERATION", idea=idea, max_retries=2)
-            if isinstance(prog_res, dict):
-                raw_bible["progression_system"] = prog_res.get("progression_system", prog_res)
-                raw_bible["cultivation_system"] = prog_res.get("cultivation_system", [])
+        # Step 1C: Full Cast Generation — FAIL-CLOSED (No Fallback)
+        msg_1c = f"[INFO] === PROMPT 1C/5: Sáng tạo Dàn Nhân Vật Nam & Nữ ==="
+        logger.info(msg_1c)
+        _safe_print(msg_1c)
+        cast_prompt = StoryDirectorPrompt.build_cast_prompt(idea, raw_bible)
+        cast_res, _ = self._call_llm_json_strict(cast_prompt, stage="CAST_GENERATION", idea=idea, max_retries=3)
+        if isinstance(cast_res, list) and len(cast_res) > 0:
+            raw_bible["characters"] = cast_res
+        elif isinstance(cast_res, dict) and "characters" in cast_res and len(cast_res["characters"]) > 0:
+            raw_bible["characters"] = cast_res["characters"]
+        else:
+            raise GenerationError("CAST_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                  f"LLM không tạo được danh sách nhân vật hợp lệ cho '{p_name}'. Hãy thử lại.")
 
-        prog_sys = raw_bible.get("progression_system") or {}
-        cult_sys = raw_bible.get("cultivation_system") or []
-        if not prog_sys and not cult_sys:
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'progression_system' or 'cultivation_system' is missing")
+        # Step 1D: World Rules — FAIL-CLOSED (No Fallback)
+        msg_1d = f"[INFO] === PROMPT 1D/5: Sáng tạo Quy Tắc Thế Giới Quan ==="
+        logger.info(msg_1d)
+        _safe_print(msg_1d)
+        rules_prompt = StoryDirectorPrompt.build_rules_prompt(idea, raw_bible)
+        rules_res, _ = self._call_llm_json_strict(rules_prompt, stage="RULES_GENERATION", max_retries=3)
+        if isinstance(rules_res, list) and len(rules_res) > 0:
+            raw_bible["rules"] = rules_res
+        elif isinstance(rules_res, dict) and "rules" in rules_res and len(rules_res["rules"]) > 0:
+            raw_bible["rules"] = rules_res["rules"]
+        else:
+            raise GenerationError("RULES_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                  "LLM không tạo được danh sách Quy Tắc Thế Giới hợp lệ. Hãy thử lại.")
 
-        # Step 1C: Full Cast Generation (Fetch via sub-step if missing or < 2 characters)
-        chars = raw_bible.get("characters", [])
-        if not isinstance(chars, list) or len(chars) < 2:
-            logger.info("[WORLD_GENERATION] 'characters' missing or incomplete in primary payload. Invoking Sub-Step 1C...")
-            cast_prompt = StoryDirectorPrompt.build_cast_prompt(idea, raw_bible)
-            cast_res, _ = self._call_llm_json_strict(cast_prompt, stage="CAST_GENERATION", idea=idea, max_retries=2)
-            if isinstance(cast_res, list) and len(cast_res) > 0:
-                raw_bible["characters"] = cast_res
-            elif isinstance(cast_res, dict) and "characters" in cast_res:
-                raw_bible["characters"] = cast_res["characters"]
-
-        if not raw_bible.get("characters") or not isinstance(raw_bible.get("characters"), list) or len(raw_bible.get("characters")) == 0:
-            raise GenerationError("WORLD_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Required field 'characters' must contain at least 1 character")
-
-        # Step 1D: World Rules (Fetch via sub-step if missing)
-        if not raw_bible.get("rules"):
-            rules_prompt = StoryDirectorPrompt.build_rules_prompt(idea, raw_bible)
-            rules_res, _ = self._call_llm_json_strict(rules_prompt, stage="RULES_GENERATION", idea=idea, max_retries=2)
-            if isinstance(rules_res, list):
-                raw_bible["rules"] = rules_res
-            elif isinstance(rules_res, dict) and "rules" in rules_res:
-                raw_bible["rules"] = rules_res["rules"]
-
-        # Step 1E: Terminology (Fetch via sub-step if missing)
-        if not raw_bible.get("terminology"):
-            term_prompt = StoryDirectorPrompt.build_terminology_prompt(idea, raw_bible)
-            term_res, _ = self._call_llm_json_strict(term_prompt, stage="TERMINOLOGY_GENERATION", idea=idea, max_retries=2)
-            if isinstance(term_res, dict):
-                raw_bible["terminology"] = term_res.get("terminology", term_res)
+        # Step 1E: Terminology — FAIL-CLOSED (No Fallback)
+        msg_1e = f"[INFO] === PROMPT 1E/5: Sáng tạo Từ Điển Thuật Ngữ ==="
+        logger.info(msg_1e)
+        _safe_print(msg_1e)
+        term_prompt = StoryDirectorPrompt.build_terminology_prompt(idea, raw_bible)
+        term_res, _ = self._call_llm_json_strict(term_prompt, stage="TERMINOLOGY_GENERATION", max_retries=3)
+        if isinstance(term_res, dict):
+            if "terminology" in term_res and isinstance(term_res["terminology"], dict) and len(term_res["terminology"]) > 0:
+                raw_bible["terminology"] = term_res["terminology"]
+            elif len(term_res) > 0 and all(isinstance(v, str) for v in term_res.values()):
+                raw_bible["terminology"] = term_res
+            else:
+                raise GenerationError("TERMINOLOGY_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                      "LLM không tạo được Từ Điển Thuật Ngữ hợp lệ (dict rỗng). Hãy thử lại.")
+        else:
+            raise GenerationError("TERMINOLOGY_GENERATION", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                  "LLM trả về dữ liệu Thuật Ngữ không hợp lệ (không phải dict). Hãy thử lại.")
 
         raw_bible["generation_metadata"] = metadata
         raw_bible["enable_tiktok_slang"] = getattr(idea, "enable_tiktok_slang", False)
-        logger.info(f"[WORLD_GENERATION] Initialization SUCCESS | Source: {metadata['source']} | Characters: {len(raw_bible.get('characters', []))}")
+        done_msg = f"[INFO] === THÀNH CÔNG: Hoàn thành 5/5 Prompts Khởi Tạo Thế Giới Quan ==="
+        logger.info(done_msg)
+        _safe_print(done_msg)
 
         # Save to DB & File ONLY AFTER PASSING VALIDATION
         self.db.create_story(self.story_id, idea)
@@ -178,7 +208,9 @@ class StoryPlanner:
                     "locked": True
                 })
         
-        ranks_list = cult_sys if cult_sys else prog_sys.get("ranks", [])
+        prog_sys = raw_bible.get("progression_system", {})
+        cult_sys = raw_bible.get("cultivation_system", [])
+        ranks_list = cult_sys if (isinstance(cult_sys, list) and len(cult_sys) > 0) else (prog_sys.get("ranks", []) if isinstance(prog_sys, dict) else [])
         for cs in ranks_list:
             if isinstance(cs, dict):
                 formatted_lore.append({
@@ -225,38 +257,92 @@ class StoryPlanner:
             raise GenerationError("MASTER_PLAN", GenerationErrorCode.DEPENDENCY_NOT_READY.value, "Story Bible premise is empty or invalid", retryable=False)
 
         premise = bible_data.get("premise", "Cốt truyện chính")
-        logger.info(f"[MASTER_PLAN_GENERATION] Input Premise: '{premise[:40]}' | Total Chapters: {total_chapters} | LLM Call: START")
 
-        prompt = MasterPlannerPrompt.build_prompt(bible_data, total_chapters)
-        raw_arcs, metadata = self._call_llm_json_strict(prompt, stage="MASTER_PLAN", idea=None, max_retries=3)
+        # Calculate expected arc count (~20 chapters per arc)
+        chaps_per_arc = 20
+        expected_arcs = max(5, min(50, (total_chapters + chaps_per_arc - 1) // chaps_per_arc))
+        
+        # Batch size: max 10 arcs per LLM call to prevent output truncation on small models
+        BATCH_SIZE = 10
+        all_raw_arcs = []
+        batch_num = 0
+        arcs_remaining = expected_arcs
 
-        if isinstance(raw_arcs, dict) and "arcs" in raw_arcs:
-            raw_arcs = raw_arcs["arcs"]
+        logger.info(f"[MASTER_PLAN_GENERATION] Input Premise: '{premise[:40]}' | Total Chapters: {total_chapters} | Expected Arcs: {expected_arcs} | Batch Size: {BATCH_SIZE}")
 
-        if not isinstance(raw_arcs, list) or len(raw_arcs) == 0:
-            raise GenerationError("MASTER_PLAN", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, "Field 'arcs' must contain at least one valid Arc plan", retryable=True)
+        while arcs_remaining > 0:
+            batch_num += 1
+            batch_count = min(BATCH_SIZE, arcs_remaining)
+            arc_start_idx = len(all_raw_arcs) + 1
+            arc_end_idx = arc_start_idx + batch_count - 1
+            
+            # Calculate chapter ranges for this batch
+            batch_start_chapter = (arc_start_idx - 1) * chaps_per_arc + 1
+            batch_end_chapter = min(arc_end_idx * chaps_per_arc, total_chapters)
+
+            batch_msg = f"[INFO] === MASTER PLAN BATCH {batch_num}: Tạo Arc {arc_start_idx}-{arc_end_idx} (Chương {batch_start_chapter}-{batch_end_chapter}) ==="
+            logger.info(batch_msg)
+            _safe_print(batch_msg)
+
+            prompt = MasterPlannerPrompt.build_batch_prompt(
+                bible_data, total_chapters, 
+                batch_start=arc_start_idx, batch_end=arc_end_idx,
+                chaps_per_arc=chaps_per_arc,
+                previous_arcs=all_raw_arcs
+            )
+            raw_arcs, metadata = self._call_llm_json_strict(prompt, stage="MASTER_PLAN", idea=None, max_retries=3)
+
+            if isinstance(raw_arcs, dict) and "arcs" in raw_arcs:
+                raw_arcs = raw_arcs["arcs"]
+
+            if not isinstance(raw_arcs, list) or len(raw_arcs) == 0:
+                raise GenerationError("MASTER_PLAN", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value, 
+                                      f"LLM không tạo được Arc {arc_start_idx}-{arc_end_idx}. Batch {batch_num} trả về dữ liệu rỗng.", retryable=True)
+
+            all_raw_arcs.extend(raw_arcs)
+            arcs_remaining -= len(raw_arcs)
+            
+            batch_done_msg = f"[INFO] Batch {batch_num} hoàn thành: {len(raw_arcs)} Arcs | Tổng hiện tại: {len(all_raw_arcs)}/{expected_arcs}"
+            logger.info(batch_done_msg)
+            _safe_print(batch_done_msg)
+
+        # Validate minimum arc count
+        if len(all_raw_arcs) < max(5, expected_arcs // 2):
+            raise GenerationError("MASTER_PLAN", GenerationErrorCode.SCHEMA_VALIDATION_ERROR.value,
+                                  f"Số lượng Arc quá ít ({len(all_raw_arcs)}/{expected_arcs}). Cần ít nhất {max(5, expected_arcs // 2)} Arcs cho {total_chapters} chương.", retryable=True)
 
         arc_objs = []
-        for idx, a in enumerate(raw_arcs, start=1):
+        total_arcs_count = len(all_raw_arcs)
+        for idx, a in enumerate(all_raw_arcs, start=1):
             if isinstance(a, str):
                 a = {"title": a}
             elif not isinstance(a, dict):
                 a = {}
 
+            # Strictly enforce continuous chapter math (no LLM hallucinated chapter gaps/overlaps)
+            calc_start = (idx - 1) * chaps_per_arc + 1
+            calc_end = total_chapters if idx == total_arcs_count else idx * chaps_per_arc
+
+            raw_title = str(a.get("title", f"Arc {idx:02d}")).strip()
+            if not raw_title:
+                raw_title = f"Arc {idx:02d} — Kịch Bản Phân Đoạn {idx}"
+
             arc_objs.append(ArcPlan(
                 id=f"arc_{idx:02d}",
                 story_id=self.story_id,
-                arc_num=a.get("arc_num", idx),
-                title=a.get("title", f"Arc {idx}"),
-                start_chapter=a.get("start_chapter", (idx-1)*40 + 1),
-                end_chapter=a.get("end_chapter", idx*40),
-                goal=a.get("goal", ""),
-                conflict=a.get("conflict", ""),
-                major_reveal=a.get("major_reveal", ""),
-                character_development=a.get("character_development", "")
+                arc_num=idx,
+                title=raw_title,
+                start_chapter=calc_start,
+                end_chapter=calc_end,
+                goal=a.get("goal", f"Mục tiêu cốt truyện trong Arc {idx}"),
+                conflict=a.get("conflict", f"Xung đột kịch bản trong Arc {idx}"),
+                major_reveal=a.get("major_reveal", f"Manh mối quan trọng trong Arc {idx}"),
+                character_development=a.get("character_development", f"Tiến trình phát triển nhân vật trong Arc {idx}")
             ))
 
-        logger.info(f"[MASTER_PLAN_GENERATION] LLM Call: SUCCESS | Source: {metadata['source']} | Fallback Used: {metadata['fallback_used']} | Arc Count: {len(arc_objs)}")
+        success_msg = f"[INFO] === MASTER PLAN HOÀN THÀNH: {len(arc_objs)} Arcs cho {total_chapters} chương ==="
+        logger.info(success_msg)
+        _safe_print(success_msg)
 
         self.db.save_arc_plans(arc_objs)
 

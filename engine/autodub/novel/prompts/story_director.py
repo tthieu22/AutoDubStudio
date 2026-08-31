@@ -4,50 +4,80 @@ from autodub.novel.novel_models import StoryIdea
 
 class StoryDirectorPrompt:
     @staticmethod
+    def _get_target_counts(total_chapters: int) -> Dict[str, Any]:
+        """Tính toán quy mô dữ liệu tối ưu dựa trên tổng số chương dự kiến."""
+        chaps = max(10, total_chapters)
+        if chaps <= 100:
+            return {
+                "factions_count": "2 - 4 thế lực chính",
+                "locations_count": "2 - 4 địa danh trọng yếu",
+                "ranks_count": 5,
+                "ranks_desc": "5 - 7 cấp độ/cảnh giới chính",
+                "chars_count": 4,
+                "chars_desc": "4 - 5 nhân vật nòng cốt",
+                "terms_count": 5
+            }
+        elif chaps <= 500:
+            return {
+                "factions_count": "4 - 6 thế lực chính (phù hợp với quy mô 500 chương)",
+                "locations_count": "4 - 6 địa danh trọng yếu",
+                "ranks_count": 8,
+                "ranks_desc": "7 - 10 cấp độ/cảnh giới chính",
+                "chars_count": 6,
+                "chars_desc": "6 - 8 nhân vật nòng cốt (Đồng đội, Nữ chính, Sư phụ, Phản diện, Đối thủ)",
+                "terms_count": 8
+            }
+        else:
+            return {
+                "factions_count": "6 - 10 thế lực chính (Thương hội, Cổ tộc, Chư thiên thế lực)",
+                "locations_count": "6 - 10 địa danh từ Hạ giới đến Thượng giới",
+                "ranks_count": 12,
+                "ranks_desc": "10 - 15 cấp độ/cảnh giới tiến hóa dài hạn",
+                "chars_count": 10,
+                "chars_desc": "8 - 12 nhân vật nòng cốt (Đầy đủ Nam & Nữ, Phản diện qua từng thời kỳ)",
+                "terms_count": 10
+            }
+
+    @staticmethod
     def build_prompt(idea: StoryIdea) -> str:
         """Tổng hợp prompt khởi tạo Bối cảnh thế giới & Hồ sơ truyện."""
         p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
         p_bg = idea.protagonist.get("background", "Bối cảnh ban đầu") if isinstance(idea.protagonist, dict) else "Bối cảnh ban đầu"
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
 
         return f"""=== VAI TRÒ: STORY DIRECTOR (GIÁM ĐỐC SÁNG TẠO NỘI DUNG TRUYỆN MỚI) ===
-Nhiệm vụ: Dựa trên Ý TƯỞNG CỦA NGHỆ SĨ, hãy sáng tạo BỘ HỒ SƠ THẾ GIỚI & QUY TẮC TRUYỆN (STORY BIBLE) hoàn toàn mới, độc đáo, 100% phù hợp với thể loại và bối cảnh.
+Nhiệm vụ: Dựa trên Ý TƯỞNG CỦA NGHỆ SĨ và TỔNG SỐ CHƯƠNG DỰ KIẾN ({total_chaps} CHƯƠNG), hãy sáng tạo BỘ HỒ SƠ THẾ GIỚI & QUY TẮC TRUYỆN (STORY BIBLE) hoàn toàn mới, độc đáo, 100% phù hợp với thể loại và bối cảnh.
 
 THÔNG TIN ĐẦU VÀO TỪ NGƯỜI DÙNG:
 - Tên truyện: {idea.title}
 - Thể loại: {idea.genre}
 - Phong cách: {idea.style}
+- Quy mô câu chuyện dự kiến: {total_chaps} chương
 - Nhân vật chính: {p_name} ({p_bg})
 - Yêu cầu đặc biệt: {", ".join(idea.requirements) if idea.requirements else "Sáng tạo độc đáo"}
 
 QUY TẮC SÁNG TẠO BẮT BUỘC:
-1. Hệ thống tiến trình sức mạnh/cấp độ (`progression_system`) PHẢI được thiết kế CHUẨN THEO THỂ LOẠI '{idea.genre}'.
-2. CẤM dùng các tên mặc định generic cũ. Hãy sáng tạo tên Tông môn/Thế lực/Tập đoàn/Đại lục/Địa danh HOÀN TOÀN MỚI mang nét đặc trưng của thể loại '{idea.genre}'.
+1. Tính toán quy mô dữ liệu phù hợp với bộ truyện {total_chaps} chương:
+   - Hệ thống cảnh giới/cấp độ sức mạnh (`progression_system`): Sáng tạo {targets['ranks_desc']}.
+   - Thế lực & Địa danh (`world`): Sáng tạo {targets['factions_count']}.
+   - Dàn nhân vật (`characters`): Sáng tạo {targets['chars_desc']}.
+2. NGUYÊN TẮC THIẾT KẾ MỞ (EXTENSIBLE): Thiết kế bối cảnh, cảnh giới và dàn nhân vật với cấu trúc mở, có thể tiếp tục mở rộng (đột phá Thượng giới / phát hiện địa danh mới) khi bộ truyện kéo dài thêm.
 3. Nhân vật chính BẮT BUỘC là: '{p_name}'.
-4. BẮT BUỘC SÁNG TẠO DÀN NHÂN VẬT ĐẦY ĐỦ THẾ GIỚI QUAN (Ít nhất 4 - 6 nhân vật bao gồm CẢ NAM VÀ NỮ). CẤM tạo dàn nhân vật 100% Nam.
-5. TÊN CÁC NHÂN VẬT PHẢI PHỔ THÔNG, TỰ NHIÊN, CÓ ĐỘ NHẬN DIỆN CAO (Ví dụ: Nguyệt Nhi, Vân Tiêu, Tiêu Viêm, Minh Quân, Alex Vance...).
-6. TOÀN BỘ NỘI DUNG VĂN BẢN TRONG ĐẦU RA JSON BẮT BUỘC PHẢI VIẾT 100% BẰNG TIẾNG VIỆT MƯỢT MÀ, TỰ NHIÊN. CẤM TRẢ VỀ TIẾNG ANH/TRUNG.
-7. CẤM BẢO LƯU CÁC TỪ MẪU GENERIC NHƯ 'Tính cách 1', 'Mô tả 1'. Mọi mô tả PHẢI ĐƯỢC VIẾT CỤ THỂ, SẮC SẢO.
-8. BẮT BUỘC SÁNG TẠO THẾ GIỚI RỘNG LỚN (Mục factions: 4-6 thế lực; Mục locations: 5-8 địa danh).
+4. TOÀN BỘ NỘI DUNG VĂN BẢN TRONG ĐẦU RA JSON BẮT BUỘC PHẢI VIẾT 100% BẰNG TIẾNG VIỆT MƯỢT MÀ, TỰ NHIÊN. CẤM TRẢ VỀ TIẾNG ANH/TRUNG.
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object):
+YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object ngắn gọn, không giải thích dài dòng):
 {{
   "premise": "Tóm tắt cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
   "world": {{
     "continent_name": "Tên thế giới / đại lục / hành tinh chính",
     "factions": [
       "Thế lực khởi đầu / Tông môn chính",
-      "Liên minh thương hội / Chợ giao dịch",
-      "Đại tập đoàn / Hoàng gia cai trị",
-      "Tổ chức phản diện / Ngầm",
-      "Thế lực ẩn thế / Cổ xưa"
+      "Tổ chức phản diện / Ngầm"
     ],
     "locations": [
       "Vùng đất khởi đầu (Làng/Tân thủ/Trạm vũ trụ)",
-      "Thành phố / Kinh thành trung tâm",
-      "Trung tâm giao dịch / Chợ đấu giá",
-      "Bí cảnh / Vùng nguy hiểm thử thách",
-      "Vùng đất cấm / Di tích cổ xưa",
-      "Tổng bộ thế lực đối lập"
+      "Thành phố / Kinh thành trung tâm"
     ]
   }},
   "progression_system": {{
@@ -58,88 +88,109 @@ YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object):
       {{"rank": 3, "name": "Cấp độ 3 đỉnh cao", "description": "Mô tả sức mạnh đỉnh cao"}}
     ]
   }},
-  "cultivation_system": [
-    {{"rank": 1, "name": "Cấp độ 1 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 1"}},
-    {{"rank": 2, "name": "Cấp độ 2 phù hợp {idea.genre}", "description": "Mô tả sức mạnh cấp 2"}},
-    {{"rank": 3, "name": "Cấp độ 3 đỉnh cao", "description": "Mô tả sức mạnh đỉnh cao"}}
-  ],
   "characters": [
     {{
       "id": "char_001",
       "name": "{p_name}",
       "gender": "Nam",
-      "personality": ["Điềm tĩnh", "Quyết đoán", "Thông minh"],
+      "personality": ["Điềm tĩnh", "Quyết đoán"],
       "goal": "Mục tiêu lớn nhất của {p_name}",
       "realm": "Cấp độ khởi đầu",
       "location": "Vị trí khởi đầu",
       "known_information": ["{p_bg}"],
-      "secrets": ["Bí mật lớn nhất / Hệ thống / Kim thủ chỉ"]
+      "secrets": ["Bí mật lớn nhất / Kim thủ chỉ"]
     }},
     {{
       "id": "char_002",
       "name": "Nguyệt Nhi",
       "gender": "Nữ",
-      "personality": ["Sắc sảo", "Thông minh", "Trung thành"],
+      "personality": ["Sắc sảo", "Trung thành"],
       "goal": "Sát cánh và hỗ trợ {p_name}",
       "realm": "Cấp độ khởi đầu",
       "location": "Vị trí khởi đầu",
       "known_information": ["Bối cảnh thân thế nữ đồng đội"],
       "secrets": ["Bí mật gia thế / Manh mối cổ xưa"]
-    }},
-    {{
-      "id": "char_003",
-      "name": "Lão Trâu",
-      "gender": "Nam",
-      "personality": ["Uy nghiêm", "Sâu sắc"],
-      "goal": "Hướng dẫn và bảo vệ thế hệ trẻ",
-      "realm": "Cấp độ cao",
-      "location": "Tổ chức / Tông môn",
-      "known_information": ["Bí mật lịch sử thế giới"],
-      "secrets": ["Vết thương cũ / Âm mưu quá khứ"]
-    }},
-    {{
-      "id": "char_004",
-      "name": "Phương Thảo",
-      "gender": "Nữ",
-      "personality": ["Kiêu ngạo", "Sắc bén"],
-      "goal": "Tranh đoạt tài nguyên / Thách thức {p_name}",
-      "realm": "Cấp độ nhỉnh hơn char_001",
-      "location": "Thế lực đối lập",
-      "known_information": ["Kế hoạch chèn ép"],
-      "secrets": ["Hậu thuẫn đằng sau"]
     }}
   ],
   "rules": [
     "Cấp độ tuân thủ nghiêm ngặt theo quy tắc thế giới",
     "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc"
-  ],
-  "terminology": {{
-    "Thuật ngữ 1": "Mô tả thuật ngữ đặc trưng của thể loại"
-  }}
+  ]
 }}
 """
 
     @staticmethod
     def build_world_prompt(idea: StoryIdea) -> str:
-        """Step 1A: Prompt dành riêng cho Bối cảnh thế giới."""
-        return StoryDirectorPrompt.build_prompt(idea)
+        """Step 1A: Prompt dành riêng cho Bối cảnh thế giới & Tiền đề."""
+        p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
+        p_bg = idea.protagonist.get("background", "Bối cảnh ban đầu") if isinstance(idea.protagonist, dict) else "Bối cảnh ban đầu"
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
+
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1A: BỐI CẢNH THẾ GIỚI & TIỀN ĐỀ - QUY MÔ {total_chaps} CHƯƠNG) ===
+Nhiệm vụ: Sáng tạo BỐI CẢNH THẾ GIỚI & TIỀN ĐỀ CỐT TRUYỆN độc đáo cho tác phẩm '{idea.title}' (Thể loại: {idea.genre}, Phong cách: {idea.style}, Quy mô dự kiến: {total_chaps} chương).
+
+THÔNG TIN NHÂN VẬT CHÍNH:
+- Tên: {p_name}
+- Thân thế khởi đầu: {p_bg}
+
+QUY TẮC SÁNG TẠO HỆ THỐNG MỞ (EXTENSIBLE):
+1. Sáng tạo tên đại lục / thế giới / hành tinh mới mẻ, hấp dẫn.
+2. Sáng tạo {targets['factions_count']}.
+3. Sáng tạo {targets['locations_count']}.
+4. ĐẢM BẢO CẤU TRÚC MỞ: Bối cảnh thế giới quan được thiết kế có thể dễ dàng mở rộng sang các đại lục/thượng giới mới khi bộ truyện phát triển vượt mốc {total_chaps} chương.
+5. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
+
+YÊU CẦU ĐẦU RA (JSON Object duy nhất):
+{{
+  "premise": "Tóm tắt ngắn gọn 2-3 câu về cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
+  "world": {{
+    "continent_name": "Tên thế giới / đại lục chính",
+    "factions": [
+      "Thế lực khởi đầu / Tông môn chính",
+      "Tổ chức phản diện / Ngầm"
+    ],
+    "locations": [
+      "Vùng đất khởi đầu (Làng/Tân thủ/Trạm vũ trụ)",
+      "Thành phố / Kinh thành trung tâm"
+    ]
+  }}
+}}
+"""
 
     @staticmethod
-    def build_progression_prompt(idea: StoryIdea, premise: str) -> str:
-        """Step 1B: Sáng tạo Hệ thống Cấp độ / Cảnh giới tiến trình sức mạnh độc lập."""
-        return f"""=== STEP 1B: SÁNG TẠO HỆ THỐNG CẤP ĐỘ SỨC MẠNH ===
-Nhiệm vụ: Sáng tạo hệ thống tiến trình sức mạnh (5 - 8 cấp độ) CHUẨN XÁC THEO THỂ LOẠI '{idea.genre}'.
+    def build_progression_prompt(idea: StoryIdea, world_info: Dict[str, Any] | str) -> str:
+        """Step 1B: Sáng tạo Hệ thống Cấp độ / Cảnh giới dựa trên bối cảnh đã có ở Step 1A và quy mô chương."""
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
 
-BỐI CẢNH TIỀN ĐỀ: {premise}
+        if isinstance(world_info, str):
+            premise = world_info
+            continent = "Thế giới chính"
+            factions = "Các thế lực lớn"
+        else:
+            premise = world_info.get("premise", "Cốt truyện chính")
+            world_obj = world_info.get("world", {}) if isinstance(world_info.get("world"), dict) else {}
+            continent = world_obj.get("continent_name", "Thế giới chính")
+            factions = ", ".join(world_obj.get("factions", [])) if world_obj.get("factions") else "Các thế lực lớn"
 
-QUY TẮC BẮT BUỘC:
-- Thể loại Tiên Hiệp/Huyền Huyễn: type='cultivation', ranks chuẩn cổ trang.
-- Thể loại Sci-Fi/Vũ Trụ: type='technology', ranks chuẩn khoa học kỹ thuật.
-- Thể loại Game/Dị Năng: type='level', ranks chuẩn F-Rank đến SSS-Rank.
-- Thể loại Trinh Thám: type='investigation', ranks chuẩn cấp bậc điều tra.
-- TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1B: HỆ THỐNG CẤP ĐỘ SỨC MẠNH - QUY MÔ {total_chaps} CHƯƠNG) ===
+Nhiệm vụ: Sáng tạo hệ thống tiến trình sức mạnh ({targets['ranks_desc']}) CHUẨN XÁC THEO THỂ LOẠI '{idea.genre}' CHO BỘ TRUYỆN DỰ KIẾN {total_chaps} CHƯƠNG.
 
-ĐẦU RA PHẢI LÀ HOÀN TOÀN TRẢ VỀ 1 JSON OBJECT DUY NHẤT:
+THÔNG TIN BỐI CẢNH ĐÃ TẠO TỪ STEP 1A:
+- Tiền đề cốt truyện: {premise}
+- Thế giới / Đại lục: {continent}
+- Các thế lực chính: {factions}
+
+QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
+1. Sáng tạo chính xác {targets['ranks_desc']} tương ứng với lộ trình phát triển trong {total_chaps} chương.
+2. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Thiết kế các cấp độ có tính kế thừa và có tầng giới hạn mở (Thượng giới / Thần giới / Cảnh giới ẩn) để sẵn sàng mở rộng thêm khi tác giả muốn viết tiếp.
+3. Thể loại Tiên Hiệp/Huyền Huyễn: type='cultivation', ranks chuẩn cổ trang.
+4. Thể loại Sci-Fi/Vũ Trụ: type='technology', ranks chuẩn khoa học kỹ thuật.
+5. Thể loại Game/Dị Năng: type='level', ranks chuẩn F-Rank đến SSS-Rank.
+6. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
+
+ĐẦU RA PHẢI LÀ 1 JSON OBJECT DUY NHẤT:
 {{
   "progression_system": {{
     "type": "cultivation / technology / level / investigation",
@@ -163,19 +214,40 @@ QUY TẮC BẮT BUỘC:
 
     @staticmethod
     def build_cast_prompt(idea: StoryIdea, world_info: Dict[str, Any]) -> str:
-        """Step 1C: Sáng tạo Dàn nhân vật nòng cốt (Đầy đủ Nam & Nữ) độc lập."""
+        """Step 1C: Sáng tạo Dàn nhân vật nòng cốt dựa trên Bối cảnh (1A), Cảnh giới (1B) & Quy mô chương."""
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
+
         p_name = idea.protagonist.get("name", "Nhân vật chính") if isinstance(idea.protagonist, dict) else "Nhân vật chính"
         p_bg = idea.protagonist.get("background", "Bối cảnh ban đầu") if isinstance(idea.protagonist, dict) else "Bối cảnh ban đầu"
         premise = world_info.get("premise", "Cốt truyện chính")
-        continent = world_info.get("world", {}).get("continent_name", "Thế giới")
+        world_obj = world_info.get("world", {}) if isinstance(world_info.get("world"), dict) else {}
+        continent = world_obj.get("continent_name", "Thế giới")
+        factions = ", ".join(world_obj.get("factions", [])) if world_obj.get("factions") else "Các thế lực chính"
 
-        return f"""=== STEP 1C: SÁNG TẠO DÀN NHÂN VẬT THẾ GIỚI QUAN ===
-Nhiệm vụ: Dựa trên Tiền đề '{premise}' và Đại lục '{continent}', hãy sáng tạo DÀN NHÂN VẬT NÒNG CỐT (4 - 6 nhân vật bao gồm CẢ NAM VÀ NỮ).
+        prog_ranks = []
+        prog_sys = world_info.get("progression_system", {})
+        if isinstance(prog_sys, dict) and "ranks" in prog_sys and isinstance(prog_sys["ranks"], list):
+            prog_ranks = [r.get("name") for r in prog_sys["ranks"] if isinstance(r, dict) and r.get("name")]
+        if not prog_ranks:
+            prog_ranks = [c.get("name") for c in world_info.get("cultivation_system", []) if isinstance(c, dict) and c.get("name")]
+        rank_str = ", ".join(prog_ranks[:4]) if prog_ranks else "Cấp 1 Khởi Đầu, Cấp 2 Tiến Bổn"
 
-QUY TẮC BẮT BUỘC:
-1. BẮT BUỘC CÓ CẢ NAM VÀ NỮ (Ít nhất 2 nhân vật Nữ như Nữ chính/Bạn đồng hành nữ, Nữ đối thủ, Nữ sư phụ).
-2. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
-3. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1C: DÀN NHÂN VẬT THẾ GIỚI QUAN - QUY MÔ {total_chaps} CHƯƠNG) ===
+Nhiệm vụ: Hãy sáng tạo DÀN NHÂN VẬT NÒNG CỐT ({targets['chars_desc']}) bám sát bối cảnh, hệ thống cảnh giới và quy mô dự kiến {total_chaps} chương.
+
+THÔNG TIN ĐÃ TẠO TỪ STEP 1A & 1B:
+- Cốt truyện & Tiền đề: {premise}
+- Đại lục / Thế giới: {continent} | Thế lực chính: {factions}
+- Hệ thống cảnh giới / cấp độ sức mạnh: {rank_str}
+
+QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
+1. Sáng tạo {targets['chars_desc']} (Bao gồm Cả Nam & Nữ: Đồng đội, Nữ chính, Phản diện, Sư phụ/Tiền bối, Đối thủ cạnh tranh).
+2. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Tạo các tuyến nhân vật có tiềm năng phát triển lâu dài, mở đường cho việc bổ sung thêm các nhân vật phụ ở từng Arc trong tương lai.
+3. Cảnh giới (`realm`) của mỗi nhân vật PHẢI sử dụng đúng tên các cấp độ sức mạnh vừa tạo ({rank_str}).
+4. Nhân vật chính BẮT BUỘC là: '{p_name}' ({p_bg}).
+5. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
+6. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
 
 ĐẦU RA PHẢI LÀ MẢNG JSON CÁC NHÂN VẬT:
 [
@@ -184,7 +256,7 @@ QUY TẮC BẮT BUỘC:
     "name": "{p_name}",
     "gender": "Nam",
     "personality": ["Điềm tĩnh", "Thông minh", "Quyết đoán"],
-    "goal": "Mục tiêu lớn nhất",
+    "goal": "Mục tiêu lớn nhất của {p_name}",
     "realm": "Cấp độ 1 Khởi Đầu",
     "location": "Vị trí khởi đầu",
     "known_information": ["{p_bg}"],
@@ -200,38 +272,33 @@ QUY TẮC BẮT BUỘC:
     "location": "Vị trí khởi đầu",
     "known_information": ["Gia thế đồng đội"],
     "secrets": ["Bí mật gia thế / Manh mối cổ"]
-  }},
-  {{
-    "id": "char_003",
-    "name": "Lão Trâu",
-    "gender": "Nam",
-    "personality": ["Uy nghiêm", "Sâu sắc"],
-    "goal": "Dẫn đường thế hệ trẻ",
-    "realm": "Cấp độ cao",
-    "location": "Tổng bộ thế lực",
-    "known_information": ["Lịch sử thế giới"],
-    "secrets": ["Âm mưu quá khứ"]
-  }},
-  {{
-    "id": "char_004",
-    "name": "Phương Thảo",
-    "gender": "Nữ",
-    "personality": ["Kiêu ngạo", "Sắc bén"],
-    "goal": "Tranh đoạt tài nguyên",
-    "realm": "Cấp độ 2 Tiến Bổn",
-    "location": "Thế lực đối lập",
-    "known_information": ["Kế hoạch chèn ép"],
-    "secrets": ["Hậu thuẫn ngầm"]
   }}
 ]
 """
 
     @staticmethod
     def build_rules_prompt(idea: StoryIdea, world_info: Dict[str, Any]) -> str:
-        """Step 1D: Sáng tạo Quy tắc thế giới quan (Rules & Memory) độc lập."""
+        """Step 1D: Sáng tạo Quy tắc thế giới quan dựa trên Bối cảnh (1A), Cảnh giới (1B) & Nhân vật (1C)."""
+        total_chaps = getattr(idea, "total_chapters", 100)
         premise = world_info.get("premise", "Cốt truyện chính")
-        return f"""=== STEP 1D: SÁNG TẠO QUY TẮC THẾ GIỚI QUAN ===
-Nhiệm vụ: Sáng tạo 4 - 6 Quy tắc sắt bất biến kiểm soát thế giới quan dựa trên Tiền đề '{premise}'.
+        world_obj = world_info.get("world", {}) if isinstance(world_info.get("world"), dict) else {}
+        continent = world_obj.get("continent_name", "Thế giới")
+
+        chars = world_info.get("characters", [])
+        char_names = ", ".join([c.get("name") for c in chars if isinstance(c, dict) and c.get("name")]) if chars else "Các nhân vật nòng cốt"
+
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1D: QUY TẮC THẾ GIỚI QUAN - QUY MÔ {total_chaps} CHƯƠNG) ===
+Nhiệm vụ: Sáng tạo 4 - 8 Quy tắc sắt bất biến kiểm soát thế giới quan dựa trên bối cảnh, quy mô {total_chaps} chương và dàn nhân vật vừa tạo.
+
+THÔNG TIN ĐÃ TẠO TỪ STEP 1A, 1B, 1C:
+- Tiền đề cốt truyện: {premise}
+- Đại lục: {continent}
+- Dàn nhân vật nòng cốt: {char_names}
+
+QUY TẮC SÁNG TẠO:
+1. Quy tắc phải ăn khớp với mâu thuẫn chính và thế giới quan '{continent}'.
+2. ĐẢM BỎO QUY TẮC CÓ TÍNH MỞ (Extensible): Bao gồm quy tắc về thăng cấp, ranh giới sinh tử, và quy luật phát triển dài hạn.
+3. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
 
 ĐẦU RA PHẢI LÀ MẢNG JSON CÁC QUY TẮC (TIẾNG VIỆT 100%):
 [
@@ -244,15 +311,37 @@ Nhiệm vụ: Sáng tạo 4 - 6 Quy tắc sắt bất biến kiểm soát thế 
 
     @staticmethod
     def build_terminology_prompt(idea: StoryIdea, world_info: Dict[str, Any]) -> str:
-        """Step 1E: Sáng tạo Từ điển Thuật ngữ đặc trưng thể loại độc lập."""
-        return f"""=== STEP 1E: SÁNG TẠO TỪ ĐIỂN THUẬT NGỮ ===
-Nhiệm vụ: Sáng tạo 5 - 8 Thuật ngữ đặc trưng riêng biệt của thể loại '{idea.genre}'.
+        """Step 1E: Sáng tạo Từ điển Thuật ngữ dựa trên Thế giới quan toàn diện (1A - 1D)."""
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
 
-ĐẦU RA PHẢI LÀ JSON OBJECT CÁC THUẬT NGỮ (TIẾNG VIỆT 100%):
+        premise = world_info.get("premise", "Cốt truyện chính")
+        world_obj = world_info.get("world", {}) if isinstance(world_info.get("world"), dict) else {}
+        continent = world_obj.get("continent_name", "Thế giới")
+        factions = ", ".join(world_obj.get("factions", [])) if world_obj.get("factions") else "Các thế lực chính"
+
+        prog_ranks = []
+        prog_sys = world_info.get("progression_system", {})
+        if isinstance(prog_sys, dict) and "ranks" in prog_sys and isinstance(prog_sys["ranks"], list):
+            prog_ranks = [r.get("name") for r in prog_sys["ranks"] if isinstance(r, dict) and r.get("name")]
+        rank_str = ", ".join(prog_ranks) if prog_ranks else "Các cảnh giới sức mạnh"
+
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1E: TỪ ĐIỂN THUẬT NGỮ) ===
+Nhiệm vụ: Tạo {targets['terms_count']} thuật ngữ đặc trưng cho truyện '{idea.title}' (thể loại '{idea.genre}').
+
+BỐI CẢNH:
+- Đại lục: {continent}
+- Cảnh giới: {rank_str}
+
+QUY TẮC:
+1. Mỗi thuật ngữ là 1 cặp "tên": "định nghĩa ngắn".
+2. TOÀN BỘ TIẾNG VIỆT 100%.
+3. ĐẦU RA LÀ 1 JSON OBJECT PHẲNG DUY NHẤT, KHÔNG CÓ MỤC CON.
+
+MẪU ĐẦU RA:
 {{
-  "Thuật ngữ 1": "Mô tả ý nghĩa thuật ngữ 1",
-  "Thuật ngữ 2": "Mô tả ý nghĩa thuật ngữ 2",
-  "Thuật ngữ 3": "Mô tả ý nghĩa thuật ngữ 3",
-  "Thuật ngữ 4": "Mô tả ý nghĩa thuật ngữ 4"
+  "linh khí": "Năng lượng cơ bản của tu luyện",
+  "đan dược": "Thuốc tăng lực từ thảo dược quý",
+  "kiếm khí": "Năng lượng chiến đấu từ kiếm pháp"
 }}
 """
