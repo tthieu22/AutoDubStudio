@@ -33,6 +33,8 @@ import { NovelDashboard } from './components/story/NovelDashboard';
 import { ArcPlanner } from './components/story/ArcPlanner';
 import { CanonExplorer } from './components/story/CanonExplorer';
 import { ChapterTimeline } from './components/story/ChapterTimeline';
+import { StoryInspector } from './components/story/StoryInspector';
+
 
 import { SourceMediaManager } from './components/dubbing/SourceMediaManager';
 import { VoiceStudio } from './components/dubbing/VoiceStudio';
@@ -681,7 +683,10 @@ export default function App() {
         ramMetrics={realRam}
         vramMetrics={realVram}
         mainContent={renderMainContent()}
+        inspectorTitle="Story DB & Telemetry Inspector"
+        inspectorContent={<StoryInspector projectDir={selectedProjectDir} />}
         bottomPanelContent={selectedProjectDir && activeTab !== 'timeline' && (activeBottomTab === 'logs' || activeBottomTab === 'jobs') ? renderBottomPanelContent() : undefined}
+
         activeBottomTab={activeBottomTab}
         setActiveBottomTab={setActiveBottomTab}
         onOpenCommandPalette={() => console.log('Open Cmd Palette')}

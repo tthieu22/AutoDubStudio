@@ -22,11 +22,15 @@ class CanonValidatorPrompt:
 
 [CRITICAL VALIDATION CHECKLIST]
 Kiểm tra nghiêm ngặt 5 nguy cơ lỗi sau:
-1. LEAK KÝ ỨC (Knowledge Leak): Nhân vật biết tri thức mà họ chưa từng nghe/thấy trong Canon hoặc Chương {chapter_num}.
-2. MÂU THUẪN CANON (Canon Contradiction): Thay đổi trái ngược hoàn toàn với dữ liệu Canon đã xác nhận (VD: Nhân vật đã chết lại xuất hiện, cấp độ bị hạ không lý do, địa danh đổi tên tự do).
+1. LEAK KÝ ỨC (Knowledge Leak): Nhân vật biết tri thức/bí mật mà họ chưa từng nghe/thấy trong Canon hoặc Chương {chapter_num}.
+2. MÂU THUẪN CANON TRỰC TIẾP (Direct Canon Contradiction): Thay đổi trái ngược hoàn toàn với dữ liệu Canon đã xác nhận (VD: Nhân vật đã chết lại xuất hiện nói chuyện, cấp độ bị hạ không lý do, địa danh đổi tên sai hoàn toàn).
 3. TRÍCH XUẤT SAI THỰC TẾ (Text Misattribution): Cập nhật Delta trích dẫn đoạn văn bản không hề tồn tại trong Chương {chapter_num}.
-4. TỰ Ý BỊA ĐẶT (Hallucination): Engine tự bịa ra nhân vật, cấp độ, hoặc sự kiện không có bất kỳ chứng cứ nào trong chương.
+4. TỰ Ý BỊA ĐẶT THIẾU CĂN CỨ (Hallucination): Engine tự bịa ra nhân vật/đối tượng không hề có trong câu chuyện.
 5. SAI LỆCH VĂN PHONG / THỂ LOẠI: Sử dụng từ ngữ từ thể loại khác không phù hợp với thể loại '{genre}'.
+
+[QUY TẮC PHÂN BIỆT LỖI - BẮT BUỘC]:
+1. NẾU NỘI DUNG CHỈ LÀ BỎ SÓT THÔNG TIN HOẶC SUY LUẬN NGỮ CẢNH HỢP LỆ (Ví dụ: Bản thảo chưa đề cập rõ tên thành phố, chưa ghi rõ tên cấp độ 1, hoặc từ ngữ đồng nghĩa) ➔ PHẢI TRẢ VỀ `"status": "PASS"`, `"failures": []`. CẤM BÁO FAIL HOẶC CRITICAL!
+2. CHỈ ĐÁNH `"status": "FAIL"` VÀ `"severity": "CRITICAL"` KHI CÓ MÂU THUẪN TRỰC TIẾP VỚI CANON DATABASE HOẶC TRÁI NGƯỢC HOÀN TOÀN VỚI VĂN BẢN (VD: Nhân vật chết xuất hiện, tụt cảnh giới, bí mật bị lọt ra ngoài).
 
 [INPUT CONTRACT]
 - Thể loại truyện: {genre}
@@ -38,15 +42,12 @@ Kiểm tra nghiêm ngặt 5 nguy cơ lỗi sau:
 - Bản thảo Chương {chapter_num}:
 {chapter_text}
 
-[FAIL-CLOSED MANDATE]
-1. BẠN LÀ NGUYÊN TẮC PHÒNG THỦ CUỐI CÙNG: Không được nể nang hay bỏ qua lỗi.
-2. KHÔNG ĐƯỢC TỰ SỬA LỖI: Bạn KHÔNG được tự ý chỉnh sửa dữ liệu sai của 8 Engine.
-3. CHỈ ĐƯỢC ĐÁNH GIÁ "PASS" HOẶC "FAIL":
-   - NẾU TẤT CẢ 8 ENGINE CHÍNH XÁC & CÓ EVIDENCE HỢP LỆ -> Trả về `"status": "PASS"`, `"failures": []`.
-   - NẾU CÓ BẤT KỲ LỖI NÀO TRONG 5 NGUY CƠ TRÊN -> Trả về `"status": "FAIL"` và liệt kê tất cả các lỗi trong mảng `"failures"`.
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+CẤU TRÚC JSON MẪU:
 {{
   "status": "PASS / FAIL",
   "failures": [
@@ -54,9 +55,9 @@ Trả về DUY NHẤT một JSON Object hợp lệ:
       "domain": "Character / World / Memory / Level / Terminology / Event / Relationship / OpenThread",
       "entity": "ID hoặc tên đối tượng bị lỗi",
       "field_name": "Tên trường thông tin bị vi phạm",
-      "problem": "Mô tả chi tiết nguyên nhân vi phạm mâu thuẫn Canon hoặc leak thông tin",
+      "problem": "Mô tả chi tiết mâu thuẫn Canon hoặc leak thông tin thực sự",
       "evidence": "Câu trích dẫn văn bản chứng minh lỗi (nếu có)",
-      "severity": "CRITICAL / MAJOR"
+      "severity": "CRITICAL / MAJOR / WARNING"
     }}
   ]
 }}

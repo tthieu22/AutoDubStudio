@@ -24,7 +24,12 @@ BỐI CẢNH & CANON HIỆN TẠI:
 TUYẾN TRUYỆN MỞ (OPEN THREADS):
 {[t.get('title', '') for t in open_threads[:5]]}
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "chapter_goal": ["{goal_text}"],
   "required_events": ["Sự kiện bắt đầu chương", "Diễn biến chính tạo tiến triển"],

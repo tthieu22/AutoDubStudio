@@ -39,8 +39,12 @@ class EventPrompt:
 1. Mỗi sự kiện BẮT BUỘC phải kèm `evidence` trích dẫn chính xác đoạn văn bản xảy ra sự kiện.
 2. Nếu chương chỉ là hội thoại bình thường không có biến cố lớn, trả về mảng rỗng: "event_updates": [].
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "event_updates": [
     {{

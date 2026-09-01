@@ -183,7 +183,9 @@ class StoryBible(BaseModel):
     items: List[Dict[str, Any]] = Field(default_factory=list)
     rules: List[str] = Field(default_factory=list)
     terminology: Dict[str, str] = Field(default_factory=dict)
+    master_blueprint: Optional[Dict[str, Any]] = None
     generation_metadata: Optional[Dict[str, Any]] = Field(default_factory=lambda: GenerationMetadata().model_dump())
+
 
 
 class ValidationViolation(BaseModel):

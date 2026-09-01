@@ -48,8 +48,12 @@ class LevelPrompt:
 1. Mọi cập nhật Level BẮT BUỘC phải kèm `evidence` chứa đoạn trích dẫn nguyên văn khẳng định sự đột phá hay thay đổi cấp độ.
 2. Nếu trong chương không có nhân vật nào thay đổi cảnh giới/cấp độ sức mạnh, trả về mảng rỗng: "level_updates": [].
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "level_updates": [
     {{

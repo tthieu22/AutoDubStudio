@@ -35,13 +35,13 @@ export const INITIAL_TIKTOK_TRENDS: SlangTrendItem[] = [
   { id: 't-9', category: 'MEME', phrase: 'Trí thông minh giản zị', explanation: 'Mỉa mai khéo phát ngôn ngốc nghếch', enabled: true },
   { id: 't-10', category: 'MEME', phrase: 'Gia môn bất hạnh', explanation: 'Cảm thán hài hước khi gặp chuyện bất ổn', enabled: true },
   { id: 't-11', category: 'MEME', phrase: 'Ủa alo', explanation: 'Cảm thán ngơ ngác khi có sự cố lạ', enabled: true },
-  { id: 't-12', category: 'MEME', phrase: 'Xu cà cà', explanation: 'Cảm thán xui xẻo', enabled: true },
   { id: 't-13', category: 'ANCIENT', phrase: 'Trùng sinh nghịch thiên cải mệnh', explanation: 'Văn phong cổ trang tiên hiệp trùng sinh', enabled: true },
   { id: 't-14', category: 'EMOTIONAL', phrase: 'Giai điệu chữa lành tâm hồn', explanation: 'Văn phong dịu dàng sâu lắng', enabled: true },
   { id: 't-15', category: 'DRAMATIC', phrase: 'Pha lật kèo kinh hoàng 3s đầu', explanation: 'Tạo hook kịch tính giật gân', enabled: true }
 ];
 
 interface TikTokTrendManagerProps {
+
   projectDir?: string | null;
 }
 
@@ -54,9 +54,42 @@ export const TikTokTrendManager: React.FC<TikTokTrendManagerProps> = ({ projectD
   const [newPhrase, setNewPhrase] = useState('');
   const [newExplanation, setNewExplanation] = useState('');
 
-  const toggleEnable = (id: string) => {
-    setTrends(prev => prev.map(t => t.id === id ? { ...t, enabled: !t.enabled } : t));
+  useEffect(() => {
+    if (projectDir) {
+      PythonEngineService.readProjectJson(projectDir).then(data => {
+        if (data) {
+          if (data.tiktok_trends && Array.isArray(data.tiktok_trends) && data.tiktok_trends.length > 0) {
+            setTrends(data.tiktok_trends);
+          }
+          if (data.tiktok_slang_density) {
+            setDensity(data.tiktok_slang_density);
+          }
+        }
+      }).catch(console.error);
+    }
+  }, [projectDir]);
+
+  const saveTrendsToProject = async (newTrends: SlangTrendItem[], newDensity?: 'LOW' | 'MEDIUM' | 'HIGH') => {
+    setTrends(newTrends);
+
+    if (newDensity) setDensity(newDensity);
+    if (projectDir) {
+      try {
+        const json = (await PythonEngineService.readProjectJson(projectDir)) || {};
+        json.tiktok_trends = newTrends;
+        if (newDensity) json.tiktok_slang_density = newDensity;
+        await PythonEngineService.writeProjectJson(projectDir, json);
+      } catch (e) {
+        console.error('Failed to save tiktok_trends to project.json:', e);
+      }
+    }
   };
+
+  const toggleEnable = (id: string) => {
+    const updated = trends.map(t => t.id === id ? { ...t, enabled: !t.enabled } : t);
+    saveTrendsToProject(updated);
+  };
+
 
   const handleAddTrend = () => {
     if (!newPhrase.trim()) return;
@@ -67,14 +100,17 @@ export const TikTokTrendManager: React.FC<TikTokTrendManagerProps> = ({ projectD
       explanation: newExplanation.trim() || 'Custom user trend',
       enabled: true
     };
-    setTrends(prev => [item, ...prev]);
+    const updated = [item, ...trends];
+    saveTrendsToProject(updated);
     setNewPhrase('');
     setNewExplanation('');
   };
 
   const handleDeleteTrend = (id: string) => {
-    setTrends(prev => prev.filter(t => t.id !== id));
+    const updated = trends.filter(t => t.id !== id);
+    saveTrendsToProject(updated);
   };
+
 
   const filteredTrends = trends.filter(t => {
     const matchesCat = selectedCategory === 'ALL' || t.category === selectedCategory;
@@ -106,8 +142,9 @@ export const TikTokTrendManager: React.FC<TikTokTrendManagerProps> = ({ projectD
           <span className="text-slate-400 font-medium">Mật độ dùng Trend:</span>
           <select
             value={density}
-            onChange={e => setDensity(e.target.value as any)}
+            onChange={e => saveTrendsToProject(trends, e.target.value as any)}
             className="bg-[#111318] border border-white/10 rounded px-2 py-0.5 text-xs text-purple-300 font-bold focus:outline-none"
+
           >
             <option value="LOW">Thưa thớt (1-2 từ/chương - Khuyên dùng)</option>
             <option value="MEDIUM">Vừa phải (3-4 từ/chương)</option>

@@ -24,13 +24,18 @@ Bạn là chuyên gia SEO và Marketing YouTube. Hãy tạo tiêu đề, mô t�
 Tên truyện: {title}
 Tác giả: {author}
 
-Trả về duy nhất định dạng JSON:
+CẤU TRÚC JSON MẪU:
 {{
   "title": "Tiêu đề video YouTube hấp dẫn (dưới 100 ký tự)",
   "description": "Mô tả video cuốn hút kèm hashtag",
   "tags": ["truyện cổ tích", "audiobook", "truyện ma"],
   "privacy_status": "private"
 }}
+
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu trên.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
 """
         payload = {
             "model": self.model_name,
@@ -42,8 +47,9 @@ Trả về duy nhất định dạng JSON:
             res = requests.post(OLLAMA_GENERATE_URL, json=payload, timeout=20)
             if res.status_code == 200:
                 raw_text = res.json().get("response", "{}")
-                parsed = json.loads(strip_think_tags(raw_text))
-                if "title" in parsed:
+                from autodub.modules.structured_parser import StructuredParser
+                parsed = StructuredParser.extract_json_payload(raw_text)
+                if isinstance(parsed, dict) and "title" in parsed:
                     return parsed
         except Exception:
             pass

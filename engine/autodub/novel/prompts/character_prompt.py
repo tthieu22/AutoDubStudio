@@ -54,8 +54,12 @@ class CharacterPrompt:
 - KHÔNG tự bịa ra cái chết hay sự biến mất của nhân vật trừ khi văn bản khẳng định rõ.
 - Nếu nhân vật không có biến động trạng thái nào trong chương, trả về mảng rỗng: "character_updates": [].
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ (không kèm lời dẫn lời giải thích):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "character_updates": [
     {{

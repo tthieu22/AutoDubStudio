@@ -41,20 +41,19 @@ class BaseDomainEngine:
                     self.log_execution(chapter_num, input_size, 0, time.time() - start_time, "FAIL", "LLM returned empty response")
                     continue
 
+                from autodub.modules.llamacpp_client import strip_think_tags
+                cleaned_raw = strip_think_tags(raw_text).strip() if raw_text else ""
+
                 if hasattr(self.llm_client, "extract_json"):
-                    parsed_json = self.llm_client.extract_json(raw_text)
+                    parsed_json = self.llm_client.extract_json(cleaned_raw)
                 else:
-                    import re, json
-                    cleaned = re.sub(r"```json\s*", "", raw_text, flags=re.IGNORECASE)
-                    cleaned = re.sub(r"```\s*", "", cleaned).strip()
-                    try:
-                        parsed_json = json.loads(cleaned)
-                    except Exception:
-                        parsed_json = None
+                    from autodub.modules.structured_parser import StructuredParser
+                    parsed_json = StructuredParser.extract_json_payload(cleaned_raw)
 
                 if parsed_json is None or not isinstance(parsed_json, (dict, list)):
                     self.log_execution(chapter_num, input_size, output_size, time.time() - start_time, "FAIL", "JSON Parse Error")
                     continue
+
 
                 exec_time = time.time() - start_time
                 self.log_execution(chapter_num, input_size, output_size, exec_time, "PASS")

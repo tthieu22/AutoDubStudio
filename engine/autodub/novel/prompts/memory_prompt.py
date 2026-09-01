@@ -44,8 +44,12 @@ Mỗi tri thức trích xuất BẮT BUỘC phải gán đúng một trong các 
 - KHÔNG biến lời nói dối của kẻ thù/NPC thành tri thức CONFIRMED của nhân vật chính.
 - KHÔNG bịa ra tri thức nhân vật chưa tiếp xúc.
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "memory_updates": [
     {{

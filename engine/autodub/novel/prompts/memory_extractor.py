@@ -18,7 +18,12 @@ CRITICAL RULES:
 NỘI DUNG CHƯƠNG {chapter_num}:
 {final_chapter_text}
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "summary": "Tóm tắt 2-3 câu diễn biến chính của chương",
   "new_characters": [

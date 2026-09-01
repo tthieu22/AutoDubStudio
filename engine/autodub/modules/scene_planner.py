@@ -25,8 +25,8 @@ class ScenePlanner:
             res = requests.post(self.ollama_url, json=payload, timeout=30)
             if res.status_code == 200:
                 raw_text = res.json().get("response", "[]")
-                cleaned_text = strip_think_tags(raw_text)
-                parsed = json.loads(cleaned_text)
+                from autodub.modules.structured_parser import StructuredParser
+                parsed = StructuredParser.extract_json_payload(raw_text)
                 if isinstance(parsed, list):
                     return parsed
                 elif isinstance(parsed, dict) and "scenes" in parsed:
@@ -50,7 +50,8 @@ class ScenePlanner:
 
 === YÊU CẦU PHÂN TÁCH PHÂN CẢNH (SCENE PLANNER) ===
 Hãy chia nội dung chương trên thành danh sách các Scene video ngắn (10-30s mỗi scene).
-Trả về kết quả duy nhất là một JSON Array với cấu trúc exact sau:
+
+CẤU TRÚC JSON MẪU:
 [
   {{
     "scene_index": 1,
@@ -67,6 +68,11 @@ Trả về kết quả duy nhất là một JSON Array với cấu trúc exact s
     "duration": 6
   }}
 ]
+
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '[' VÀ KẾT THÚC BẰNG ']'.
 """
         raw_scenes = self._call_qwen_json(prompt)
 

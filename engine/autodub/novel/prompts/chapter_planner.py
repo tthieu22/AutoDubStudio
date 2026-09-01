@@ -43,7 +43,12 @@ QUY TẮC BẮT BUỘC & CẤM LẶP LẠI (ANTI-STAGNATION):
 2. Chương {chapter_num} PHẢI có sự kiện/địa điểm/hành động HOÀN TOÀN MỚI (Ví dụ: Khai phá vị trí mới, thu thập bằng chứng/tài liệu quan trọng, đối đầu trở ngại mới, giải mã bí mật bối cảnh).
 3. Đảm bảo 'goal' chứa một mục tiêu động mang tính hành động cụ thể, tạo ra Narrative Delta rõ ràng so với các chương trước.
 
-YÊU CẦU ĐẦU RA (Trả về JSON Object duy nhất):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "chapter_num": {chapter_num},
   "goal": "Mục tiêu cụ thể mang tính hành động MỚI mà chương này phải đạt được",

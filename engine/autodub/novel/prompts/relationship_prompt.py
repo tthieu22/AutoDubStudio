@@ -50,8 +50,12 @@ class RelationshipPrompt:
 1. Mọi cập nhật mối quan hệ BẮT BUỘC phải kèm `evidence` trích dẫn chính xác hành động hoặc lời nói.
 2. Nếu không có mối quan hệ nào biến động trong chương, trả về mảng rỗng: "relationship_updates": [].
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "relationship_updates": [
     {{

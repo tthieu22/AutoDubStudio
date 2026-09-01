@@ -15,7 +15,12 @@ MỤC TIÊU CHƯƠNG {chapter_num}:
 - Goal: {chapter_plan.get('goal')}
 - Conflict: {chapter_plan.get('conflict')}
 
-YÊU CẦU ĐẦU RA (Trả về JSON Object):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "option_a": {{
     "title": "Phương án A — Kịch tính & Phản bội",

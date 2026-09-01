@@ -1,6 +1,8 @@
 import os
+import json
 import tempfile
 import unittest
+
 from pathlib import Path
 from autodub.novel.novel_models import StoryIdea, CanonFact
 from autodub.novel.novel_database import NovelDatabase
@@ -29,6 +31,11 @@ class MockLlamaClient:
         # Fallback for any STORY DIRECTOR prompt
         elif "STORY DIRECTOR" in prompt:
             return '{"premise": "Test premise", "world": {"continent_name": "Test Continent", "locations": ["Loc 1"]}, "progression_system": {"type": "cultivation", "ranks": [{"rank":1, "name":"Sơ Cấp"}]}, "cultivation_system": [{"rank":1, "name":"Sơ Cấp"}], "characters": [{"id":"char_001", "name":"Lâm Phàm", "realm":"Sơ Cấp"}], "rules": ["Rule 1"], "terminology": {"linh khí": "Năng lượng"}}'
+        # Step 1F: Master Story Blueprint
+        elif "MASTER STORY BLUEPRINT ARCHITECT" in prompt:
+            return '{"overall_arc_summary": "Tóm tắt kịch bản tổng thể test 1000 chương", "core_conflicts_and_mysteries": ["Mâu thuẫn 1"], "protagonist_growth_milestones": ["Cột mốc 1"], "major_climaxes_and_twists": ["Twist 1"], "world_timeline_events": ["Sự kiện 1"]}'
+        elif "ARC ROADMAP ARCHITECT" in prompt:
+            return '[{"chapter_num": 1, "title": "Chương 1: Xuất sơn", "goal": "Khám phá hang động", "trigger_event": "Phát hiện yêu thú", "conflict": "Giao chiến", "revelation": "Cổ thư", "transition_hook": "Rút lui"}]'
         elif "MASTER PLANNER" in prompt:
             return '[{"arc_num": 1, "title": "Arc 1", "start_chapter": 1, "end_chapter": 20, "goal": "Goal 1", "conflict": "Conflict 1", "major_reveal": "Reveal 1", "character_development": "Dev 1"}, {"arc_num": 2, "title": "Arc 2", "start_chapter": 21, "end_chapter": 40, "goal": "Goal 2", "conflict": "Conflict 2", "major_reveal": "Reveal 2", "character_development": "Dev 2"}]'
         elif "CHAPTER PLANNER" in prompt:
@@ -53,22 +60,37 @@ class TestNovelEnginePipeline(unittest.TestCase):
             mock_llm = MockLlamaClient()
             engine = NovelEngine(story_dir=story_dir, story_id="story_test", llm_client=mock_llm)
 
-            # 1. Test Initialize Story
+            # 1. Test Initialize Story (World Bible)
             idea = StoryIdea(title="Độc Cô Cầu Bại", total_chapters=100)
             bible = engine.initialize_story(idea)
             self.assertIsNotNone(bible)
             self.assertEqual(bible.premise, "Test premise")
 
-            # 2. Test Master Planner (100 chapters / 20 per arc = 5 expected, mock returns 2 per batch)
+            # 2. Test Master Planner & Master Blueprint Skeleton (Prompt 1F generated AFTER Arcs)
             arcs = engine.generate_master_plan(100)
             self.assertGreaterEqual(len(arcs), 5)
             self.assertEqual(arcs[0].title, "Arc 1")
+
+            bible_path = story_dir / "story_bible.json"
+            self.assertTrue(bible_path.exists())
+            with open(bible_path, "r", encoding="utf-8") as f:
+                updated_bible = json.load(f)
+            self.assertIsNotNone(updated_bible.get("master_blueprint"))
+
+
+
+
+            # 2b. Test Arc Roadmap Generation
+            roadmap = engine.story_planner.generate_arc_roadmap(1)
+            self.assertIsInstance(roadmap, list)
+            self.assertGreater(len(roadmap), 0)
 
             # 3. Test Generate Chapter 1
             chap_res = engine.generate_chapter(1)
             self.assertEqual(chap_res["chapter_num"], 1)
             self.assertIn("Lâm Phàm", chap_res["text"])
             self.assertTrue(os.path.exists(chap_res["file"]))
+
 
             # 4. Verify DB was populated
             facts = engine.db.get_canon_facts("story_test", limit=10)

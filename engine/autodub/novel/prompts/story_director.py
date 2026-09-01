@@ -66,7 +66,12 @@ QUY TẮC SÁNG TẠO BẮT BUỘC:
 3. Nhân vật chính BẮT BUỘC là: '{p_name}'.
 4. TOÀN BỘ NỘI DUNG VĂN BẢN TRONG ĐẦU RA JSON BẮT BUỘC PHẢI VIẾT 100% BẰNG TIẾNG VIỆT MƯỢT MÀ, TỰ NHIÊN. CẤM TRẢ VỀ TIẾNG ANH/TRUNG.
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất 1 JSON Object ngắn gọn, không giải thích dài dòng):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ ngắn gọn.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "premise": "Tóm tắt cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
   "world": {{
@@ -141,7 +146,12 @@ QUY TẮC SÁNG TẠO HỆ THỐNG MỞ (EXTENSIBLE):
 4. ĐẢM BẢO CẤU TRÚC MỞ: Bối cảnh thế giới quan được thiết kế có thể dễ dàng mở rộng sang các đại lục/thượng giới mới khi bộ truyện phát triển vượt mốc {total_chaps} chương.
 5. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
 
-YÊU CẦU ĐẦU RA (JSON Object duy nhất):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "premise": "Tóm tắt ngắn gọn 2-3 câu về cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
   "world": {{
@@ -190,7 +200,12 @@ QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
 5. Thể loại Game/Dị Năng: type='level', ranks chuẩn F-Rank đến SSS-Rank.
 6. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
 
-ĐẦU RA PHẢI LÀ 1 JSON OBJECT DUY NHẤT:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "progression_system": {{
     "type": "cultivation / technology / level / investigation",
@@ -243,19 +258,30 @@ THÔNG TIN ĐÃ TẠO TỪ STEP 1A & 1B:
 
 QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
 1. Sáng tạo {targets['chars_desc']} (Bao gồm Cả Nam & Nữ: Đồng đội, Nữ chính, Phản diện, Sư phụ/Tiền bối, Đối thủ cạnh tranh).
-2. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Tạo các tuyến nhân vật có tiềm năng phát triển lâu dài, mở đường cho việc bổ sung thêm các nhân vật phụ ở từng Arc trong tương lai.
-3. Cảnh giới (`realm`) của mỗi nhân vật PHẢI sử dụng đúng tên các cấp độ sức mạnh vừa tạo ({rank_str}).
-4. Nhân vật chính BẮT BUỘC là: '{p_name}' ({p_bg}).
-5. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
-6. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
+2. CẤM TRÙNG TÊN: MỖI NHÂN VẬT BẮT BUỘC PHẢI CÓ TÊN RIÊNG ĐỘC NHẤT (UNIQUE NAME). Tuyệt đối CẤM tạo 2 nhân vật cùng tên hoặc lặp lại họ tên (Ví dụ: CẤM tạo 2 nhân vật cùng tên 'Thiên Phong').
+3. ĐA DẠNG HÓA VAI TRÒ & ĐỘ TUỔI: Độ tuổi (18, 25, 45, 60,...), vai trò (Nữ chính, Phản diện, Sư phụ, Bằng hữu, Trưởng lão...), tính cách và bối cảnh của mỗi nhân vật phải hoàn toàn khác biệt. CẤM để tất cả nhân vật có cùng 1 tuổi hay mô tả giống hệt nhau.
+4. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Tạo các tuyến nhân vật có tiềm năng phát triển lâu dài, mở đường cho việc bổ sung thêm các nhân vật phụ ở từng Arc trong tương lai.
+5. Cảnh giới (`realm`) của mỗi nhân vật PHẢI sử dụng đúng tên các cấp độ sức mạnh vừa tạo ({rank_str}).
+6. Nhân vật chính BẮT BUỘC là: '{p_name}' ({p_bg}).
+7. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
+8. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
 
-ĐẦU RA PHẢI LÀ MẢNG JSON CÁC NHÂN VẬT:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '[' VÀ KẾT THÚC BẰNG ']'.
+
+CẤU TRÚC JSON MẪU:
 [
   {{
     "id": "char_001",
     "name": "{p_name}",
     "gender": "Nam",
+    "age": "21",
+    "role": "Nhân vật chính",
     "personality": ["Điềm tĩnh", "Thông minh", "Quyết đoán"],
+    "appearance": "Thân hình thon gọn, ánh mắt sắc bén, thần thái kiên định",
+    "clothing": "Y phục thanh nhã phong trần",
     "goal": "Mục tiêu lớn nhất của {p_name}",
     "realm": "Cấp độ 1 Khởi Đầu",
     "location": "Vị trí khởi đầu",
@@ -266,7 +292,11 @@ QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
     "id": "char_002",
     "name": "Nguyệt Nhi",
     "gender": "Nữ",
+    "age": "19",
+    "role": "Nữ chính / Đồng đội",
     "personality": ["Sắc sảo", "Thông minh", "Trung thành"],
+    "appearance": "Dáng người thanh tú, ánh mắt rạng rỡ",
+    "clothing": "Váy lụa xanh biếc nhã nhặn",
     "goal": "Sát cánh hỗ trợ {p_name}",
     "realm": "Cấp độ 1 Khởi Đầu",
     "location": "Vị trí khởi đầu",
@@ -297,16 +327,62 @@ THÔNG TIN ĐÃ TẠO TỪ STEP 1A, 1B, 1C:
 
 QUY TẮC SÁNG TẠO:
 1. Quy tắc phải ăn khớp với mâu thuẫn chính và thế giới quan '{continent}'.
-2. ĐẢM BỎO QUY TẮC CÓ TÍNH MỞ (Extensible): Bao gồm quy tắc về thăng cấp, ranh giới sinh tử, và quy luật phát triển dài hạn.
-3. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
+2. CẤM LẶP LẠI CÁC CÂU MẪU: Mỗi quy tắc trong mảng BẮT BUỘC phải có nội dung ĐỘC NHẤT (Unique), cấm lặp đi lặp lại cùng một câu hay cùng một ý.
+3. ĐẢM BẢO QUY TẮC CÓ TÍNH MỞ (Extensible): Bao gồm quy tắc về thăng cấp, ranh giới sinh tử, và quy luật phát triển dài hạn.
+4. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
 
-ĐẦU RA PHẢI LÀ MẢNG JSON CÁC QUY TẮC (TIẾNG VIỆT 100%):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '[' VÀ KẾT THÚC BẰNG ']'.
+
+CẤU TRÚC JSON MẪU:
 [
-  "Cấp độ sức mạnh tuân thủ nghiêm ngặt quy tắc đại lục",
-  "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc",
-  "Tài nguyên quý hiếm đều bị các thế lực lớn kiểm soát",
-  "Quy tắc sinh tồn và giao dịch trong thế giới"
+  "Cấp độ sức mạnh tuân thủ nghiêm ngặt quy tắc đại lục {continent}",
+  "Nhân vật không thể biết thông tin mà mình chưa từng tiếp xúc trực tiếp",
+  "Tài nguyên tu luyện quý hiếm đều bị các đại thế lực kiểm soát gắt gao",
+  "Ranh giới sinh tử giữa các cảnh giới không thể dễ dàng vượt qua bằng ngoại lực"
 ]
+"""
+
+    @staticmethod
+    def build_terminology_prompt(idea: StoryIdea, world_info: Dict[str, Any]) -> str:
+        """Step 1E: Sáng tạo Từ điển Thuật ngữ dựa trên Thế giới quan toàn diện (1A - 1D)."""
+        total_chaps = getattr(idea, "total_chapters", 100)
+        targets = StoryDirectorPrompt._get_target_counts(total_chaps)
+
+        premise = world_info.get("premise", "Cốt truyện chính")
+        world_obj = world_info.get("world", {}) if isinstance(world_info.get("world"), dict) else {}
+        continent = world_obj.get("continent_name", "Thế giới")
+        factions = ", ".join(world_obj.get("factions", [])) if world_obj.get("factions") else "Các thế lực chính"
+
+        prog_ranks = []
+        prog_sys = world_info.get("progression_system", {})
+        if isinstance(prog_sys, dict) and "ranks" in prog_sys and isinstance(prog_sys["ranks"], list):
+            prog_ranks = [r.get("name") for r in prog_sys["ranks"] if isinstance(r, dict) and r.get("name")]
+        rank_str = ", ".join(prog_ranks) if prog_ranks else "Các cảnh giới sức mạnh"
+
+        return f"""=== VAI TRÒ: STORY DIRECTOR (STEP 1E: TỪ ĐIỂN THUẬT NGỮ) ===
+Nhiệm vụ: Tạo {targets['terms_count']} thuật ngữ đặc trưng cho truyện '{idea.title}' (thể loại '{idea.genre}').
+
+BỐI CẢNH:
+- Đại lục: {continent}
+- Cảnh giới: {rank_str}
+
+QUY TẮC:
+1. Mỗi thuật ngữ là 1 cặp "tên": "định nghĩa ngắn".
+2. TOÀN BỘ TIẾNG VIỆT 100%.
+
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object phẳng duy nhất (không có mục con).
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
+{{
+  "linh khí": "Năng lượng cơ bản của tu luyện",
+  "đan dược": "Thuốc tăng lực từ thảo dược quý",
+  "kiếm khí": "Năng lượng chiến đấu từ kiếm pháp"
 """
 
     @staticmethod

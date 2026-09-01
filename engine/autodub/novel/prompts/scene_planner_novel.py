@@ -23,7 +23,12 @@ QUY TẮC PHÂN CẢNH:
 2. Không tạo scene filler chỉ để tăng chữ.
 3. Ưu tiên các tình huống có đối thoại, hành động và cảm xúc tự nhiên.
 
-YÊU CẦU ĐẦU RA (Trả về duy nhất JSON Array gồm các Scene objects):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '[' VÀ KẾT THÚC BẰNG ']'.
+
+CẤU TRÚC JSON MẪU:
 [
   {{
     "scene_index": 1,

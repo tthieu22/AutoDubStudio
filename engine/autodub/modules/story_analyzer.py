@@ -62,7 +62,7 @@ Bạn là chuyên gia phân tích kịch bản. Hãy phân tích văn bản câu
 Văn bản:
 {text_sample[:2500]}
 
-Trả về JSON với cấu trúc exact:
+CẤU TRÚC JSON MẪU:
 {{
   "characters": [
     {{
@@ -77,14 +77,17 @@ Trả về JSON với cấu trúc exact:
     "era": "Thời cổ đại"
   }}
 }}
+
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu trên.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
 """
         response_text = self._call_qwen(prompt)
-        try:
-            parsed = json.loads(response_text)
-            if "characters" in parsed:
-                return parsed
-        except json.JSONDecodeError:
-            pass
+        from autodub.modules.structured_parser import StructuredParser
+        parsed = StructuredParser.extract_json_payload(response_text)
+        if isinstance(parsed, dict) and "characters" in parsed:
+            return parsed
 
         # Fallback default struct if LLM unparseable
         return {

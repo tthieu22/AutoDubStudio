@@ -29,9 +29,13 @@ QUY TẮC BẮT BUỘC:
 2. Mỗi Arc có Mục tiêu (Goal), Xung đột (Conflict), Phát hiện lớn (Major Reveal), và Phát triển nhân vật (Character Development) riêng biệt.
 3. Tựa đề Arc và nội dung Arc PHẢI bám sát Tiền đề '{premise}'.
 4. TOÀN BỘ NỘI DUNG (Tựa đề Arc, Mục tiêu, Xung đột, Phát hiện lớn, Phát triển nhân vật) PHẢI VIẾT HOÀN TOÀN BẰNG TIẾNG VIỆT 100% (CẤM dùng tiếng Anh hoặc tiếng Trung).
-5. ĐẦU RA PHẢI LÀ MỘT MẢNG JSON THUẦN TÚY (RAW JSON ARRAY), KHÔNG CÓ BẤT KỲ VĂN BẢN LỜI DẪN NÀO BÊN NGOÀI MẢNG JSON.
 
-MẪU ĐẦU RA YÊU CẦU:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '[' VÀ KẾT THÚC BẰNG ']'.
+
+CẤU TRÚC JSON MẪU:
 [
   {{
     "arc_num": 1,

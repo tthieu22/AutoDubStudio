@@ -49,8 +49,12 @@ class WorldPrompt:
 1. Mọi địa danh hay thế lực mới trích xuất BẮT BUỘC phải kèm theo `evidence` chứa câu trích dẫn nguyên văn từ Chương {chapter_num}.
 2. Nếu chương không xuất hiện địa danh hay thế lực mới nào, trả về mảng rỗng.
 
-[OUTPUT CONTRACT (JSON SCHEMA)]
-Trả về DUY NHẤT một JSON Object hợp lệ:
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "world_updates": {{
     "new_locations": [

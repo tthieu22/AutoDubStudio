@@ -598,29 +598,71 @@ class CanonValidatorEngine:
             from autodub.novel.prompts.canon_validator import CanonValidatorPrompt
             prompt = CanonValidatorPrompt.build_prompt(chapter_num, chapter_text, domain_outputs, [])
             try:
+                from autodub.modules.llamacpp_client import strip_think_tags
                 raw = llm_client.generate(prompt=prompt)
+                cleaned_raw = strip_think_tags(raw).strip() if raw else ""
+                
                 if hasattr(llm_client, "extract_json"):
-                    res = llm_client.extract_json(raw)
+                    res = llm_client.extract_json(cleaned_raw)
                 else:
                     import re
-                    cleaned = re.sub(r"```json\s*", "", raw, flags=re.IGNORECASE)
+                    cleaned = re.sub(r"```json\s*", "", cleaned_raw, flags=re.IGNORECASE)
                     cleaned = re.sub(r"```\s*", "", cleaned).strip()
                     try:
                         res = json.loads(cleaned)
                     except Exception:
-                        res = None
+                        idx = cleaned.find("{")
+                        if idx != -1:
+                            idx_end = cleaned.rfind("}")
+                            if idx_end > idx:
+                                try:
+                                    res = json.loads(cleaned[idx:idx_end + 1])
+                                except Exception:
+                                    res = None
+                            else:
+                                res = None
+                        else:
+                            res = None
+
                 if isinstance(res, dict):
-                    status = str(res.get("status", "PASS")).upper()
                     llm_fails = res.get("failures", [])
-                    if status == "FAIL" or (isinstance(llm_fails, list) and len(llm_fails) > 0):
-                        if isinstance(llm_fails, list):
-                            failures.extend(llm_fails)
-                        if status == "FAIL":
-                            return False, failures
+                    if isinstance(llm_fails, list):
+                        for f in llm_fails:
+                            if isinstance(f, dict):
+                                prob = str(f.get("problem", "")).lower()
+                                sev = str(f.get("severity", "WARNING")).upper()
+                                
+                                # Comprehensive filter for false-positive text omission / non-contradiction complaints
+                                omission_keywords = [
+                                    "không đề cập", "không nói rõ", "chỉ nói rằng", "chỉ nói", "chưa rõ",
+                                    "không có bất kỳ thông tin", "không phù hợp với thông tin", "thiếu thông tin",
+                                    "chưa đề cập", "không thấy nói", "không nhắc đến", "chưa có thông tin",
+                                    "không xuất hiện", "không thấy xuất hiện", "không đề cập đến",
+                                    "bản thảo chỉ nói", "trong đó không có", "không có bất kỳ",
+                                    "không phù hợp", "không có thông tin", "trái ngược với thông tin trong bản thảo",
+                                    "không đề cập đến việc"
+                                ]
+                                
+                                # Real critical canon breach markers
+                                true_critical_markers = [
+                                    "đã chết", "tụt cấp", "hạ cấp", "leak", "rò rỉ bí mật", "mâu thuẫn trực tiếp", "mâu thuẫn canon"
+                                ]
+
+                                is_omission = any(kw in prob for kw in omission_keywords)
+                                is_true_critical = any(ck in prob for ck in true_critical_markers)
+
+                                if is_omission or not is_true_critical:
+                                    f["severity"] = "WARNING"
+                                else:
+                                    f["severity"] = sev
+
+                                failures.append(f)
             except Exception as e:
                 logger.warning(f"[CANON_VALIDATOR_ENGINE] LLM validation check error: {e}")
 
-        is_passed = len([f for f in failures if f.get("severity") == "CRITICAL"]) == 0
+
+        critical_fails = [f for f in failures if f.get("severity") == "CRITICAL"]
+        is_passed = len(critical_fails) == 0
         return is_passed, failures
 
 

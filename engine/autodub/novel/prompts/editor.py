@@ -18,7 +18,12 @@ TAY NGHỀ BIÊN TẬP KIỂM TRA:
 □ Đảm bảo nhịp truyện căng thẳng, hấp dẫn
 □ Giữ nguyên logic tình tiết và Cliffhanger ở cuối chương
 
-YÊU CẦU ĐẦU RA (Trả về JSON Object):
+[OUTPUT CONTRACT - STRICT RAW JSON ONLY]
+- Trả về DUY NHẤT 1 JSON Object hợp lệ theo cấu trúc mẫu sau.
+- CẤM kèm bất kỳ lời dẫn, giải thích hay khối markdown codeblock (```json ... ```).
+- ĐẦU RA BẮT ĐẦU BẰNG KÝ TỰ '{' VÀ KẾT THÚC BẰNG '}'.
+
+CẤU TRÚC JSON MẪU:
 {{
   "edited_text": "Nội dung chương sau khi đã biên tập hoàn chỉnh...",
   "changes_made": [

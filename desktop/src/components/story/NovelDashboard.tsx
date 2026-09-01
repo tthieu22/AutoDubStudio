@@ -29,7 +29,8 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
   const [hasMasterPlan, setHasMasterPlan] = useState<boolean>(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
   const [gpuServerInfo, setGpuServerInfo] = useState<string>('Đang khởi động GPU Ollama (qwen2.5:3b)...');
-  const [currentSubStage, setCurrentSubStage] = useState<'1A' | '1B' | '1C' | '1D' | '1E' | '2A' | 'DONE' | 'IDLE'>('IDLE');
+  const [currentSubStage, setCurrentSubStage] = useState<'1A' | '1B' | '1C' | '1D' | '1E' | '1F' | '2A' | '2B' | 'DONE' | 'IDLE'>('IDLE');
+  const [currentChapterStep, setCurrentChapterStep] = useState<number>(0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleCopyLogs = () => {
@@ -48,6 +49,7 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
       if (isActive) {
         setIsGenerating(true);
         setCurrentStage('AUTO_WRITING');
+        setCurrentChapterStep(1);
       }
     }).catch(() => {});
 
@@ -127,13 +129,33 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         setCurrentChapterNum(evt.current);
         setProgressPercent(evt.percent || 0);
         setCurrentStage(`WRITING_CHAPTER_${evt.current}`);
+        setCurrentChapterStep(1);
+      } else if (evt.event === 'novel_sub_stage') {
+        const stepName = String(evt.step || '').toUpperCase();
+        if (['RETRIEVAL', 'HARDWARE'].includes(stepName)) {
+          setCurrentChapterStep(1);
+        } else if (['PLANNING', 'CONTRACT'].includes(stepName)) {
+          setCurrentChapterStep(2);
+        } else if (['SCENE_EXECUTION', 'WRITING', 'WRITER', 'SCENE_PLANNER'].includes(stepName)) {
+          setCurrentChapterStep(3);
+        } else if (['ASSEMBLER', 'CHAPTER_ASSEMBLER', 'EDITOR'].includes(stepName)) {
+          setCurrentChapterStep(4);
+        } else if (['PROGRESSION_VALIDATOR', 'VALIDATOR'].includes(stepName)) {
+          setCurrentChapterStep(5);
+        } else if (['METADATA_EXTRACTOR', 'EXTRACTOR', 'CHARACTER_ENGINE', 'WORLD_ENGINE', 'LEVEL_ENGINE', 'EVENT_ENGINE', 'RELATIONSHIP_ENGINE', 'OPEN_THREAD_ENGINE'].includes(stepName)) {
+          setCurrentChapterStep(6);
+        } else if (['CANON_VALIDATOR', 'MEMORY', 'MEMORY_EXTRACTOR', 'MEMORY_UPDATE'].includes(stepName)) {
+          setCurrentChapterStep(7);
+        }
       } else if (evt.event === 'novel_chapter_complete') {
         setCurrentChapterNum(evt.current + 1);
         setProgressPercent(evt.percent || 0);
+        setCurrentChapterStep(7);
       } else if (evt.event === 'novel_complete') {
         setIsGenerating(false);
         setCurrentStage('COMPLETED');
         setProgressPercent(100);
+        setCurrentChapterStep(7);
       }
     });
 
@@ -160,8 +182,32 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         setCurrentSubStage('1D');
       } else if (displayLine.includes('PROMPT 1E/5') || displayLine.includes('TERMINOLOGY_GENERATION')) {
         setCurrentSubStage('1E');
+      } else if (displayLine.includes('PROMPT 1F') || displayLine.includes('MASTER_BLUEPRINT')) {
+        setCurrentSubStage('1F');
       } else if (displayLine.includes('MASTER_PLAN') || displayLine.includes('GENERATING_MASTER_PLAN') || displayLine.includes('BƯỚC 2-3/7')) {
         setCurrentSubStage('2A');
+      } else if (displayLine.includes('ARC_ROADMAP') || displayLine.includes('DÀN Ý KỊCH BẢN 20 CHƯƠNG')) {
+        setCurrentSubStage('2B');
+      }
+
+
+      // Match 7 Chapter Pipeline Steps in stdout log stream
+      if (displayLine.includes('Step 1/7') || displayLine.includes('RETRIEVAL')) {
+        setCurrentChapterStep(1);
+      } else if (displayLine.includes('Step 2/7') || displayLine.includes('CHAPTER PLANNER') || displayLine.includes('PLANNING & CONTRACT')) {
+        setCurrentChapterStep(2);
+      } else if (displayLine.includes('Step 3/7') || displayLine.includes('Scene ') || displayLine.includes('WRITING')) {
+        setCurrentChapterStep(3);
+      } else if (displayLine.includes('Step 4/7') || displayLine.includes('CHAPTER ASSEMBLER')) {
+        setCurrentChapterStep(4);
+      } else if (displayLine.includes('Step 5/7') || displayLine.includes('PROGRESSION VALIDATOR')) {
+        setCurrentChapterStep(5);
+      } else if (displayLine.includes('Step 6/7') || displayLine.includes('PIPELINE ORCHESTRATOR') || displayLine.includes('CHARACTER_ENGINE') || displayLine.includes('WORLD_ENGINE') || displayLine.includes('LEVEL_ENGINE') || displayLine.includes('EVENT_ENGINE') || displayLine.includes('RELATIONSHIP_ENGINE') || displayLine.includes('OPEN_THREAD_ENGINE')) {
+        setCurrentChapterStep(6);
+      } else if (displayLine.includes('Step 7/7') || displayLine.includes('CANON_VALIDATOR') || displayLine.includes('Bước 9/9')) {
+        setCurrentChapterStep(7);
+      } else if (displayLine.includes('SPECIALIZED ENGINES PASS') || displayLine.includes('novel_chapter_complete')) {
+        setCurrentChapterStep(7);
       } else if (displayLine.includes('Hoàn thành 5/5') || displayLine.includes('THÀNH CÔNG')) {
         // Keep at 1E until master plan starts
       }
@@ -444,24 +490,28 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
           {[
             { key: '1A', label: 'Prompt 1A', title: 'Bối Cảnh Thế Giới', desc: 'World & Premise' },
             { key: '1B', label: 'Prompt 1B', title: 'Hệ Thống Cảnh Giới', desc: 'Progression Ranks' },
             { key: '1C', label: 'Prompt 1C', title: 'Dàn Nhân Vật Nam/Nữ', desc: 'Full Cast Profiles' },
             { key: '1D', label: 'Prompt 1D', title: 'Quy Tắc Thế Giới', desc: 'World Rules & Canon' },
             { key: '1E', label: 'Prompt 1E', title: 'Từ Điển Thuật Ngữ', desc: 'Genre Terminology' },
-            { key: '2A', label: 'Bước 2 (2A)', title: 'Master Plan (20-50 Arcs)', desc: '20-50 Master Arcs' },
+            { key: '2A', label: 'Bước 2A', title: 'Master Plan Arcs', desc: '20-50 Master Arcs' },
+            { key: '1F', label: 'Prompt 1F', title: 'Sườn Kịch Bản Tổng Thể', desc: 'Master Blueprint' },
           ].map((sub) => {
             const isCompleted = 
-              sub.key === '1A' ? (!!storyBible || ['1B', '1C', '1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
-              sub.key === '1B' ? (!!storyBible || ['1C', '1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
-              sub.key === '1C' ? (!!storyBible || ['1D', '1E', '2A', 'DONE'].includes(currentSubStage)) :
-              sub.key === '1D' ? (!!storyBible || ['1E', '2A', 'DONE'].includes(currentSubStage)) :
-              sub.key === '1E' ? (!!storyBible || ['2A', 'DONE'].includes(currentSubStage)) :
-              sub.key === '2A' ? (hasMasterPlan || currentSubStage === 'DONE') : false;
+              sub.key === '1A' ? (!!storyBible || ['1B', '1C', '1D', '1E', '2A', '1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1B' ? (!!storyBible || ['1C', '1D', '1E', '2A', '1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1C' ? (!!storyBible || ['1D', '1E', '2A', '1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1D' ? (!!storyBible || ['1E', '2A', '1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1E' ? (!!storyBible || ['2A', '1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '2A' ? (hasMasterPlan || ['1F', '2B', 'DONE'].includes(currentSubStage)) :
+              sub.key === '1F' ? (!!storyBible?.master_blueprint || ['2B', 'DONE'].includes(currentSubStage)) : false;
 
             const isActive = !isCompleted && currentSubStage === sub.key;
+
+
 
             return (
               <div
@@ -516,40 +566,20 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         ].map((st) => {
           let status: 'COMPLETED' | 'ACTIVE' | 'PENDING' = 'PENDING';
 
-          const hasBible = !!storyBible;
-          const isInitializingBible = currentStage === 'INITIALIZING_STORY_BIBLE';
-          const isGeneratingMasterPlan = currentStage === 'GENERATING_MASTER_PLAN';
-
-          if (st.id === 1) {
-            status = hasBible || currentStage !== 'IDLE' ? 'COMPLETED' : 'ACTIVE';
-          } else if (st.id === 2) {
-            if (isInitializingBible || currentStage === 'CHAPTER_PLANNER') status = 'ACTIVE';
-            else if (hasBible) status = 'COMPLETED';
-            else status = 'PENDING';
-          } else if (st.id === 3) {
-            if (isGeneratingMasterPlan || ['SCENE_PLANNER', 'CHAPTER_PLANNER'].includes(currentStage)) status = 'ACTIVE';
-            else if (['SCENE_EXECUTION', 'WRITER', 'WRITING_SCENE', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
-            else status = 'PENDING';
-          } else if (st.id === 4) {
-            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
-            else if (['SCENE_EXECUTION', 'WRITER', 'WRITING_SCENE'].includes(currentStage)) status = 'ACTIVE';
-            else if (['CHAPTER_ASSEMBLER', 'EDITOR', 'VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
-            else status = 'PENDING';
-          } else if (st.id === 5) {
-            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
-            else if (['CHAPTER_ASSEMBLER', 'EDITOR'].includes(currentStage)) status = 'ACTIVE';
-            else if (['FINAL_VALIDATOR', 'VALIDATOR', 'PROGRESSION_VALIDATOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
-            else status = 'PENDING';
-          } else if (st.id === 6) {
-            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
-            else if (['FINAL_VALIDATOR', 'VALIDATOR', 'PROGRESSION_VALIDATOR'].includes(currentStage)) status = 'ACTIVE';
-            else if (['METADATA_EXTRACTOR', 'MEMORY_EXTRACTOR', 'COMPLETED'].includes(currentStage)) status = 'COMPLETED';
-            else status = 'PENDING';
-          } else if (st.id === 7) {
-            if (!hasBible || isInitializingBible || isGeneratingMasterPlan) status = 'PENDING';
-            else if (['METADATA_EXTRACTOR', 'MEMORY_EXTRACTOR', 'MEMORY_UPDATE'].includes(currentStage)) status = 'ACTIVE';
-            else if (currentStage === 'COMPLETED') status = 'COMPLETED';
-            else status = 'PENDING';
+          if (currentChapterStep > 0) {
+            if (st.id < currentChapterStep) {
+              status = 'COMPLETED';
+            } else if (st.id === currentChapterStep) {
+              status = 'ACTIVE';
+            } else {
+              status = 'PENDING';
+            }
+          } else if (currentStage === 'COMPLETED') {
+            status = 'COMPLETED';
+          } else if (storyBible && hasMasterPlan) {
+            status = 'COMPLETED';
+          } else {
+            status = 'PENDING';
           }
 
           const isActive = status === 'ACTIVE';
