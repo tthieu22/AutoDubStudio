@@ -422,7 +422,7 @@ export class PythonEngineService {
   }
 
   // ── AI Novel Engine APIs ─────────────────────────────────────────
-  static async initializeNovel(projectDir: string, storyIdea: any): Promise<any> {
+  static async initializeNovel(projectDir: string, storyIdea: any, resume: boolean = false): Promise<any> {
     if (!isTauri()) {
       const pName = storyIdea.protagonist?.name || "Nhân vật chính";
       const pGenre = storyIdea.genre || "Hành động viễn tưởng";
@@ -446,17 +446,54 @@ export class PythonEngineService {
         rules: ["Cấp độ cố định theo quy tắc thế giới", "Nhân vật không biết trước tương lai"]
       };
     }
-    return invoke<any>('initialize_novel', { projectDir, idea: storyIdea });
+    const result = await invoke<any>('initialize_novel', { projectDir, idea: storyIdea, resume });
+    this.notifyStoryDataUpdated(projectDir);
+    return result;
   }
 
-  static async generateNovelMasterPlan(projectDir: string): Promise<any[]> {
+  static async regenerateCharacters(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return [];
+    }
+    const result = await invoke<any>('regenerate_novel_characters', { projectDir });
+    this.notifyStoryDataUpdated(projectDir);
+    return result;
+  }
+
+  static async regenerateWorld(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return {};
+    }
+    const result = await invoke<any>('regenerate_novel_world', { projectDir });
+    this.notifyStoryDataUpdated(projectDir);
+    return result;
+  }
+
+  static async regenerateRules(projectDir: string): Promise<any> {
+    if (!isTauri()) {
+      return [];
+    }
+    const result = await invoke<any>('regenerate_novel_rules', { projectDir });
+    this.notifyStoryDataUpdated(projectDir);
+    return result;
+  }
+
+  static async generateNovelMasterPlan(projectDir: string, totalChapters?: number): Promise<any[]> {
     if (!isTauri()) {
       return [
         { arc_num: 1, title: "Arc 01 — Khởi Đầu & Thử Thách", start_chapter: 1, end_chapter: 40, goal: "Thiết lập nền móng", conflict: "Đối thủ ghen ghét", status: "PLANNED" },
         { arc_num: 2, title: "Arc 02 — Vùng Đất Mới & Đột Phá", start_chapter: 41, end_chapter: 80, goal: "Đạt được bước ngoặt lớn", conflict: "Tổ chức bí ẩn vây phục", status: "PLANNED" }
       ];
     }
-    return invoke<any[]>('generate_novel_master_plan', { projectDir });
+    const result = await invoke<any[]>('generate_novel_master_plan', { projectDir, totalChapters });
+    this.notifyStoryDataUpdated(projectDir);
+    return result;
+  }
+
+  static notifyStoryDataUpdated(projectDir: string) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('story_data_updated', { detail: { projectDir } }));
+    }
   }
 
   static async startNovelAutoWrite(projectDir: string, startChapter: number = 1, endChapter: number = 1000): Promise<void> {

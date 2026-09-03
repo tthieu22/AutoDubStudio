@@ -253,22 +253,27 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
     }
   };
 
-  const executeInitializeNovel = async () => {
+  const executeInitializeNovel = async (resume: boolean = false) => {
     if (!projectDir || isGenerating) return null;
     setIsGenerating(true);
-    
-    // 1. CLEAR OLD DATA & RESET ALL PROCESS INDICATORS
-    setStoryBible(null);
-    setGlobalProgress(null);
-    setHasMasterPlan(false);
-    setLogs([]);
-    setProgressPercent(0);
-    setCurrentChapterNum(1);
-    setCurrentSubStage('1A');
-    setCurrentStage('INITIALIZING_STORY_BIBLE');
 
-    const startLog = '[INFO] AI Story Director building Story Bible & World Rules...';
-    setLogs([startLog]);
+    if (!resume) {
+      // 1. CLEAR OLD DATA & RESET ALL PROCESS INDICATORS FOR FRESH NEW WORLD
+      setStoryBible(null);
+      setGlobalProgress(null);
+      setHasMasterPlan(false);
+      setLogs([]);
+      setProgressPercent(0);
+      setCurrentChapterNum(1);
+      setCurrentSubStage('1A');
+      setCurrentStage('INITIALIZING_STORY_BIBLE');
+      await PythonEngineService.writeTextFile(`${projectDir}/novel_execution.log`, '');
+    }
+
+    const startLog = resume
+      ? '[INFO] Đang tiếp tục quy trình khởi tạo (giữ nguyên các bước 1A-1D đã thành công)...'
+      : '[INFO] AI Story Director building Story Bible & World Rules...';
+    setLogs(prev => [startLog, ...prev]);
 
     try {
       const idea = {
@@ -280,31 +285,24 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
         enable_tiktok_slang: enableTiktokSlang
       };
 
-      // Reset novel_execution.log file & clean old project state
-      await PythonEngineService.writeTextFile(`${projectDir}/novel_execution.log`, '');
-      await saveNovelStateToProject({ 
-        novel_idea: idea, 
-        story_bible: null,
-        arc_plans: [],
-        global_progress: null,
-        novel_logs: [startLog],
-        novel_current_stage: 'INITIALIZING_STORY_BIBLE',
-        novel_current_chapter: 1,
-        novel_progress_percent: 0,
-        chapters: []
-      });
-
-      const bible = await PythonEngineService.initializeNovel(projectDir, idea);
+      const bible = await PythonEngineService.initializeNovel(projectDir, idea, resume);
       setStoryBible(bible);
       
-      setLogs(prev => ['[SUCCESS] Story Bible generated! Creating Master Plan (20-50 Arcs)...', ...prev]);
+      setLogs(prev => ['[SUCCESS] Story Bible generated! Checking Master Plan...', ...prev]);
       setCurrentStage('GENERATING_MASTER_PLAN');
       setCurrentSubStage('2A');
 
       await saveNovelStateToProject({ story_bible: bible, novel_current_stage: 'GENERATING_MASTER_PLAN' });
 
-      const masterPlan = await PythonEngineService.generateNovelMasterPlan(projectDir);
-      setLogs(prev => ['[SUCCESS] Master Plan created! Ready for Auto-Write.', ...prev]);
+      // If master plan is not generated yet, generate it now
+      const projJson = await PythonEngineService.readProjectJson(projectDir);
+      let masterPlan = projJson?.arc_plans || [];
+      if (!masterPlan || !Array.isArray(masterPlan) || masterPlan.length === 0) {
+        setLogs(prev => ['[INFO] Đang lập Master Plan (Arcs kịch bản)...', ...prev]);
+        masterPlan = await PythonEngineService.generateNovelMasterPlan(projectDir, totalChapters);
+      }
+
+      setLogs(prev => ['[SUCCESS] Master Plan ready! Ready for Auto-Write.', ...prev]);
       setCurrentStage('READY');
       setCurrentSubStage('DONE');
       setHasMasterPlan(true);
@@ -720,13 +718,24 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
             </button>
           </div>
 
-          <button
-            onClick={handleInitializeNovelClick}
-            disabled={isGenerating}
-            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <Sparkles size={15} /> Tạo Thế Giới & Master Plan (20-50 Arcs)
-          </button>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleInitializeNovelClick}
+              disabled={isGenerating}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+              title="Khởi tạo mới từ đầu (xóa dữ liệu cũ)"
+            >
+              <Sparkles size={15} /> Tạo Mới Từ Đầu
+            </button>
+            <button
+              onClick={() => executeInitializeNovel(true)}
+              disabled={isGenerating}
+              className="px-3 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+              title="Tiếp tục quy trình khởi tạo từ bước dở dang (giữ nguyên các bước 1A-1D đã thành công)"
+            >
+              <Play size={14} className="fill-amber-300" /> Tiếp Tục Dở Dang
+            </button>
+          </div>
         </div>
 
         {/* LOGS & PROGRESS TRACKER */}
@@ -835,10 +844,10 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               </ul>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold transition-all border border-white/10 cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold transition-all border border-white/10 cursor-pointer"
               >
                 Hủy Bỏ
               </button>
@@ -846,11 +855,23 @@ export const NovelDashboard: React.FC<NovelDashboardProps> = ({ projectDir }) =>
               <button
                 onClick={() => {
                   setShowResetConfirm(false);
-                  executeInitializeNovel();
+                  executeInitializeNovel(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-amber-600 hover:from-rose-400 hover:to-amber-500 text-white text-xs font-extrabold shadow-lg shadow-rose-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold shadow-lg shadow-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                title="Giữ lại các bước 1A-1D đã thành công và tiếp tục từ bước dở dang"
               >
-                <Sparkles size={14} /> Xác Nhận Xóa Cũ & Tạo Mới
+                <Play size={14} className="fill-black" /> Tiếp Tục Dở Dang
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowResetConfirm(false);
+                  executeInitializeNovel(false);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold shadow-lg shadow-rose-600/20 transition-all cursor-pointer flex items-center gap-1.5"
+                title="Xóa sạch dữ liệu cũ và tạo mới hoàn toàn từ đầu"
+              >
+                <Sparkles size={14} /> Xóa Cũ & Tạo Mới
               </button>
             </div>
           </div>

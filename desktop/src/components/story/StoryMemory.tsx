@@ -80,52 +80,59 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
   };
 
   React.useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(async data => {
-        if (data && data.story_memory && Array.isArray(data.story_memory) && data.story_memory.length > 0) {
-          const unique: MemoryItem[] = [];
-          const seen = new Set<string>();
-          for (const item of data.story_memory) {
-            const key = (item.content || '').trim();
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              unique.push({ ...item, id: `mem-${unique.length}` });
-            }
-          }
-          setMemories(unique);
-        } else {
-          try {
-            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
-            if (rawBible) {
-              const bible = JSON.parse(rawBible);
-              if (bible.rules && Array.isArray(bible.rules) && bible.rules.length > 0) {
-                const unique: MemoryItem[] = [];
-                const seen = new Set<string>();
-                bible.rules.forEach((r: string) => {
-                  const key = String(r || '').trim();
-                  if (key && !seen.has(key)) {
-                    seen.add(key);
-                    unique.push({
-                      id: `mem-${unique.length}`,
-                      category: "World",
-                      content: key,
-                      importance: "HIGH",
-                      confidence: 1.0,
-                      locked: true
-                    });
-                  }
-                });
-                setMemories(unique);
-                return;
+    const loadData = () => {
+      if (projectDir) {
+        PythonEngineService.readProjectJson(projectDir).then(async data => {
+          const rawMems = data?.story_memories || data?.story_memory;
+          if (data && rawMems && Array.isArray(rawMems) && rawMems.length > 0) {
+            const unique: MemoryItem[] = [];
+            const seen = new Set<string>();
+            for (const item of rawMems) {
+              const key = (item.content || '').trim();
+              if (key && !seen.has(key)) {
+                seen.add(key);
+                unique.push({ ...item, id: `mem-${unique.length}` });
               }
             }
-          } catch (e) {}
+            setMemories(unique);
+          } else {
+            try {
+              const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+              if (rawBible) {
+                const bible = JSON.parse(rawBible);
+                if (bible.rules && Array.isArray(bible.rules) && bible.rules.length > 0) {
+                  const unique: MemoryItem[] = [];
+                  const seen = new Set<string>();
+                  bible.rules.forEach((r: string) => {
+                    const key = String(r || '').trim();
+                    if (key && !seen.has(key)) {
+                      seen.add(key);
+                      unique.push({
+                        id: `mem-${unique.length}`,
+                        category: "World",
+                        content: key,
+                        importance: "HIGH",
+                        confidence: 1.0,
+                        locked: true
+                      });
+                    }
+                  });
+                  setMemories(unique);
+                  return;
+                }
+              }
+            } catch (e) {}
+            setMemories([]);
+          }
+        }).catch(() => {
           setMemories([]);
-        }
-      }).catch(() => {
-        setMemories([]);
-      });
-    }
+        });
+      }
+    };
+
+    loadData();
+    window.addEventListener('story_data_updated', loadData);
+    return () => window.removeEventListener('story_data_updated', loadData);
   }, [projectDir]);
 
   const saveMemoriesToProject = async (newMems: MemoryItem[]) => {
@@ -157,48 +164,19 @@ export const StoryMemory: React.FC<StoryMemoryProps> = ({ projectDir }) => {
 
   const handleRegenerateMemory = async () => {
     if (!projectDir) return;
-    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại dữ liệu Trí Nhớ & Quy Tắc cho dự án không?')) return;
+    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại duy nhất Quy Tắc & Trí Nhớ cho dự án không?')) return;
     setIsRegenerating(true);
-    setRegenStatus('Đang chạy Python Engine & AI Qwen 2.5 tạo lại trí nhớ...');
+    setRegenStatus('Đang chạy AI Qwen 2.5 tái tạo duy nhất Quy Tắc & Ký Ức (Step 1D)...');
     try {
-      const projJson = await PythonEngineService.readProjectJson(projectDir);
-      let idea = projJson?.story_idea || projJson?.idea || {};
-      if (!idea || !idea.title) {
-        idea = {
-          title: projJson?.name || "Kịch Bản Mới",
-          genre: projJson?.genre || "Hành động viễn tưởng",
-          protagonist: { name: "Diệp Phàm", background: "Nhân vật chính" },
-          total_chapters: projJson?.total_chapters || 100
-        };
-      }
-
-      const bible = await PythonEngineService.initializeNovel(projectDir, idea);
+      const res = await PythonEngineService.regenerateRules(projectDir);
       const updatedProj = await PythonEngineService.readProjectJson(projectDir);
 
-      if (updatedProj && updatedProj.story_memory && Array.isArray(updatedProj.story_memory) && updatedProj.story_memory.length > 0) {
-        setMemories(updatedProj.story_memory);
-      } else if (bible && bible.rules && Array.isArray(bible.rules)) {
-        const unique: MemoryItem[] = [];
-        const seen = new Set<string>();
-        bible.rules.forEach((r: string) => {
-          const key = String(r || '').trim();
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            unique.push({
-              id: `mem-${unique.length}`,
-              category: "World",
-              content: key,
-              importance: "HIGH",
-              confidence: 1.0,
-              locked: false
-            });
-          }
-        });
-        if (unique.length > 0) {
-          saveMemoriesToProject(unique);
-        }
+      if (updatedProj && updatedProj.story_memories && Array.isArray(updatedProj.story_memories) && updatedProj.story_memories.length > 0) {
+        setMemories(updatedProj.story_memories);
+      } else if (Array.isArray(res) && res.length > 0) {
+        saveMemoriesToProject(res);
       }
-      setRegenStatus('Tái tạo danh sách trí nhớ bằng AI thành công!');
+      setRegenStatus('Tái tạo duy nhất quy tắc & ký ước bằng AI thành công!');
       setTimeout(() => setRegenStatus(null), 3000);
     } catch (e: any) {
       console.error("Lỗi khi tái tạo dữ liệu trí nhớ:", e);

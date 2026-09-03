@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Search, Target, Flame, Eye, Copy, Check, Compass, ChevronDown, ChevronRight, BookOpen, GitCommit, List, LayoutGrid } from 'lucide-react';
+import { Layers, Search, Target, Flame, Eye, Copy, Check, Compass, ChevronDown, ChevronRight, BookOpen, GitCommit, List, LayoutGrid, RefreshCw } from 'lucide-react';
 import { PythonEngineService } from '../../services/pythonEngine';
 
 export interface ArcPlanItem {
@@ -49,28 +49,72 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
   const [copiedArcId, setCopiedArcId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'arcs' | 'timeline'>('arcs');
   const [allExpanded, setAllExpanded] = useState<boolean>(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenStatus, setRegenStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(data => {
-        if (data) {
-          if (data.arc_plans && Array.isArray(data.arc_plans)) {
-            setArcs(data.arc_plans);
+    const loadData = () => {
+      if (projectDir) {
+        PythonEngineService.readProjectJson(projectDir).then(data => {
+          if (data) {
+            if (data.arc_plans && Array.isArray(data.arc_plans)) {
+              setArcs(data.arc_plans);
+            } else {
+              setArcs([]);
+            }
+            if (data.story_bible && data.story_bible.master_blueprint) {
+              setBlueprint(data.story_bible.master_blueprint);
+            } else if (data.master_blueprint) {
+              setBlueprint(data.master_blueprint);
+            } else {
+              setBlueprint(null);
+            }
+            if (data.arc_roadmaps && typeof data.arc_roadmaps === 'object') {
+              setRoadmaps(data.arc_roadmaps);
+            } else {
+              setRoadmaps({});
+            }
           }
-          if (data.story_bible && data.story_bible.master_blueprint) {
-            setBlueprint(data.story_bible.master_blueprint);
-          } else if (data.master_blueprint) {
-            setBlueprint(data.master_blueprint);
-          }
-          if (data.arc_roadmaps && typeof data.arc_roadmaps === 'object') {
-            setRoadmaps(data.arc_roadmaps);
-          }
-        }
-      }).catch(() => {
-        setArcs([]);
-      });
-    }
+        }).catch(() => {
+          setArcs([]);
+        });
+      }
+    };
+
+    loadData();
+    window.addEventListener('story_data_updated', loadData);
+    return () => window.removeEventListener('story_data_updated', loadData);
   }, [projectDir]);
+
+  const handleRegenerateArcPlan = async () => {
+    if (!projectDir) return;
+    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại Sườn Kịch Bản & Các Arcs Cốt Truyện cho dự án không?')) return;
+    setIsRegenerating(true);
+    setRegenStatus('Đang chạy Python Engine & AI Qwen 2.5 lập Master Plan Sườn Kịch Bản...');
+    try {
+      const masterPlan = await PythonEngineService.generateNovelMasterPlan(projectDir);
+      const updatedProj = await PythonEngineService.readProjectJson(projectDir);
+      if (updatedProj && updatedProj.arc_plans && Array.isArray(updatedProj.arc_plans) && updatedProj.arc_plans.length > 0) {
+        setArcs(updatedProj.arc_plans);
+      } else if (masterPlan && Array.isArray(masterPlan)) {
+        setArcs(masterPlan);
+      }
+      if (updatedProj && updatedProj.arc_roadmaps) {
+        setRoadmaps(updatedProj.arc_roadmaps);
+      }
+      if (updatedProj && (updatedProj.story_bible?.master_blueprint || updatedProj.master_blueprint)) {
+        setBlueprint(updatedProj.story_bible?.master_blueprint || updatedProj.master_blueprint);
+      }
+      setRegenStatus('Tái tạo Sườn Kịch Bản & Arcs bằng AI thành công!');
+      setTimeout(() => setRegenStatus(null), 3000);
+    } catch (e: any) {
+      console.error("Lỗi khi tái tạo Master Plan:", e);
+      setRegenStatus(`Lỗi AI: ${e?.message || e}`);
+      setTimeout(() => setRegenStatus(null), 4000);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const toggleRoadmapExpand = (arcNum: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -137,7 +181,7 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
   });
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0d10] text-slate-100 p-4 space-y-4 font-sans">
+    <div className="h-full flex flex-col bg-[#0b0d10] text-slate-100 p-4 space-y-4 font-sans relative">
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#111318] p-4 rounded-xl border border-white/5 shadow-md">
         <div className="flex items-center gap-3">
@@ -159,55 +203,32 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 max-w-lg w-full justify-end">
-          {/* VIEW MODE SWITCHER */}
-          <div className="flex items-center bg-[#0b0d10] p-1 rounded-lg border border-white/10 shrink-0">
-            <button
-              onClick={() => setViewMode('arcs')}
-              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                viewMode === 'arcs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-              title="Hiển thị dạng Danh sách các Arc"
-            >
-              <LayoutGrid size={13} /> Theo Arc
-            </button>
-            <button
-              onClick={() => setViewMode('timeline')}
-              className={`px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                viewMode === 'timeline' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-              title="Hiển thị Sườn Kịch Bản toàn bộ các chương liên tục"
-            >
-              <List size={13} /> Toàn Bộ Chương
-            </button>
-          </div>
-
-          <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Tìm Arc hoặc Chương..."
-              className="w-full bg-[#0b0d10] border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none"
-            />
-          </div>
-
+        <div className="flex items-center gap-2">
           {viewMode === 'arcs' && arcs.length > 0 && (
             <button
               onClick={handleToggleExpandAllRoadmaps}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 shrink-0 cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 cursor-pointer"
               title="Mở rộng hoặc gom tất cả Dàn ý 20 chương của các Arc"
             >
-              <BookOpen size={13} />
-              <span>{allExpanded ? 'Gom Tất Cả' : 'Mở Dàn Ý Các Chương'}</span>
+              <BookOpen size={14} />
+              <span>{allExpanded ? 'Gom Dàn Ý' : 'Mở Dàn Ý các Arc'}</span>
             </button>
           )}
 
           <button
+            onClick={handleRegenerateArcPlan}
+            disabled={isRegenerating}
+            className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            title="Tái tạo lại Master Plan Sườn Kịch Bản bằng AI"
+          >
+            <RefreshCw size={14} className={isRegenerating ? "animate-spin" : ""} />
+            {isRegenerating ? "Đang Tái Tạo..." : "Tái Tạo AI"}
+          </button>
+
+          <button
             onClick={handleCopyAllArcs}
             disabled={arcs.length === 0}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer select-none ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer select-none ${
               copiedAll
                 ? 'bg-emerald-500 text-black shadow-emerald-500/20'
                 : arcs.length > 0
@@ -221,6 +242,54 @@ export const ArcPlanner: React.FC<ArcPlannerProps> = ({ projectDir }) => {
           </button>
         </div>
       </div>
+
+      {/* FILTER & SEARCH SUB-TOOLBAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#111318] p-3 rounded-xl border border-white/5 text-xs shadow-sm">
+        {/* WIDE SEARCH INPUT */}
+        <div className="relative flex-1 max-w-md w-full">
+          <Search size={15} className="absolute left-3.5 top-2.5 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Tìm kiếm Arc, tên chương, mục tiêu cốt truyện..."
+            className="w-full bg-[#0b0d10] border border-white/10 rounded-lg pl-10 pr-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+          />
+        </div>
+
+        {/* VIEW MODE SWITCHER */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-slate-400 font-medium">Chế độ xem:</span>
+          <div className="flex items-center bg-[#0b0d10] p-1 rounded-lg border border-white/10">
+            <button
+              onClick={() => setViewMode('arcs')}
+              className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'arcs' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+              title="Hiển thị dạng Danh sách các Arc"
+            >
+              <LayoutGrid size={13} /> Theo Danh Sách Arc
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'timeline' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+              title="Hiển thị Sườn Kịch Bản toàn bộ các chương liên tục"
+            >
+              <List size={13} /> Toàn Bộ Kịch Bản Chương
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* REGEN STATUS BANNER */}
+      {regenStatus && (
+        <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2.5 font-bold shadow-md shadow-amber-500/10 animate-pulse">
+          <RefreshCw size={15} className="animate-spin text-amber-400" />
+          <span>{regenStatus}</span>
+        </div>
+      )}
 
       {/* MASTER BLUEPRINT SKELETON CARD */}
       {blueprint && (

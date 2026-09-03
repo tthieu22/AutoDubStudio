@@ -27,8 +27,11 @@ export interface Character {
   alias: string;
   gender: string;
   age: string;
+  relationship?: string;
+  addressPronouns?: string;
   personality: string;
   appearance: string;
+  goal?: string;
   clothing: string;
   voice: string;
   speakingStyle: string;
@@ -51,9 +54,38 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
   const [editingChar, setEditingChar] = useState<Character | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  const formatCharData = (c: any, idx: number): Character => {
+    const rawApp = String(c.appearance || "");
+    let cleanApp = rawApp;
+    let extractedGoal = c.goal || "";
+
+    if (rawApp.startsWith("Mục tiêu:")) {
+      extractedGoal = rawApp.replace("Mục tiêu:", "").trim();
+      cleanApp = c.appearance_desc || "Thần thái kiên định, dáng người thanh tú nhã nhặn";
+    }
+
+    return {
+      ...c,
+      id: c.id || `char_${String(idx + 1).padStart(3, '0')}`,
+      name: c.name || "Nhân vật",
+      alias: c.alias || c.role || c.realm || "Khởi Đầu",
+      gender: c.gender || "Nam",
+      age: String(c.age || (19 + (idx * 4) % 20)),
+      relationship: c.relationship || c.relation || (idx === 0 ? "Nhân vật trung tâm" : "Đồng đội / Mối quan hệ sát cánh"),
+      addressPronouns: c.addressPronouns || c.address_pronouns || (c.gender === "Nữ" ? "Xưng: Huynh - Muội (Sư huynh - Muội muội)" : "Xưng: Ta - Ngươi / Ta - Hắn"),
+      personality: Array.isArray(c.personality) ? c.personality.join(", ") : String(c.personality || "Quyết đoán"),
+      appearance: cleanApp || "Thần thái kiên định, dáng người nhã nhặn",
+      goal: extractedGoal || "Khám phá thế giới và đạt đỉnh cao sức mạnh",
+      clothing: c.clothing || `Cảnh giới: ${c.realm || "Khởi Đầu"} • Vị trí: ${c.location || "Vùng Khởi Đầu"}`,
+      voice: c.voice || (c.gender === "Nữ" ? "vi_female_hero" : "vi_male_hero"),
+      speakingStyle: c.speakingStyle || "Trang trọng",
+      locked: c.locked ?? true
+    };
+  };
+
   const handleCopyCharText = (char: Character, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const info = `[Tên: ${char.name}] (${char.alias})\nGiới tính: ${char.gender} | Tuổi: ${char.age}\nTính cách: ${char.personality}\nNgoại hình: ${char.appearance}\nTrang phục/Cảnh giới: ${char.clothing}\nGiọng đọc: ${char.voice} | Phong cách: ${char.speakingStyle}`;
+    const info = `[Tên: ${char.name}] (${char.alias})\nGiới tính: ${char.gender} | Tuổi: ${char.age}\nMối quan hệ: ${char.relationship || 'N/A'}\nCách xưng hô: ${char.addressPronouns || 'N/A'}\nTính cách: ${char.personality}\nNgoại hình: ${char.appearance}\nMục tiêu: ${char.goal || 'N/A'}\nTrang phục/Cảnh giới: ${char.clothing}\nGiọng đọc: ${char.voice} | Phong cách: ${char.speakingStyle}`;
     navigator.clipboard.writeText(info);
     setCopiedCharId(char.id);
     setCopiedType('text');
@@ -74,8 +106,11 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
     const body = characters.map((char, index) => (
       `[${index + 1}] ${char.name} (${char.alias || 'Chưa rõ'})\n` +
       `  • Giới tính: ${char.gender} | Tuổi: ${char.age}\n` +
+      `  • Mối quan hệ: ${char.relationship || 'N/A'}\n` +
+      `  • Cách xưng hô: ${char.addressPronouns || 'N/A'}\n` +
       `  • Tính cách: ${char.personality}\n` +
-      `  • Ngoại hình/Mục tiêu: ${char.appearance}\n` +
+      `  • Ngoại hình: ${char.appearance}\n` +
+      `  • Mục tiêu: ${char.goal || 'N/A'}\n` +
       `  • Cảnh giới/Vị trí: ${char.clothing}\n` +
       `  • Mẫu giọng: ${char.voice} (${char.speakingStyle})`
     )).join('\n\n');
@@ -93,40 +128,35 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
   };
 
   React.useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(async data => {
-        if (data && data.characters && Array.isArray(data.characters) && data.characters.length > 0) {
-          setCharacters(data.characters);
-        } else {
-          try {
-            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
-            if (rawBible) {
-              const bible = JSON.parse(rawBible);
-              if (bible.characters && Array.isArray(bible.characters) && bible.characters.length > 0) {
-                const formatted = bible.characters.map((c: any, idx: number) => ({
-                  id: c.id || `char_${String(idx + 1).padStart(3, '0')}`,
-                  name: c.name || "Nhân vật",
-                  alias: c.alias || c.role || c.realm || "Khởi Đầu",
-                  gender: c.gender || "Nam",
-                  age: String(c.age || (19 + (idx * 4) % 20)),
-                  personality: Array.isArray(c.personality) ? c.personality.join(", ") : String(c.personality || "Quyết đoán"),
-                  appearance: c.appearance || `Mục tiêu: ${c.goal || "Khám phá thế giới"}`,
-                  clothing: c.clothing || `Cảnh giới: ${c.realm || "Khởi Đầu"} • Vị trí: ${c.location || "Vùng Khởi Đầu"}`,
-                  voice: c.voice || (c.gender === "Nữ" ? "vi_female_hero" : "vi_male_hero"),
-                  speakingStyle: c.speakingStyle || "Trang trọng",
-                  locked: c.locked ?? true
-                }));
-                setCharacters(formatted);
-                return;
+    const loadData = () => {
+      if (projectDir) {
+        PythonEngineService.readProjectJson(projectDir).then(async data => {
+          if (data && data.characters && Array.isArray(data.characters) && data.characters.length > 0) {
+            const formatted = data.characters.map((c: any, idx: number) => formatCharData(c, idx));
+            setCharacters(formatted);
+          } else {
+            try {
+              const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+              if (rawBible) {
+                const bible = JSON.parse(rawBible);
+                if (bible.characters && Array.isArray(bible.characters) && bible.characters.length > 0) {
+                  const formatted = bible.characters.map((c: any, idx: number) => formatCharData(c, idx));
+                  setCharacters(formatted);
+                  return;
+                }
               }
-            }
-          } catch (e) {}
+            } catch (e) {}
+            setCharacters([]);
+          }
+        }).catch(() => {
           setCharacters([]);
-        }
-      }).catch(() => {
-        setCharacters([]);
-      });
-    }
+        });
+      }
+    };
+
+    loadData();
+    window.addEventListener('story_data_updated', loadData);
+    return () => window.removeEventListener('story_data_updated', loadData);
   }, [projectDir]);
 
   const saveCharactersToProject = async (newChars: Character[]) => {
@@ -159,43 +189,21 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
 
   const handleRegenerateCharacters = async () => {
     if (!projectDir) return;
-    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại toàn bộ dàn nhân vật cho dự án không?')) return;
+    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại duy nhất dàn nhân vật cho dự án không?')) return;
     setIsRegenerating(true);
-    setRegenStatus('Đang chạy Python Engine & AI Qwen 2.5 tạo lại dàn nhân vật...');
+    setRegenStatus('Đang chạy AI Qwen 2.5 tái tạo duy nhất Dàn Nhân Vật (Step 1C)...');
     try {
-      const projJson = await PythonEngineService.readProjectJson(projectDir);
-      let idea = projJson?.story_idea || projJson?.idea || {};
-      if (!idea || !idea.title) {
-        idea = {
-          title: projJson?.name || "Kịch Bản Mới",
-          genre: projJson?.genre || "Hành động viễn tưởng",
-          protagonist: projJson?.characters?.[0] ? { name: projJson.characters[0].name, background: "Nhân vật chính" } : { name: "Diệp Phàm", background: "Nhân vật chính" },
-          total_chapters: projJson?.total_chapters || 100
-        };
-      }
-
-      const bible = await PythonEngineService.initializeNovel(projectDir, idea);
+      const res = await PythonEngineService.regenerateCharacters(projectDir);
       const updatedProj = await PythonEngineService.readProjectJson(projectDir);
 
       if (updatedProj && updatedProj.characters && Array.isArray(updatedProj.characters) && updatedProj.characters.length > 0) {
-        setCharacters(updatedProj.characters);
-      } else if (bible && bible.characters && Array.isArray(bible.characters)) {
-        const formatted = bible.characters.map((c: any, idx: number) => ({
-          id: c.id || `char_${String(idx + 1).padStart(3, '0')}`,
-          name: c.name || `Nhân vật ${idx + 1}`,
-          alias: c.alias || c.role || c.realm || "Khởi Đầu",
-          gender: c.gender || (idx % 2 === 0 ? "Nam" : "Nữ"),
-          age: String(c.age || (19 + (idx * 4) % 25)),
-          personality: Array.isArray(c.personality) ? c.personality.join(", ") : String(c.personality || "Quyết đoán"),
-          appearance: c.appearance || `Mục tiêu: ${c.goal || "Khám phá thế giới"}`,
-          clothing: c.clothing || `Cảnh giới: ${c.realm || "Khởi Đầu"} • Vị trí: ${c.location || "Vùng Khởi Đầu"}`,
-          voice: c.voice || (c.gender === "Nữ" ? "vi_female_hero" : "vi_male_hero"),
-          speakingStyle: c.speakingStyle || "Trang trọng",
-          locked: false
-        }));
+        const formatted = updatedProj.characters.map((c: any, idx: number) => formatCharData(c, idx));
+        setCharacters(formatted);
+      } else if (Array.isArray(res) && res.length > 0) {
+        const formatted = res.map((c: any, idx: number) => formatCharData(c, idx));
         saveCharactersToProject(formatted);
       }
-      setRegenStatus('Tái tạo dàn nhân vật bằng AI thành công!');
+      setRegenStatus('Tái tạo duy nhất dàn nhân vật bằng AI thành công!');
       setTimeout(() => setRegenStatus(null), 3000);
     } catch (e: any) {
       console.error("Lỗi khi tái tạo dữ liệu nhân vật:", e);
@@ -415,8 +423,24 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
                 </div>
 
                 <div className="space-y-1.5 text-xs text-slate-300 pt-2 border-t border-white/5">
-                  <p className="line-clamp-2"><strong className="text-slate-500">Personality:</strong> {char.personality}</p>
-                  <p className="line-clamp-2"><strong className="text-slate-500">Appearance:</strong> {char.appearance}</p>
+                  <p className="line-clamp-1"><strong className="text-slate-500">Vai trò:</strong> {char.alias}</p>
+                  {char.relationship && (
+                    <p className="line-clamp-1 text-purple-300 font-medium">
+                      <strong className="text-slate-500 font-normal">Quan hệ:</strong> {char.relationship}
+                    </p>
+                  )}
+                  {char.addressPronouns && (
+                    <p className="line-clamp-1 text-emerald-300 font-mono text-[11px]">
+                      <strong className="text-slate-500 font-normal font-sans">Xưng hô:</strong> {char.addressPronouns}
+                    </p>
+                  )}
+                  <p className="line-clamp-1"><strong className="text-slate-500">Tính cách:</strong> {char.personality}</p>
+                  <p className="line-clamp-1"><strong className="text-slate-500">Ngoại hình:</strong> {char.appearance}</p>
+                  {char.goal && (
+                    <p className="line-clamp-1 text-amber-300 font-medium">
+                      <strong className="text-slate-500 font-normal">Mục tiêu:</strong> {char.goal}
+                    </p>
+                  )}
                   <div className="pt-2 flex items-center justify-between text-[11px]">
                     <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
                       <Mic size={10} /> {char.voice}
@@ -489,6 +513,30 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
                 </div>
               </div>
 
+              {/* RELATIONSHIP & ADDRESS PRONOUNS INPUTS */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-purple-300 font-semibold mb-1 block">Mối quan hệ chính</label>
+                  <input
+                    type="text"
+                    value={editingChar.relationship || ''}
+                    onChange={e => setEditingChar({ ...editingChar, relationship: e.target.value })}
+                    placeholder="Sư phụ Diệp Phàm, Đồng đội sát cánh..."
+                    className="w-full bg-[#0b0d10] border border-purple-500/30 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-emerald-300 font-semibold mb-1 block">Cách xưng hô (Pronouns)</label>
+                  <input
+                    type="text"
+                    value={editingChar.addressPronouns || ''}
+                    onChange={e => setEditingChar({ ...editingChar, addressPronouns: e.target.value })}
+                    placeholder="Xưng: Sư huynh - Muội muội, Ta - Ngươi..."
+                    className="w-full bg-[#0b0d10] border border-emerald-500/30 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-slate-400 font-semibold mb-1 block">Tính cách</label>
                 <input
@@ -499,14 +547,27 @@ export const CharacterBible: React.FC<CharacterBibleProps> = ({ projectDir, onSe
                 />
               </div>
 
-              <div>
-                <label className="text-slate-400 font-semibold mb-1 block">Ngoại hình / Mục tiêu</label>
-                <textarea
-                  rows={2}
-                  value={editingChar.appearance}
-                  onChange={e => setEditingChar({ ...editingChar, appearance: e.target.value })}
-                  className="w-full bg-[#0b0d10] border border-white/10 rounded-lg p-2 text-white custom-scrollbar focus:outline-none focus:border-cyan-500"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 font-semibold mb-1 block">Ngoại hình (Appearance)</label>
+                  <input
+                    type="text"
+                    value={editingChar.appearance}
+                    onChange={e => setEditingChar({ ...editingChar, appearance: e.target.value })}
+                    placeholder="Thần thái kiên định, dáng người phong trần..."
+                    className="w-full bg-[#0b0d10] border border-white/10 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-amber-300 font-semibold mb-1 block">Mục tiêu kịch bản (Goal)</label>
+                  <input
+                    type="text"
+                    value={editingChar.goal || ''}
+                    onChange={e => setEditingChar({ ...editingChar, goal: e.target.value })}
+                    placeholder="Mục tiêu lớn nhất của nhân vật..."
+                    className="w-full bg-[#0b0d10] border border-amber-500/30 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
 
               <div>

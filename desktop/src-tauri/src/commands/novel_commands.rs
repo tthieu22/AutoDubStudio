@@ -131,12 +131,12 @@ pub async fn start_story_import(window: Window, project_dir: String, chapters_js
 }
 
 #[tauri::command]
-pub async fn initialize_novel(window: Window, project_dir: String, idea: serde_json::Value) -> Result<serde_json::Value, String> {
+pub async fn initialize_novel(window: Window, project_dir: String, idea: serde_json::Value, resume: Option<bool>) -> Result<serde_json::Value, String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let python_path = find_python_path();
     let p_path = PathBuf::from(&project_dir);
 
-    let title_str = idea.get("title").and_then(|v| v.as_str()).unwrap_or("Hành Trình Mới").to_string();
+    let title_str = idea.get("title").and_then(|v| v.as_str()).unwrap_or("Kịch Bản Mới").to_string();
     let genre_str = idea.get("genre").and_then(|v| v.as_str()).unwrap_or("Hành động viễn tưởng").to_string();
     let style_str = idea.get("style").and_then(|v| v.as_str()).unwrap_or("Dễ đọc, tiết tấu nhanh").to_string();
     let chapters_str = idea.get("total_chapters").and_then(|v| v.as_i64()).unwrap_or(1000).to_string();
@@ -144,18 +144,23 @@ pub async fn initialize_novel(window: Window, project_dir: String, idea: serde_j
     let p_name = idea.get("protagonist").and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("Nhân vật chính").to_string();
     let p_bg = idea.get("protagonist").and_then(|p| p.get("background")).and_then(|v| v.as_str()).unwrap_or("Bối cảnh ban đầu").to_string();
 
+    let mut args_vec = vec![
+        "-m".to_string(), "autodub.cli".to_string(), "novel".to_string(), "init".to_string(),
+        "--project".to_string(), p_path.to_string_lossy().to_string(),
+        "--title".to_string(), title_str,
+        "--genre".to_string(), genre_str,
+        "--style".to_string(), style_str,
+        "--protagonist-name".to_string(), p_name,
+        "--protagonist-bg".to_string(), p_bg,
+        "--chapters".to_string(), chapters_str,
+    ];
+    if resume.unwrap_or(false) {
+        args_vec.push("--resume".to_string());
+    }
+
     let mut cmd = Command::new(&python_path);
     cmd.current_dir(ws_root.join("engine"))
-        .args(&[
-            "-m", "autodub.cli", "novel", "init",
-            "--project", &p_path.to_string_lossy(),
-            "--title", &title_str,
-            "--genre", &genre_str,
-            "--style", &style_str,
-            "--protagonist-name", &p_name,
-            "--protagonist-bg", &p_bg,
-            "--chapters", &chapters_str,
-        ])
+        .args(&args_vec)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -217,16 +222,33 @@ pub async fn initialize_novel(window: Window, project_dir: String, idea: serde_j
 }
 
 #[tauri::command]
-pub async fn generate_novel_master_plan(window: Window, project_dir: String) -> Result<serde_json::Value, String> {
+pub async fn generate_novel_master_plan(window: Window, project_dir: String, total_chapters: Option<i64>) -> Result<serde_json::Value, String> {
     let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
     let python_path = find_python_path();
     let p_path = PathBuf::from(&project_dir);
+
+    let chaps_str = if let Some(tc) = total_chapters {
+        tc.to_string()
+    } else {
+        let proj_file = p_path.join("project.json");
+        if proj_file.exists() {
+            fs::read_to_string(&proj_file)
+                .ok()
+                .and_then(|data| serde_json::from_str::<serde_json::Value>(&data).ok())
+                .and_then(|v| v.get("novel_idea").and_then(|i| i.get("total_chapters")).and_then(|c| c.as_i64()))
+                .unwrap_or(100)
+                .to_string()
+        } else {
+            "100".to_string()
+        }
+    };
 
     let mut cmd = Command::new(&python_path);
     cmd.current_dir(ws_root.join("engine"))
         .args(&[
             "-m", "autodub.cli", "novel", "plan",
             "--project", &p_path.to_string_lossy(),
+            "--chapters", &chaps_str,
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -474,4 +496,196 @@ pub async fn get_novel_plot_threads(project_dir: String) -> Result<serde_json::V
     }
 
     Ok(serde_json::json!([]))
+}
+
+#[tauri::command]
+pub async fn regenerate_novel_characters(window: Window, project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "regen-chars",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn novel regen-chars: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let win1 = window.clone();
+    let p_path1 = p_path.clone();
+    let t1 = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win1.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path1, &line_str);
+            }
+        }
+    });
+
+    let win2 = window.clone();
+    let p_path2 = p_path.clone();
+    let t2 = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path2, &line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("Wait failed: {}", e))?;
+    let _ = t1.join();
+    let _ = t2.join();
+
+    if status.success() {
+        let p_json = p_path.join("project.json");
+        if p_json.exists() {
+            if let Ok(content) = fs::read_to_string(&p_json) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(chars) = val.get("characters") {
+                        return Ok(chars.clone());
+                    }
+                }
+            }
+        }
+        Ok(serde_json::json!({ "status": "SUCCESS" }))
+    } else {
+        Err("Regenerate characters failed".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn regenerate_novel_world(window: Window, project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "regen-world",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn novel regen-world: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let win1 = window.clone();
+    let p_path1 = p_path.clone();
+    let t1 = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win1.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path1, &line_str);
+            }
+        }
+    });
+
+    let win2 = window.clone();
+    let p_path2 = p_path.clone();
+    let t2 = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path2, &line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("Wait failed: {}", e))?;
+    let _ = t1.join();
+    let _ = t2.join();
+
+    if status.success() {
+        let p_json = p_path.join("project.json");
+        if p_json.exists() {
+            if let Ok(content) = fs::read_to_string(&p_json) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(lore) = val.get("world_lore") {
+                        return Ok(lore.clone());
+                    }
+                }
+            }
+        }
+        Ok(serde_json::json!({ "status": "SUCCESS" }))
+    } else {
+        Err("Regenerate world failed".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn regenerate_novel_rules(window: Window, project_dir: String) -> Result<serde_json::Value, String> {
+    let ws_root = find_workspace_root().ok_or("Workspace root not found")?;
+    let python_path = find_python_path();
+    let p_path = PathBuf::from(&project_dir);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.current_dir(ws_root.join("engine"))
+        .args(&[
+            "-m", "autodub.cli", "novel", "regen-rules",
+            "--project", &p_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn novel regen-rules: {}", e))?;
+    let stdout = child.stdout.take().ok_or("Failed to open stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to open stderr")?;
+
+    let win1 = window.clone();
+    let p_path1 = p_path.clone();
+    let t1 = thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win1.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path1, &line_str);
+            }
+        }
+    });
+
+    let win2 = window.clone();
+    let p_path2 = p_path.clone();
+    let t2 = thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line_str) = line {
+                let _ = win2.emit("pipeline://log", &line_str);
+                append_novel_log(&p_path2, &line_str);
+            }
+        }
+    });
+
+    let status = child.wait().map_err(|e| format!("Wait failed: {}", e))?;
+    let _ = t1.join();
+    let _ = t2.join();
+
+    if status.success() {
+        let p_json = p_path.join("project.json");
+        if p_json.exists() {
+            if let Ok(content) = fs::read_to_string(&p_json) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(mems) = val.get("story_memories") {
+                        return Ok(mems.clone());
+                    }
+                }
+            }
+        }
+        Ok(serde_json::json!({ "status": "SUCCESS" }))
+    } else {
+        Err("Regenerate rules failed".to_string())
+    }
 }

@@ -51,7 +51,7 @@ def main():
 
     # novel <action> [--project <dir>] ...
     novel_sp = subparsers.add_parser("novel", help="AI Novel Engine commands")
-    novel_sp.add_argument("action", choices=["init", "plan", "write", "status"], help="Novel action")
+    novel_sp.add_argument("action", choices=["init", "plan", "write", "status", "regen-chars", "regen-world", "regen-rules"], help="Novel action")
     novel_sp.add_argument("--project", default="stories/novel_001", help="Story project directory path")
     novel_sp.add_argument("--title", default="Hành Trình Mới", help="Novel title")
     novel_sp.add_argument("--genre", default="Hành động viễn tưởng", help="Novel genre")
@@ -61,6 +61,7 @@ def main():
     novel_sp.add_argument("--chapters", type=int, default=1000, help="Total chapters")
     novel_sp.add_argument("--start", type=int, default=1, help="Start chapter number")
     novel_sp.add_argument("--end", type=int, default=100, help="End chapter number")
+    novel_sp.add_argument("--resume", action="store_true", help="Resume uncompleted novel initialization")
 
     # run <project_or_job> [--force] [--stop-at <stage>]
     run_sp = subparsers.add_parser("run", help="Run full pipeline for a project or job")
@@ -467,7 +468,8 @@ def main():
                         enable_tiktok_slang=enable_tiktok_slang,
                         protagonist=protagonist_data if protagonist_data else {"name": "Nhân vật chính"}
                     )
-                    bible = engine.initialize_story(idea)
+                    is_resume = bool(getattr(args, "resume", False))
+                    bible = engine.initialize_story(idea, resume=is_resume)
                     print(f"[SUCCESS] Đã tạo xong Story Bible & Hồ sơ thế giới thành công cho '{args.title}'!", flush=True)
 
                 elif args.action == "plan":
@@ -480,6 +482,21 @@ def main():
                     def _cli_cb(evt):
                         print(json.dumps(evt, ensure_ascii=False), flush=True)
                     engine.run_auto(start_chapter=args.start, end_chapter=args.end, progress_callback=_cli_cb)
+
+                elif args.action == "regen-chars":
+                    print(f"[INFO] === TÁI TẠO DUY NHẤT DÀN NHÂN VẬT (STEP 1C) ===", flush=True)
+                    chars = engine.story_planner.regenerate_characters_only()
+                    print(json.dumps({"success": True, "count": len(chars), "characters": chars}, ensure_ascii=False))
+
+                elif args.action == "regen-world":
+                    print(f"[INFO] === TÁI TẠO DUY NHẤT BỐI CẢNH THẾ GIỚI (STEP 1A) ===", flush=True)
+                    w_data = engine.story_planner.regenerate_world_only()
+                    print(json.dumps({"success": True, "world": w_data}, ensure_ascii=False))
+
+                elif args.action == "regen-rules":
+                    print(f"[INFO] === TÁI TẠO DUY NHẤT QUY TẮC & KÝ ỨC (STEP 1D) ===", flush=True)
+                    rules = engine.story_planner.regenerate_rules_only()
+                    print(json.dumps({"success": True, "count": len(rules), "memories": rules}, ensure_ascii=False))
 
                 elif args.action == "status":
                     facts = engine.db.get_canon_facts(p_dir.name, limit=10)

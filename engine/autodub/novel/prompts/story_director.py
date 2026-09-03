@@ -77,7 +77,7 @@ CẤU TRÚC JSON MẪU:
   "world": {{
     "continent_name": "Tên thế giới / đại lục / hành tinh chính",
     "factions": [
-      "Thế lực khởi đầu / Tông môn chính",
+      "Thế lực khởi đầu / Tổ chức chính",
       "Tổ chức phản diện / Ngầm"
     ],
     "locations": [
@@ -140,8 +140,8 @@ THÔNG TIN NHÂN VẬT CHÍNH:
 - Thân thế khởi đầu: {p_bg}
 
 QUY TẮC SÁNG TẠO HỆ THỐNG MỞ (EXTENSIBLE):
-1. Sáng tạo tên đại lục / thế giới / hành tinh mới mẻ, hấp dẫn.
-2. Sáng tạo {targets['factions_count']}.
+1. Sáng tạo tên đại lục / thế giới / hành tinh mới mẻ, hấp dẫn phù hợp thể loại '{idea.genre}'.
+2. Sáng tạo {targets['factions_count']}. CẤM sử dụng các thuật ngữ cổ trang/tiên hiệp (như 'tông môn', 'trúc cơ') nếu thể loại KHÔNG PHẢI Tiên hiệp/Tu tiên.
 3. Sáng tạo {targets['locations_count']}.
 4. ĐẢM BẢO CẤU TRÚC MỞ: Bối cảnh thế giới quan được thiết kế có thể dễ dàng mở rộng sang các đại lục/thượng giới mới khi bộ truyện phát triển vượt mốc {total_chaps} chương.
 5. TOÀN BỘ NỘI DUNG VIẾT BẰNG TIẾNG VIỆT 100%.
@@ -155,9 +155,9 @@ CẤU TRÚC JSON MẪU:
 {{
   "premise": "Tóm tắt ngắn gọn 2-3 câu về cốt truyện chủ đạo và bước ngoặt khởi đầu của {p_name}",
   "world": {{
-    "continent_name": "Tên thế giới / đại lục chính",
+    "continent_name": "Tên thế giới / đại lục / hành tinh chính",
     "factions": [
-      "Thế lực khởi đầu / Tông môn chính",
+      "Thế lực khởi đầu / Tổ chức chính",
       "Tổ chức phản diện / Ngầm"
     ],
     "locations": [
@@ -259,12 +259,19 @@ THÔNG TIN ĐÃ TẠO TỪ STEP 1A & 1B:
 QUY TẮC BẮT BUỘC & TÍNH TOÁN DỮ LIỆU:
 1. Sáng tạo {targets['chars_desc']} (Bao gồm Cả Nam & Nữ: Đồng đội, Nữ chính, Phản diện, Sư phụ/Tiền bối, Đối thủ cạnh tranh).
 2. CẤM TRÙNG TÊN: MỖI NHÂN VẬT BẮT BUỘC PHẢI CÓ TÊN RIÊNG ĐỘC NHẤT (UNIQUE NAME). Tuyệt đối CẤM tạo 2 nhân vật cùng tên hoặc lặp lại họ tên (Ví dụ: CẤM tạo 2 nhân vật cùng tên 'Thiên Phong').
-3. ĐA DẠNG HÓA VAI TRÒ & ĐỘ TUỔI: Độ tuổi (18, 25, 45, 60,...), vai trò (Nữ chính, Phản diện, Sư phụ, Bằng hữu, Trưởng lão...), tính cách và bối cảnh của mỗi nhân vật phải hoàn toàn khác biệt. CẤM để tất cả nhân vật có cùng 1 tuổi hay mô tả giống hệt nhau.
-4. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Tạo các tuyến nhân vật có tiềm năng phát triển lâu dài, mở đường cho việc bổ sung thêm các nhân vật phụ ở từng Arc trong tương lai.
-5. Cảnh giới (`realm`) của mỗi nhân vật PHẢI sử dụng đúng tên các cấp độ sức mạnh vừa tạo ({rank_str}).
-6. Nhân vật chính BẮT BUỘC là: '{p_name}' ({p_bg}).
-7. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
-8. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
+3. ĐA DẠNG HÓA NGOẠI HÌNH, TÍNH CÁCH & VÓC DÁNG (ĐẶC BIỆT NGHÊM NGẶT):
+   - Ngoại hình (`appearance`): CẤM DÙNG CHUNG KHUÔN MẪU! Mỗi nhân vật BẮT BUỘC phải có nét vóc dáng, gương mặt, kiểu tóc và thần thái riêng biệt phù hợp độ tuổi/vai trò (Ví dụ: Nhân vật chính nam trẻ: "Dáng người thon gọn, lông mày sắc nét"; Sư phụ: "Tóc bạc phơ, tiên phong đạo cốt, gương mặt từ hòa"; Phản diện: "Khuôn mặt góc cạnh thâm trầm, ánh mắt lạnh lẽo thâm sâu"; Nữ chính: "Khuôn mặt trái xoan, dáng người thanh tú, nụ cười rạng rỡ"). CẤM lặp lại cụm từ 'Thân hình cao lớn, ánh mắt sắc bén' cho nhiều nhân vật.
+   - Tính cách (`personality`): CẤM LẶP TỪ TRONG MẢNG! 3 từ tính cách của mỗi nhân vật phải KHÁC NHAU HOÀN TOÀN (Tuyệt đối CẤM lặp 'Cố chấp, Cố chấp, Cố chấp').
+4. MỐI QUAN HỆ & XƯNG HÔ PHÂN BIỆT RÕ RÀNG: Mỗi nhân vật PHẢI có thuộc tính `relationship` và `address_pronouns` chính xác theo vị thế:
+   - Sư phụ xưng với đồ đệ: "Vi sư - Đồ nhi" / "Tiền bối - Vãn bối"
+   - Nữ chính / Đồng đội xưng với nhân vật chính: "Huynh - Muội" / "Sư huynh - Muội muội"
+   - Phản diện / Kẻ thù xưng với nhân vật chính: "Ta - Ngươi" / "Lão tử - Ngươi" / "Ta - Hắn"
+   - CẤM tạo xưng hô vô nghĩa như "Sư huynh (Sư huynh)".
+5. NGUYÊN TẮC HỆ THỐNG MỞ (EXTENSIBLE): Tạo các tuyến nhân vật có tiềm năng phát triển lâu dài, mở đường cho việc bổ sung thêm các nhân vật phụ ở từng Arc trong tương lai.
+6. Cảnh giới (`realm`) của mỗi nhân vật PHẢI sử dụng đúng tên các cấp độ sức mạnh vừa tạo ({rank_str}).
+7. Nhân vật chính BẮT BUỘC là: '{p_name}' ({p_bg}).
+8. Tên nhân vật phải tự nhiên, hợp thể loại '{idea.genre}'. CẤM dùng các từ giữ chỗ 'Tính cách 1', 'Địa danh 1'.
+9. TOÀN BỘ VIẾT BẰNG TIẾNG VIỆT 100%.
 
 [OUTPUT CONTRACT - STRICT RAW JSON ONLY]
 - Trả về DUY NHẤT 1 Mảng JSON (JSON Array) hợp lệ.
@@ -279,8 +286,10 @@ CẤU TRÚC JSON MẪU:
     "gender": "Nam",
     "age": "21",
     "role": "Nhân vật chính",
+    "relationship": "Nhân vật trung tâm của câu chuyện",
+    "address_pronouns": "Xưng: Ta - Hắn / Ta - Ngươi",
     "personality": ["Điềm tĩnh", "Thông minh", "Quyết đoán"],
-    "appearance": "Thân hình thon gọn, ánh mắt sắc bén, thần thái kiên định",
+    "appearance": "Dáng người thon gọn, phong thái kiên định, ánh mắt sáng như sao",
     "clothing": "Y phục thanh nhã phong trần",
     "goal": "Mục tiêu lớn nhất của {p_name}",
     "realm": "Cấp độ 1 Khởi Đầu",
@@ -294,14 +303,50 @@ CẤU TRÚC JSON MẪU:
     "gender": "Nữ",
     "age": "19",
     "role": "Nữ chính / Đồng đội",
-    "personality": ["Sắc sảo", "Thông minh", "Trung thành"],
-    "appearance": "Dáng người thanh tú, ánh mắt rạng rỡ",
+    "relationship": "Nữ đồng đội sinh tử có nhau với {p_name}",
+    "address_pronouns": "Xưng với {p_name}: Huynh - Muội (Sư huynh - Muội muội)",
+    "personality": ["Sắc sảo", "Mưu trí", "Trung thành"],
+    "appearance": "Khuôn mặt trái xoan thanh tú, làn da trắng nõn, đôi mắt trong veo",
     "clothing": "Váy lụa xanh biếc nhã nhặn",
     "goal": "Sát cánh hỗ trợ {p_name}",
     "realm": "Cấp độ 1 Khởi Đầu",
     "location": "Vị trí khởi đầu",
     "known_information": ["Gia thế đồng đội"],
     "secrets": ["Bí mật gia thế / Manh mối cổ"]
+  }},
+  {{
+    "id": "char_003",
+    "name": "Trần Thanh Phong",
+    "gender": "Nam",
+    "age": "55",
+    "role": "Sư phụ / Tiền bối",
+    "relationship": "Sư phụ hướng dẫn và chỉ điểm võ học cho {p_name}",
+    "address_pronouns": "Xưng với {p_name}: Vi sư - Đồ nhi (Tiền bối - Vãn bối)",
+    "personality": ["Trí tuệ", "Uy nghiêm", "Thâm trầm"],
+    "appearance": "Mái tóc điểm bạc phơ, râu dài che ngực, dáng vẻ tiên phong đạo cốt",
+    "clothing": "Đạo bào xám cổ kính rộng thùng thình",
+    "goal": "Đào tạo {p_name} trở thành cao thủ thế hệ mới",
+    "realm": "Cấp độ 3 Đột Phá",
+    "location": "Tông môn / Sư môn",
+    "known_information": ["Bí mật thế giới cổ"],
+    "secrets": ["Vết thương ẩn giấu từ quá khứ"]
+  }},
+  {{
+    "id": "char_004",
+    "name": "Lưu Triệt",
+    "gender": "Nam",
+    "age": "26",
+    "role": "Phản diện / Kẻ thù",
+    "relationship": "Đối thủ tranh chấp tài nguyên và là kẻ thù của {p_name}",
+    "address_pronouns": "Xưng với {p_name}: Ta - Ngươi / Lão tử - Ngươi",
+    "personality": ["Ngông cuồng", "Hiếu chiến", "Nham hiểm"],
+    "appearance": "Khuôn mặt góc cạnh lạnh lẽo, vết sẹo mờ ở đuôi mắt, ánh mắt nham hiểm",
+    "clothing": "Áo gấm thêu kim tuyến xa hoa",
+    "goal": "Tiêu diệt {p_name} và chiếm đoạt gia sản",
+    "realm": "Cấp độ 2 Tiến Bổn",
+    "location": "Thành thị chính",
+    "known_information": ["Mạng lưới thế lực ngầm"],
+    "secrets": ["Cấu kết với thế lực tà đạo"]
   }}
 ]
 """

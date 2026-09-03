@@ -123,8 +123,9 @@ BẢN ĐỒ THẾ GIỚI QUAN (STORY BIBLE CONTEXT):
 {prev_summary}
 QUY TẮC SÁNG TẠO TỰA ĐỀ VÀ NỘI DUNG (BẮT BUỘC):
 1. TỰA ĐỀ ARC (`title`):
-   - CẤM TUYỆT ĐỐI đặt tựa đề lặp đi lặp lại hoặc dùng từ chung chung như: "Đấu trường mới", "Đấu trường nguy hiểm", "Đấu trường mới hơn", "Đấu trường phức tạp", "Đấu trường thách thức".
-   - Mỗi Tựa đề Arc PHẢI độc nhất, mang tính tiểu thuyết lôi cuốn, kết hợp địa danh/thế lực/cảnh giới/bí mật cụ thể từ bối cảnh (Ví dụ: "Arc {batch_start:02d} — Tân Thủ Làng Sóng Gió", "Arc {batch_start+1:02d} — Khảo Nghiệm Thiên Đô Tông", "Arc {batch_start+2:02d} — Trạm Vũ Trụ Hắc Ám Biến Cố").
+   - CẤM TUYỆT ĐỐI đặt tựa đề lặp đi lặp lại hoặc chép lại tựa đề của Arc 1 cho Arc 2, 3, 4, 5.
+   - CẤM dùng tựa đề chung chung như: "Thăng Đường Thân Vực", "Đấu trường mới", "Đấu trường nguy hiểm".
+   - Mỗi Tựa đề Arc PHẢI độc nhất, mang tính tiểu thuyết lôi cuốn, kết hợp địa danh/thế lực/cảnh giới/bí mật cụ thể từ bối cảnh (Ví dụ: Arc 01: "Tân Thủ Làng Sóng Gió", Arc 02: "Khảo Nghiệm Thiên Đô Tông", Arc 03: "Trạm Vũ Trụ Hắc Ám Biến Cố").
 
 2. CHI TIẾT KỊCH BẢN (goal, conflict, major_reveal, character_development):
    - Bám sát tiến trình thăng tiến:
@@ -134,16 +135,30 @@ QUY TẮC SÁNG TẠO TỰA ĐỀ VÀ NỘI DUNG (BẮT BUỘC):
    - CẤM dùng văn mẫu mơ hồ ("gặp nhiều khó khăn", "đối mặt cuộc chiến lớn"). PHẢI nêu rõ xung đột là gì, đối thủ là ai, bí mật tiết lộ là gì!
    - 100% TIẾNG VIỆT MƯỢT MÀ.
 
-3. CẤU TRÚC ĐẦU RA (MẢNG JSON THUẦN TÚY [{batch_count} objects]):
+3. CẤU TRÚC ĐẦU RA (MẢNG JSON THUẦN TÚY CÓ {batch_count} OBJECTS):
+- Trả về Mảng JSON chứa đúng {batch_count} Arc objects, bắt đầu bằng '[' và kết thúc bằng ']'.
+- Nếu mô hình trả về JSON Object, hãy đặt mảng dưới key "arcs": [...]
+
+MẪU ĐẦU RA MẢNG JSON ({batch_count} Arcs có tựa đề và mục tiêu KHÁC NHAU HOÀN TOÀN):
 [
   {{
     "arc_num": {batch_start},
-    "title": "Arc {batch_start:02d} — [Tựa Đề Độc Nhất Sáng Tạo]",
+    "title": "Arc {batch_start:02d} — Tân Thủ Xuất Sơn Trảm Sóng Gió",
     "start_chapter": {start_chapter},
     "end_chapter": {start_chapter + chaps_per_arc - 1},
-    "goal": "Mục tiêu cụ thể của Diệp Phàm",
-    "conflict": "Xung đột cụ thể với nhân vật/thế lực",
-    "major_reveal": "Bí mật hoặc phát hiện quan trọng",
-    "character_development": "Sự trưởng thành về tâm lý/kỹ năng"
+    "goal": "Diệp Phàm thích nghi với hệ thống và gia nhập thế lực khởi đầu",
+    "conflict": "Bị phản diện phe cánh chèn ép và khiêu khích",
+    "major_reveal": "Phát hiện hệ thống có thể quy đổi tài sản thành tu vi",
+    "character_development": "Học cách giữ bình tĩnh và lập chiến lược đối phó kẻ địch"
+  }},
+  {{
+    "arc_num": {batch_start + 1},
+    "title": "Arc {batch_start+1:02d} — Tranh Đoạt Linh Mạch Thiên Đô Tông",
+    "start_chapter": {start_chapter + chaps_per_arc},
+    "end_chapter": {min((batch_start + 1) * chaps_per_arc, total_chapters)},
+    "goal": "Đột phá cảnh giới cấp 2 và giành suất đệ tử nội môn",
+    "conflict": "Đối đầu với Đại trưởng lão phe cánh ngầm",
+    "major_reveal": "Phát hiện bí mật linh mạch bị phong ấn bên dưới tông môn",
+    "character_development": "Thu phục đồng minh đầu tiên và xây dựng thế lực"
   }}
 ]"""

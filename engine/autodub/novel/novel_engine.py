@@ -392,8 +392,8 @@ class NovelEngine:
     # ══════════════════════════════════════════════════════════════
     # PHASE A: INITIALIZATION & MASTER PLAN
     # ══════════════════════════════════════════════════════════════
-    def initialize_story(self, idea: StoryIdea) -> StoryBible:
-        return self.story_planner.initialize_story(idea)
+    def initialize_story(self, idea: StoryIdea, resume: bool = True) -> StoryBible:
+        return self.story_planner.initialize_story(idea, resume=resume)
 
     def generate_master_plan(self, total_chapters: int = 1000) -> List[ArcPlan]:
         return self.story_planner.generate_master_plan(total_chapters)

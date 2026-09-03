@@ -81,7 +81,8 @@ def validate_genre_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
     genre_lower = (idea.genre or "").lower()
     xianxia_genres = [
         "tiên hiệp", "huyền huyễn", "tu tiên", "tiên đế", "xuyên không",
-        "cổ đại", "kiếm hiệp", "võ lâm", "hệ thống", "trùng sinh", "dị thế", "dị năng"
+        "cổ đại", "kiếm hiệp", "võ lâm", "hệ thống", "trùng sinh", "dị thế", "dị năng",
+        "hành động", "phiêu lưu", "giả tưởng", "mạt thế", "đô thị"
     ]
     is_xianxia = any(xg in genre_lower for xg in xianxia_genres)
 
@@ -92,6 +93,21 @@ def validate_genre_integrity(res: Any, idea: StoryIdea) -> Tuple[bool, str]:
     found = [ft for ft in FORBIDDEN_GENRE_TERMS if ft in res_str]
 
     if found:
+        # Auto-cleanse prompt template leakage terms if present
+        if isinstance(res, dict) or isinstance(res, list):
+            try:
+                res_json = json.dumps(res, ensure_ascii=False)
+                res_json = res_json.replace("tông môn", "tổ chức").replace("Tông môn", "Tổ chức")
+                cleaned = json.loads(res_json)
+                if isinstance(res, dict):
+                    res.clear()
+                    res.update(cleaned)
+                elif isinstance(res, list):
+                    res.clear()
+                    res.extend(cleaned)
+                return True, ""
+            except Exception:
+                pass
         return False, f"Genre integrity error for '{idea.genre}': found forbidden Xianxia terms {found}"
 
     return True, ""

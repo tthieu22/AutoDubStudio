@@ -301,7 +301,7 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
           onDeleteChapter={handleDeleteChapter}
         />
 
-        {selectedChap && (
+        {selectedChap ? (
           <ChapterEditorPanel
             selectedChap={selectedChap}
             isEditing={isEditing}
@@ -328,6 +328,46 @@ export const StoryWorkspace: React.FC<StoryWorkspaceProps> = ({ projectDir }) =>
             onClose={() => setSelectedChapId('')}
             onDeleteChapter={handleDeleteChapter}
           />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl bg-[#111318]/50 p-8 text-center space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 shadow-lg shadow-cyan-500/10">
+              <BookOpen size={24} />
+            </div>
+            <div className="max-w-md space-y-1.5">
+              <h3 className="text-base font-bold text-white font-['Outfit']">
+                Chưa Có Nội Dung Chương
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Thế giới quan và Master Plan (Arcs) đã sẵn sàng! Nội dung kịch bản chi tiết từng chương sẽ tự động xuất hiện tại đây khi AI bắt đầu tiến trình viết chương (Chapter Writer).
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <Download size={14} /> Import Truyện Có Sẵn
+              </button>
+              <button
+                onClick={() => {
+                  const newChap: Chapter = {
+                    id: `chap-${Date.now()}`,
+                    chapterNumber: chapters.length + 1,
+                    title: `Chapter ${chapters.length + 1}`,
+                    summary: 'Chapter summary text...',
+                    characters: ['AutoDetect'],
+                    scenesCount: 0,
+                    content: ''
+                  };
+                  saveChaptersToProject([...chapters, newChap]);
+                  handleSelectChapter(newChap);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <Plus size={14} /> Tự Tạo Chương Mới
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

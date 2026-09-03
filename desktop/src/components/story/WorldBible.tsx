@@ -82,57 +82,63 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
   };
 
   React.useEffect(() => {
-    if (projectDir) {
-      PythonEngineService.readProjectJson(projectDir).then(async data => {
-        if (data && data.world_lore && Array.isArray(data.world_lore) && data.world_lore.length > 0) {
-          setEntities(data.world_lore);
-        } else {
-          try {
-            const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
-            if (rawBible) {
-              const bible = JSON.parse(rawBible);
-              const formatted: WorldEntity[] = [];
-              const worldInfo = bible.world || {};
-              (worldInfo.locations || []).forEach((loc: any, idx: number) => {
-                formatted.push({
-                  id: `w-loc-${idx}`,
-                  category: 'Location',
-                  name: typeof loc === 'string' ? loc : (loc.name || 'Địa Danh'),
-                  description: typeof loc === 'string' ? `Địa danh thuộc ${worldInfo.continent_name || 'bối cảnh'}` : (loc.description || ''),
-                  locked: true
+    const loadData = () => {
+      if (projectDir) {
+        PythonEngineService.readProjectJson(projectDir).then(async data => {
+          if (data && data.world_lore && Array.isArray(data.world_lore) && data.world_lore.length > 0) {
+            setEntities(data.world_lore);
+          } else {
+            try {
+              const rawBible = await PythonEngineService.readTextFile(`${projectDir}/story_bible.json`);
+              if (rawBible) {
+                const bible = JSON.parse(rawBible);
+                const formatted: WorldEntity[] = [];
+                const worldInfo = bible.world || {};
+                (worldInfo.locations || []).forEach((loc: any, idx: number) => {
+                  formatted.push({
+                    id: `w-loc-${idx}`,
+                    category: 'Location',
+                    name: typeof loc === 'string' ? loc : (loc.name || 'Địa Danh'),
+                    description: typeof loc === 'string' ? `Địa danh thuộc ${worldInfo.continent_name || 'bối cảnh'}` : (loc.description || ''),
+                    locked: true
+                  });
                 });
-              });
-              (worldInfo.factions || []).forEach((fac: any, idx: number) => {
-                formatted.push({
-                  id: `w-fac-${idx}`,
-                  category: 'Organization',
-                  name: typeof fac === 'string' ? fac : (fac.name || 'Thế Lực'),
-                  description: 'Thế lực chính trong thế giới',
-                  locked: true
+                (worldInfo.factions || []).forEach((fac: any, idx: number) => {
+                  formatted.push({
+                    id: `w-fac-${idx}`,
+                    category: 'Organization',
+                    name: typeof fac === 'string' ? fac : (fac.name || 'Thế Lực'),
+                    description: 'Thế lực chính trong thế giới',
+                    locked: true
+                  });
                 });
-              });
-              const ranks = bible.cultivation_system || (bible.progression_system?.ranks || []);
-              ranks.forEach((cs: any, idx: number) => {
-                formatted.push({
-                  id: `w-cs-${idx}`,
-                  category: 'Rule',
-                  name: `Cảnh Giới #${cs.rank || idx + 1}: ${cs.name}`,
-                  description: cs.description || 'Cấp độ sức mạnh',
-                  locked: true
+                const ranks = bible.cultivation_system || (bible.progression_system?.ranks || []);
+                ranks.forEach((cs: any, idx: number) => {
+                  formatted.push({
+                    id: `w-cs-${idx}`,
+                    category: 'Rule',
+                    name: `Cảnh Giới #${cs.rank || idx + 1}: ${cs.name}`,
+                    description: cs.description || 'Cấp độ sức mạnh',
+                    locked: true
+                  });
                 });
-              });
-              if (formatted.length > 0) {
-                setEntities(formatted);
-                return;
+                if (formatted.length > 0) {
+                  setEntities(formatted);
+                  return;
+                }
               }
-            }
-          } catch (e) {}
+            } catch (e) {}
+            setEntities([]);
+          }
+        }).catch(() => {
           setEntities([]);
-        }
-      }).catch(() => {
-        setEntities([]);
-      });
-    }
+        });
+      }
+    };
+
+    loadData();
+    window.addEventListener('story_data_updated', loadData);
+    return () => window.removeEventListener('story_data_updated', loadData);
   }, [projectDir]);
 
   const saveEntitiesToProject = async (newEntities: WorldEntity[]) => {
@@ -164,62 +170,19 @@ export const WorldBible: React.FC<WorldBibleProps> = ({ projectDir }) => {
 
   const handleRegenerateWorldLore = async () => {
     if (!projectDir) return;
-    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại toàn bộ Thế Giới Quan cho dự án không?')) return;
+    if (!confirm('Bạn có chắc muốn gọi AI Qwen 2.5 tái tạo lại duy nhất Thế Giới Quan cho dự án không?')) return;
     setIsRegenerating(true);
-    setRegenStatus('Đang chạy Python Engine & AI Qwen 2.5 tạo lại thế giới quan...');
+    setRegenStatus('Đang chạy AI Qwen 2.5 tái tạo duy nhất Thế Giới Quan (Step 1A)...');
     try {
-      const projJson = await PythonEngineService.readProjectJson(projectDir);
-      let idea = projJson?.story_idea || projJson?.idea || {};
-      if (!idea || !idea.title) {
-        idea = {
-          title: projJson?.name || "Kịch Bản Mới",
-          genre: projJson?.genre || "Hành động viễn tưởng",
-          protagonist: { name: "Diệp Phàm", background: "Nhân vật chính" },
-          total_chapters: projJson?.total_chapters || 100
-        };
-      }
-
-      const bible = await PythonEngineService.initializeNovel(projectDir, idea);
+      const res = await PythonEngineService.regenerateWorld(projectDir);
       const updatedProj = await PythonEngineService.readProjectJson(projectDir);
 
       if (updatedProj && updatedProj.world_lore && Array.isArray(updatedProj.world_lore) && updatedProj.world_lore.length > 0) {
         setEntities(updatedProj.world_lore);
-      } else if (bible) {
-        const formatted: WorldEntity[] = [];
-        const worldInfo = bible.world || {};
-        (worldInfo.locations || []).forEach((loc: any, idx: number) => {
-          formatted.push({
-            id: `w-loc-${idx}`,
-            category: 'Location',
-            name: typeof loc === 'string' ? loc : (loc.name || 'Địa Danh'),
-            description: typeof loc === 'string' ? `Địa danh thuộc ${worldInfo.continent_name || 'bối cảnh'}` : (loc.description || ''),
-            locked: false
-          });
-        });
-        (worldInfo.factions || []).forEach((fac: any, idx: number) => {
-          formatted.push({
-            id: `w-fac-${idx}`,
-            category: 'Organization',
-            name: typeof fac === 'string' ? fac : (fac.name || 'Thế Lực'),
-            description: 'Thế lực chính trong thế giới',
-            locked: false
-          });
-        });
-        const ranks = bible.cultivation_system || (bible.progression_system?.ranks || []);
-        ranks.forEach((cs: any, idx: number) => {
-          formatted.push({
-            id: `w-cs-${idx}`,
-            category: 'Rule',
-            name: `Cảnh Giới #${cs.rank || idx + 1}: ${cs.name}`,
-            description: cs.description || 'Cấp độ sức mạnh',
-            locked: false
-          });
-        });
-        if (formatted.length > 0) {
-          saveEntitiesToProject(formatted);
-        }
+      } else if (res && res.world_lore && Array.isArray(res.world_lore)) {
+        saveEntitiesToProject(res.world_lore);
       }
-      setRegenStatus('Tái tạo thế giới quan bằng AI thành công!');
+      setRegenStatus('Tái tạo duy nhất thế giới quan bằng AI thành công!');
       setTimeout(() => setRegenStatus(null), 3000);
     } catch (e: any) {
       console.error("Lỗi khi tái tạo dữ liệu thế giới quan:", e);

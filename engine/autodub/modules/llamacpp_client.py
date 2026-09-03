@@ -25,26 +25,47 @@ def strip_think_tags(text: str) -> str:
     if not text:
         return ""
 
-    # 1. Remove closed and unclosed <think> blocks
-    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
-    cleaned = re.sub(r'^<think>[\s\S]*', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = text.strip()
 
-    # 2. If batch formatted output with [SUBTITLE_XXX], extract from the first subtitle block
+    # 1. Strip closed <think>...</think> blocks first
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', cleaned, flags=re.IGNORECASE).strip()
+
+    # 2. Handle unclosed <think> blocks (where </think> is missing)
+    if '<think>' in cleaned.lower():
+        # Check if JSON array/object or subtitle marker starts inside/after <think>
+        json_match = re.search(r'([\[\{])', cleaned)
+        sub_match = re.search(r'(?:\[)?SUBTITLE_\d+(?:\]|\:)?', cleaned, flags=re.IGNORECASE)
+
+        if json_match:
+            # Keep payload from the first JSON bracket onward
+            cleaned = cleaned[json_match.start():].strip()
+        elif sub_match:
+            cleaned = cleaned[sub_match.start():].strip()
+        else:
+            # If no bracket found, strip think tag line or tag itself safely
+            cleaned = re.sub(r'<think>.*?\n', '', cleaned, flags=re.IGNORECASE).strip()
+            cleaned = re.sub(r'<think>', '', cleaned, flags=re.IGNORECASE).strip()
+
+    # 3. If batch formatted output with [SUBTITLE_XXX], extract from the first subtitle block
     match = re.search(r'(?:\[)?SUBTITLE_\d+(?:\]|\:)?', cleaned, flags=re.IGNORECASE)
     if match:
         cleaned = cleaned[match.start():].strip()
         return cleaned
 
-    # 3. If single sentence output, strip preamble reasoning lines
-    lines = [l.strip() for l in cleaned.splitlines() if l.strip()]
-    final_lines = []
-    for l in lines:
-        if re.match(r'^(okay|let me|first|here is|the chinese sentence|this sentence|in vietnamese|analyzing|understanding|translation)\b', l, re.IGNORECASE):
-            continue
-        final_lines.append(l)
+    # 4. Strip preamble reasoning lines ONLY if response does NOT contain JSON structures
+    first_bracket = cleaned.find('[')
+    first_brace = cleaned.find('{')
+    has_json = (first_bracket != -1 or first_brace != -1)
 
-    if final_lines:
-        return "\n".join(final_lines).strip()
+    if not has_json:
+        lines = [l.strip() for l in cleaned.splitlines() if l.strip()]
+        final_lines = []
+        for l in lines:
+            if re.match(r'^(okay|let me|first|here is|the chinese sentence|this sentence|in vietnamese|analyzing|understanding|translation)\b', l, re.IGNORECASE):
+                continue
+            final_lines.append(l)
+        if final_lines:
+            return "\n".join(final_lines).strip()
 
     return cleaned
 
@@ -94,7 +115,7 @@ class LlamaCppClient:
         ollama_bin = shutil.which("ollama") or r"C:\Users\hieut\AppData\Local\Programs\Ollama\ollama.exe"
         if Path(ollama_bin).exists():
             try:
-                print(f"[INFO] [AUTO-LAUNCH] Đang tự động kích hoạt Ollama GPU Server ({ollama_bin})...", flush=True)
+                logger.info(f"[INFO] [AUTO-LAUNCH] Đang tự động kích hoạt Ollama GPU Server ({ollama_bin})...")
                 subprocess.Popen(
                     [str(ollama_bin), "serve"],
                     stdout=subprocess.DEVNULL,
@@ -103,12 +124,12 @@ class LlamaCppClient:
                 )
                 time.sleep(2.0)
                 # Verify port 11434 status
-                for _ in range(5):
+                for _ in range(10):
                     try:
                         req = urllib.request.Request("http://localhost:11434/v1/models", method="GET")
                         with urllib.request.urlopen(req, timeout=1) as resp:
                             if resp.status in (200, 204):
-                                print("[SUCCESS] [AUTO-LAUNCH] 🟢 Ollama GPU Server (http://localhost:11434) đã sẵn sàng!", flush=True)
+                                logger.info("[SUCCESS] [AUTO-LAUNCH] Ollama GPU Server (http://localhost:11434) ready!")
                                 return "http://localhost:11434"
                     except Exception:
                         time.sleep(0.5)
@@ -164,7 +185,7 @@ class LlamaCppClient:
         max_tokens = options.get("max_tokens", options.get("num_predict", 1024))
 
         # Try /v1/chat/completions with auto-retry & keep_alive
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model_name,
             "messages": messages,
             "temperature": temperature,
@@ -173,6 +194,8 @@ class LlamaCppClient:
             "stream": False,
             "keep_alive": "24h"
         }
+        if options.get("json_format", True):
+            payload["response_format"] = {"type": "json_object"}
 
         data_bytes = json.dumps(payload).encode("utf-8")
         res_data = None
@@ -227,10 +250,11 @@ class LlamaCppClient:
         timeout: int = 120
     ) -> str:
         """Sends a text completion / generation prompt to llama.cpp."""
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        sys_prompt = system or "Bạn là AI Story Director chuyên sáng tạo tiểu thuyết. Bạn BẮT BUỘC chỉ trả về duy nhất 1 chuỗi RAW JSON hợp lệ (JSON Object hoặc JSON Array). CẤM kèm bất kỳ lời dẫn hay văn bản giải thích nào ngoài JSON."
+        messages = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": prompt}
+        ]
 
         return self.chat(messages=messages, model_name=model_name, options=options, timeout=timeout)
 

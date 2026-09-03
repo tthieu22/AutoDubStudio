@@ -468,21 +468,12 @@ export default function App() {
     }
   };
 
-  const renderMainContent = () => {
-    if (!selectedProjectDir || currentScreen === 'home') {
-      return (
-        <NewProjectModal
-          isCreating={isCreatingProject}
-          onCreateProject={handleCreateProject}
-        />
-      );
-    }
-
+  const renderDynamicTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return (
           <Dashboard
-            projectName={selectedProjectDir.split('/').pop()?.split('\\').pop() || 'MyStory'}
+            projectName={selectedProjectDir?.split('/').pop()?.split('\\').pop() || 'MyStory'}
             mode={pipelineMode}
             status={pipelineStatus}
             overallProgress={overallProgress}
@@ -532,17 +523,11 @@ export default function App() {
           />
         );
 
-      case 'novel_dashboard':
-        return <NovelDashboard projectDir={selectedProjectDir} />;
-
       case 'arc_planner':
         return <ArcPlanner projectDir={selectedProjectDir} />;
 
       case 'canon_explorer':
         return <CanonExplorer projectDir={selectedProjectDir} />;
-
-      case 'story':
-        return <StoryWorkspace projectDir={selectedProjectDir} />;
 
       case 'chapters':
         return <ChapterTimeline projectDir={selectedProjectDir} />;
@@ -614,7 +599,7 @@ export default function App() {
       case 'preview':
         return (
           <OutputPreview
-            selectedProjectDir={selectedProjectDir}
+            selectedProjectDir={selectedProjectDir || ''}
             onOpenOutputFolder={handleOpenOutputFolder}
           />
         );
@@ -637,6 +622,31 @@ export default function App() {
           </div>
         );
     }
+  };
+
+  const renderMainContent = () => {
+    if (!selectedProjectDir || currentScreen === 'home') {
+      return (
+        <NewProjectModal
+          isCreating={isCreatingProject}
+          onCreateProject={handleCreateProject}
+        />
+      );
+    }
+
+    return (
+      <div className="w-full h-full relative">
+        <div className={activeTab === 'novel_dashboard' ? 'w-full h-full block' : 'hidden'}>
+          <NovelDashboard projectDir={selectedProjectDir} />
+        </div>
+
+        <div className={activeTab === 'story' ? 'w-full h-full block' : 'hidden'}>
+          <StoryWorkspace projectDir={selectedProjectDir} />
+        </div>
+
+        {activeTab !== 'novel_dashboard' && activeTab !== 'story' && renderDynamicTabContent()}
+      </div>
+    );
   };
 
   const renderBottomPanelContent = () => {

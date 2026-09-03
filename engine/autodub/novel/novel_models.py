@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InformationState(str, Enum):
@@ -51,6 +51,15 @@ class Character(BaseModel):
     known_information: List[str] = Field(default_factory=list)
     secrets: List[str] = Field(default_factory=list)
     locked: bool = False
+
+    @field_validator('personality', mode='before')
+    @classmethod
+    def parse_personality(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        if isinstance(v, list):
+            return [str(p).strip() for p in v if str(p).strip()]
+        return []
 
 
 class CharacterState(BaseModel):

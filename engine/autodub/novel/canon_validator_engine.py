@@ -294,18 +294,28 @@ class CanonValidatorEngine:
         issues: List[str] = []
 
         # 1. Detect New Events (action verbs + significant progression indicators)
-        event_keywords = ["giải mã", "tìm thấy", "quyết định", "đột phá", "đối đầu", "đạt được", "khám phá", "xuất hiện", "trảm sát", "đột nhập", "đánh bại", "tiến vào", "nhiệm vụ", "chiến đấu"]
+        event_keywords = [
+            "giải mã", "tìm thấy", "quyết định", "đột phá", "đối đầu", "đạt được", "khám phá", 
+            "xuất hiện", "trảm sát", "đột nhập", "đánh bại", "tiến vào", "nhiệm vụ", "chiến đấu",
+            "kích hoạt", "bắt đầu", "giao chiến", "tấn công", "tiêu diệt", "rời khỏi", "bước vào",
+            "thách thức", "mở ra", "triệu hồi", "chiến thắng", "thắng", "thua", "lên cấp", "tiêu hao",
+            "chữa trị", "cứu", "đối thoại", "giao dịch", "mua", "nhận", "hệ thống"
+        ]
         new_events_count = sum(1 for kw in event_keywords if kw in lowered_text)
 
         # 2. Detect New Information & Evidence
-        info_keywords = ["phát hiện ra", "bằng chứng", "cổ thư ghi", "tài liệu bí mật", "manh mối mới", "sự thật về", "thông tin", "ghi nhận"]
+        info_keywords = [
+            "phát hiện", "bằng chứng", "cổ thư", "tài liệu", "manh mối", "sự thật", "thông tin", 
+            "ghi nhận", "nhận ra", "hiểu ra", "biết được", "nghe thấy", "tiết lộ", "bí mật",
+            "học được", "nhận được", "nhìn thấy", "xác nhận", "làm rõ", "thông báo", "lời khuyên"
+        ]
         new_information_count = sum(1 for kw in info_keywords if kw in lowered_text)
 
-        evidence_keywords = ["bằng chứng độc lập", "cổ thư xác nhận", "kiểm chứng trực tiếp", "vật chứng", "bằng chứng mới"]
+        evidence_keywords = ["bằng chứng", "cổ thư", "xác nhận", "vật chứng", "manh mối", "kiểm chứng", "trực tiếp"]
         new_evidence_count = sum(1 for kw in evidence_keywords if kw in lowered_text)
 
         # 3. Detect Character State / Consequence changes
-        state_keywords = ["thay đổi thái độ", "quyết định xuất sơn", "bị thương", "tỉnh ngộ", "rút lui"]
+        state_keywords = ["thay đổi", "quyết định", "bị thương", "tỉnh ngộ", "rút lui", "nổi giận", "vui mừng", "kinh ngạc", "bất ngờ", "tăng cường", "tăng"]
         state_changes_count = sum(1 for kw in state_keywords if kw in lowered_text)
 
         # 4. Question Advancement

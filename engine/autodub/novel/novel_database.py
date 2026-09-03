@@ -872,3 +872,39 @@ class NovelDatabase:
             raise RuntimeError(f"MEMORY_TRANSACTION_FAILED: {e}")
         finally:
             conn.close()
+
+    def clear_characters(self, story_id: str):
+        """Purges old character records from SQLite DB for a story."""
+        conn = self.get_connection()
+        try:
+            conn.execute("DELETE FROM characters WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM character_states WHERE character_id IN (SELECT id FROM characters WHERE story_id = ?)", (story_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def clear_arc_plans(self, story_id: str):
+        """Purges old Arc plans from SQLite DB for a story."""
+        conn = self.get_connection()
+        try:
+            conn.execute("DELETE FROM arc_plans WHERE story_id = ?", (story_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def clear_all_story_data(self, story_id: str):
+        """Purges all story telemetry & data when starting a completely new story world."""
+        conn = self.get_connection()
+        try:
+            conn.execute("DELETE FROM characters WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM character_states WHERE character_id IN (SELECT id FROM characters WHERE story_id = ?)", (story_id,))
+            conn.execute("DELETE FROM arc_plans WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM chapter_plans WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM canon_facts WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM canon_candidates WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM plot_threads WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM story_bible WHERE story_id = ?", (story_id,))
+            conn.execute("DELETE FROM global_progress_ledger WHERE story_id = ?", (story_id,))
+            conn.commit()
+        finally:
+            conn.close()

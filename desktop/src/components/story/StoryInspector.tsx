@@ -58,6 +58,9 @@ export const StoryInspector: React.FC<StoryInspectorProps> = ({ projectDir }) =>
   useEffect(() => {
     loadData();
 
+    // Auto refresh DB telemetry every 5s while inspector is visible
+    const interval = setInterval(loadData, 5000);
+
     let unsubProgFn: any = null;
     let unsubLogFn: any = null;
 
@@ -106,6 +109,7 @@ export const StoryInspector: React.FC<StoryInspectorProps> = ({ projectDir }) =>
     }
 
     return () => {
+      clearInterval(interval);
       if (typeof unsubProgFn === 'function') unsubProgFn();
       if (typeof unsubLogFn === 'function') unsubLogFn();
     };
@@ -118,13 +122,17 @@ export const StoryInspector: React.FC<StoryInspectorProps> = ({ projectDir }) =>
     setTimeout(() => setCopiedText(null), 2000);
   };
 
-  const idea = projectData?.novel_idea || {};
+  const idea = projectData?.story_idea || projectData?.idea || projectData?.novel_idea || {};
+  const title = idea.title || projectData?.name || 'Tác phẩm mới';
+  const genre = idea.genre || projectData?.genre || 'Hành động viễn tưởng';
+  const protagonistName = idea.protagonist?.name || (projectData?.characters?.[0]?.name) || 'Diệp Phàm';
+  const totalChaps = idea.total_chapters || projectData?.total_chapters || 100;
+
   const bible = projectData?.story_bible || {};
   const globalProg = projectData?.global_progress || bible?.global_progress || {};
-  const masterPlan = projectData?.arc_plans || [];
-  const masterBlueprint = bible?.master_blueprint || {};
+  const masterPlan = projectData?.arc_plans || bible?.arc_plans || [];
   const characters = projectData?.characters || bible?.characters || [];
-  const locations = bible?.world?.locations || [];
+  const worldLore = projectData?.world_lore || bible?.world?.locations || [];
 
   return (
     <div className="flex flex-col h-full space-y-3 font-sans text-slate-200">
@@ -136,7 +144,7 @@ export const StoryInspector: React.FC<StoryInspectorProps> = ({ projectDir }) =>
           </div>
           <div>
             <h3 className="text-xs font-bold text-white font-['Outfit'] truncate">
-              {idea.title || 'Novel Inspector'}
+              {title}
             </h3>
             <p className="text-[10px] text-slate-400">SQLite DB Telemetry & Context</p>
           </div>
@@ -234,19 +242,19 @@ export const StoryInspector: React.FC<StoryInspectorProps> = ({ projectDir }) =>
         <div className="space-y-1 text-[11px]">
           <div className="flex justify-between">
             <span className="text-slate-400">Thể loại:</span>
-            <span className="font-semibold text-slate-200">{idea.genre || 'Tiên Hiệp'}</span>
+            <span className="font-semibold text-slate-200">{genre}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">Nhân vật chính:</span>
-            <span className="font-semibold text-cyan-300">{idea.protagonist?.name || 'Diệp Phàm'}</span>
+            <span className="font-semibold text-cyan-300">{protagonistName}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">Tổng số chương:</span>
-            <span className="font-semibold text-amber-300 font-mono">{idea.total_chapters || 1000} chương</span>
+            <span className="font-semibold text-amber-300 font-mono">{totalChaps} chương</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-400">Đã hoàn thành:</span>
-            <span className="font-semibold text-emerald-300 font-mono">Chương #{globalProg.last_completed_chapter || 0}</span>
+            <span className="font-semibold text-emerald-300 font-mono">Chương #{globalProg.last_completed_chapter || globalProg.current_chapter || 0}</span>
           </div>
         </div>
       </div>
