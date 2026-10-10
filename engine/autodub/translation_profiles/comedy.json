@@ -1,0 +1,7 @@
+{
+  "id": "comedy",
+  "name": "Hài hước",
+  "description": "Phong cách hài hước, dí dỏm, dí dỏm và gần gũi với phong cách nói chuyện vui nhộn tiếng Việt.",
+  "tone": "humorous",
+  "prompt_instruction": "TRANSLATION STYLE: COMEDY / HUMOR (HÀI HƯỚC)\n- Translate with witty, lively, and humorous Vietnamese conversational phrasing.\n- Use natural, punchy comedic timing in subtitle phrasing without losing original meaning.\n- Adapt wordplay and comedic banter into relatable, laugh-out-loud natural Vietnamese."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "drama",
+  "name": "Chính kịch / Drama",
+  "description": "Phong cách kịch tính, cảm xúc sâu sắc, thể hiện rõ mâu thuẫn và diễn biến tâm lý nhân vật.",
+  "tone": "dramatic",
+  "prompt_instruction": "TRANSLATION STYLE: DRAMA / CINEMATIC (CHÍNH KỊCH)\n- Translate with dramatic tension, psychological nuance, and impactful dialogue.\n- Highlight character conflict, subtle subtext, and emotional weight in spoken Vietnamese.\n- Keep lines concise, powerful, and cinematic."
+}

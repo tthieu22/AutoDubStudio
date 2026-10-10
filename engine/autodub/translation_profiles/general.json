@@ -1,0 +1,7 @@
+{
+  "id": "general",
+  "name": "General / Tự động",
+  "description": "Dịch tiếng Việt tự nhiên, phù hợp hội thoại thông thường.",
+  "tone": "natural_conversational",
+  "prompt_instruction": "TRANSLATION STYLE: GENERAL / AUTOMATIC CONVERSATIONAL\n- Translate into natural, fluent, standard conversational spoken Vietnamese.\n- Maintain standard tone suitable for general dialogue, movies, and vlogs."
+}

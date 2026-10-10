@@ -1,0 +1,48 @@
+{
+  "premise": "Truyện tiên hiệp Thần Tôn Tu Tiên",
+  "cultivation_system": [
+    {
+      "rank": 1,
+      "name": "Luyện Khí"
+    },
+    {
+      "rank": 2,
+      "name": "Trúc Cơ"
+    },
+    {
+      "rank": 3,
+      "name": "Kim Đan"
+    },
+    {
+      "rank": 4,
+      "name": "Nguyên Anh"
+    },
+    {
+      "rank": 5,
+      "name": "Hóa Thần"
+    }
+  ],
+  "characters": [
+    {
+      "id": "char_001",
+      "name": "Lâm Phàm",
+      "personality": [
+        "Thận trọng",
+        "Thông minh"
+      ],
+      "goal": "Trở thành Tiên Đế",
+      "realm": "Luyện Khí Tầng 1",
+      "location": "Thanh Vân Tông",
+      "known_information": [
+        "Xuyên không"
+      ],
+      "secrets": [
+        "Có hệ thống"
+      ]
+    }
+  ],
+  "rules": [
+    "Cảnh giới không thay đổi tùy tiện"
+  ],
+  "terminology": {}
+}

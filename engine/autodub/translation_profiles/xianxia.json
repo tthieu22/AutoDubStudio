@@ -1,0 +1,7 @@
+{
+  "id": "xianxia",
+  "name": "Tiên hiệp / Kiếm hiệp",
+  "description": "Phù hợp tiên hiệp, kiếm hiệp, tu tiên và thế giới võ hiệp.",
+  "tone": "wuxia_xianxia",
+  "prompt_instruction": "TRANSLATION STYLE: XIANXIA / WUXIA (TIÊN HIỆP / KIẾM HIỆP)\n- Use heroic and cultivation-focused Vietnamese vocabulary for martial arts and Xianxia worlds.\n- Preserve terminology for sects (sư môn, tông môn), ranks (trưởng lão, đệ tử, chưởng môn), cultivation realms (cảnh giới), and martial peers (đạo hữu, huynh đệ).\n- Maintain dignified, martial-arts film dialogue tone."
+}

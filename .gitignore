@@ -1,13 +1,15 @@
-# Byte-compiled / optimized / DLL files
+# ===========================
+# Python
+# ===========================
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
+*.pyd
 
 # Virtual Environments
 venv/
+.venv/
 env/
 ENV/
 env.bak/
@@ -32,8 +34,12 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Node / Desktop / Frontend dependencies (if any)
+# ===========================
+# Node / Frontend
+# ===========================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -41,33 +47,75 @@ yarn-error.log*
 .next/
 dist-desktop/
 
-# Media & Large files / Project Outputs
-/models/
-/piper_voices/
-/projects/
-/logs/
+# ===========================
+# Rust / Tauri
+# ===========================
+desktop/src-tauri/target/
+*.exe
+!OllamaSetup.exe
+
+# ===========================
+# Media & Large files
+# ===========================
 *.mp4
 *.mp3
 *.wav
 *.m4a
+*.avi
+*.mkv
+*.flac
+*.ogg
+*.webm
+
+# Subtitles
 *.srt
 *.ass
 *.vtt
 
+# ===========================
+# Project Outputs & Data
+# ===========================
+/models/
+/piper_voices/
+/projects/
+/logs/
+/engine/projects/
+/engine/logs/
+/engine/.autodub/
+/.autodub/
+proj_batch_*/
+transcript.txt
+
+# Installer / large binaries
+OllamaSetup.exe
+
+# ===========================
 # IDE & Editor settings
+# ===========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# Log files
+# ===========================
+# Logs
+# ===========================
 *.log
 
-# Environment variables / Configs with secrets
+# ===========================
+# Environment variables / Secrets
+# ===========================
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+
+# ===========================
+# Misc
+# ===========================
+*.bak
+*.tmp
+*.temp
